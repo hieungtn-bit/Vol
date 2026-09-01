@@ -172,3 +172,22 @@ tính sẵn đòn bẩy tối đa để mức lỗ khi chạm stop không vượ
 ---
 
 **Không phải khuyến nghị đầu tư.**
+
+---
+
+## Web: Market Scan · Multi-TF
+
+Trong repo còn có `web/` — bản web Next.js của cùng tư tưởng này, nhưng **quét nhiều
+symbol** và ra khuyến nghị riêng cho **từng khung 15m / 1h / 4h / 1D** thay vì một
+báo cáo 15m cho một mã.
+
+```bash
+cd web && npm install && npm run dev     # http://localhost:3000
+```
+
+- Luật engine: [`web/logic.md`](./web/logic.md)
+- Hướng dẫn và cấu trúc: [`web/README.md`](./web/README.md)
+
+`vp_desk.py` (CLI, một symbol, có phần "nếu đang có lệnh") và `web/` (quét nhiều symbol,
+4 khung) dùng chung triết lý — chỉ vào ở mép nhà volume, WAIT là kết luận hợp lệ, không
+bịa số — nhưng là hai công cụ độc lập, không chia sẻ code.
