@@ -133,6 +133,10 @@ export interface PerpSnapshot {
   markPrice: number | null;
   openInterest: number | null;   // base coin
   oiHist: { t: number; oi: number }[] | null;
+  /** OI quy ra USD notional — để so với volume perp cùng chợ. */
+  oiUsd: number | null;
+  /** Volume 24h của CHÍNH chợ perp này (USDT). */
+  vol24hUsd: number | null;
 }
 
 export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
@@ -140,20 +144,31 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
     const dead = (reason: string): PerpSnapshot => {
       venueState.perpAlive = false;
       venueState.perpReason = reason;
-      return { alive: false, reason, fundingRate: null, nextFundingTime: null, markPrice: null, openInterest: null, oiHist: null };
+      return {
+        alive: false, reason, fundingRate: null, nextFundingTime: null,
+        markPrice: null, openInterest: null, oiHist: null, oiUsd: null, vol24hUsd: null,
+      };
     };
     try {
-      const [pi, oi] = await Promise.all([
+      const [pi, oi, t24] = await Promise.all([
         getJSON<any>(`${FAPI}/fapi/v1/premiumIndex?symbol=${symbol}`),
         getJSON<any>(`${FAPI}/fapi/v1/openInterest?symbol=${symbol}`).catch(() => null),
+        // Volume 24h của chính chợ perp — mẫu số duy nhất hợp lệ cho tỷ lệ OI/vol.
+        getJSON<any>(`${FAPI}/fapi/v1/ticker/24hr?symbol=${symbol}`).catch(() => null),
       ]);
       let oiHist: { t: number; oi: number }[] | null = null;
+      let oiUsd: number | null = null;
       try {
         const h = await getJSON<any[]>(
           `${FAPI}/futures/data/openInterestHist?symbol=${symbol}&period=1h&limit=25`,
         );
         oiHist = h.map((x) => ({ t: +x.timestamp, oi: +x.sumOpenInterest }));
+        const lastVal = h[h.length - 1]?.sumOpenInterestValue;
+        if (lastVal != null) oiUsd = +lastVal;
       } catch { /* openInterestHist có thể tắt riêng — không sao */ }
+
+      const mark = pi?.markPrice != null ? +pi.markPrice : null;
+      if (oiUsd == null && oi?.openInterest != null && mark) oiUsd = +oi.openInterest * mark;
 
       venueState.perpAlive = true;
       return {
@@ -161,9 +176,11 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
         reason: 'binance-fapi',
         fundingRate: pi?.lastFundingRate != null ? +pi.lastFundingRate : null,
         nextFundingTime: pi?.nextFundingTime != null ? +pi.nextFundingTime : null,
-        markPrice: pi?.markPrice != null ? +pi.markPrice : null,
+        markPrice: mark,
         openInterest: oi?.openInterest != null ? +oi.openInterest : null,
         oiHist,
+        oiUsd,
+        vol24hUsd: t24?.quoteVolume != null ? +t24.quoteVolume : null,
       };
     } catch (e) {
       if (e instanceof GeoBlocked) return dead(`Binance perp bị chặn (${e.message}) → dùng OKX.`);

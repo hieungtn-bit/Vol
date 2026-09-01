@@ -64,20 +64,31 @@ export function buildOI(
   okx: OkxSnapshot,
   priceChg1hPct: number | null,
   priceChg24hPct: number | null,
-  /** Volume 24h của CHÍNH chợ perp đang lấy OI (USD). null = không có → không tính tỷ lệ. */
-  perpVol24hUsd: number | null,
+  /** Volume 24h perp của OKX (USD). Nhánh Binance tự lấy volume của chính nó. */
+  okxPerpVol24hUsd: number | null,
 ): OIInfo {
   let series: { t: number; oi: number }[] | null = null;
   let openNow: number | null = null;
   let venue: string | null = null;
   let unit: string | null = null;
 
+  // USD notional + volume perp CÙNG CHỢ với venue đang cấp OI. Hai số này phải đi
+  // theo cặp, nếu không tỷ lệ OI/vol là phép chia giữa hai thị trường khác nhau.
+  let oiUsd: number | null = null;
+  let venueVol24hUsd: number | null = null;
+
   if (perp.alive && perp.oiHist && perp.oiHist.length > 1) {
     series = perp.oiHist; openNow = perp.openInterest; venue = 'binance-perp'; unit = 'base coin';
+    oiUsd = perp.oiUsd; venueVol24hUsd = perp.vol24hUsd;
   } else if (okx.oiHistUsd && okx.oiHistUsd.length > 1) {
     series = okx.oiHistUsd; openNow = okx.oiUsd; venue = 'okx-swap'; unit = 'USD';
+    oiUsd = okx.oiUsd; venueVol24hUsd = okxPerpVol24hUsd;
   } else if (okx.oiUsd != null) {
     openNow = okx.oiUsd; venue = 'okx-swap'; unit = 'USD';
+    oiUsd = okx.oiUsd; venueVol24hUsd = okxPerpVol24hUsd;
+  } else if (perp.alive && perp.oiUsd != null) {
+    openNow = perp.openInterest; venue = 'binance-perp'; unit = 'base coin';
+    oiUsd = perp.oiUsd; venueVol24hUsd = perp.vol24hUsd;
   }
 
   if (openNow == null && !series) {
@@ -109,8 +120,8 @@ export function buildOI(
   // Tử số và mẫu số PHẢI cùng một chợ: so OI perp với volume spot là so hai thứ
   // khác nhau và cho ra tỷ lệ vô nghĩa. Không có volume perp thì bỏ trống, không đoán.
   let oiOverVol: number | null = null;
-  if (unit === 'USD' && openNow != null && perpVol24hUsd != null && perpVol24hUsd > 0) {
-    oiOverVol = openNow / perpVol24hUsd;
+  if (oiUsd != null && venueVol24hUsd != null && venueVol24hUsd > 0) {
+    oiOverVol = oiUsd / venueVol24hUsd;
   }
   const squeeze = oiOverVol != null && oiOverVol > 1.5;
 
@@ -228,7 +239,7 @@ export function buildDerivatives(
   okx: OkxSnapshot,
   priceChg1hPct: number | null,
   priceChg24hPct: number | null,
-  perpVol24hUsd: number | null,
+  okxPerpVol24hUsd: number | null,
   perpTaker: { buy: number; sell: number }[] | null,
 ): Derivatives {
   let perpDelta: DeltaInfo;
@@ -252,7 +263,7 @@ export function buildDerivatives(
 
   return {
     funding: buildFunding(perp, okx),
-    oi: buildOI(perp, okx, priceChg1hPct, priceChg24hPct, perpVol24hUsd),
+    oi: buildOI(perp, okx, priceChg1hPct, priceChg24hPct, okxPerpVol24hUsd),
     perpTaker: perpDelta,
   };
 }

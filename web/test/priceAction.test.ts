@@ -6,7 +6,7 @@ import { classifyStage, decideBias } from '@/lib/decide';
 import { flat, mkCandles, noDerivatives, type Spec } from './fixtures';
 
 const okxEmpty = { ok: false, fundingRate: null, nextFundingTime: null, markPrice: null, oiUsd: null, oiHistUsd: null, perpVol24hUsd: null };
-const perpDead = { alive: false, reason: 'HTTP 451', fundingRate: null, nextFundingTime: null, markPrice: null, openInterest: null, oiHist: null };
+const perpDead = { alive: false, reason: 'HTTP 451', fundingRate: null, nextFundingTime: null, markPrice: null, openInterest: null, oiHist: null, oiUsd: null, vol24hUsd: null };
 
 describe('accept vs grab', () => {
   it('wick ra ngoài range rồi đóng trong = grab, không phải break', () => {
@@ -136,6 +136,24 @@ describe('OI + funding', () => {
     expect(oi.squeezeWarning).toBe(true);
     expect(oi.oiOverVol).toBeCloseTo(5, 6);
     expect(oi.note).toContain('KHÔNG phải tín hiệu vào lệnh');
+  });
+
+  it('Binance perp sống → OI/vol dùng volume perp Binance, không mượn số của OKX', () => {
+    const now = Date.now();
+    const perpAlive = {
+      alive: true, reason: 'binance-fapi', fundingRate: 0.0001, nextFundingTime: null,
+      markPrice: 100, openInterest: 1000, oiUsd: 300, vol24hUsd: 100,
+      oiHist: [
+        { t: now - 25 * 3_600_000, oi: 900 },
+        { t: now - 2 * 3_600_000, oi: 900 },
+        { t: now, oi: 1000 },
+      ],
+    };
+    // mẫu số của OKX cố tình lệch hẳn — nếu bị dùng nhầm thì tỷ lệ sẽ ra 0.03
+    const oi = buildOI(perpAlive, { ...okxEmpty, oiUsd: 999, perpVol24hUsd: 10_000 }, 1, 2, 10_000);
+    expect(oi.venue).toBe('binance-perp');
+    expect(oi.oiOverVol).toBeCloseTo(3, 6);
+    expect(oi.squeezeWarning).toBe(true);
   });
 
   it('không có volume PERP thì không tính OI/vol — cấm lấy volume spot làm mẫu số', () => {
