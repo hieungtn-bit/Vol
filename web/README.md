@@ -91,3 +91,31 @@ Sửa ngưỡng và danh sách trong `config/universe.ts`.
 - Không gợi ý đòn bẩy, không có "10x". Chỉ có size Small/Normal và rủi ro 0.5–1% tài khoản.
 - Không nới SL "cho khỏi bị quét", không kéo TP xa "cho đẹp RR".
 - Không hardcode thiên kiến cho bất kỳ symbol nào — ENA chạy đúng engine như BTC.
+
+## Deploy
+
+Vercel project **`market-scan`** (`prj_l1f7VDFM5ibbjZOwhziflWMmVPMx`, team `hieungtn-bits-projects`),
+link tới `hieungtn-bit/Vol`, **Root Directory = `web`**. Push là deploy.
+
+### Region — điểm chết người
+
+Region mặc định của Vercel là `iad1` (US East) và **Binance/OKX chặn IP US**. Deploy vào đó
+thì mọi call sàn trả 451, trang vẫn lên nhưng chỉ còn WAIT rỗng — hỏng mà trông như chạy tốt.
+Đã ghim `sin1` (Singapore) ở hai chỗ, phải giữ cả hai:
+
+- `vercel.json` → `"regions": ["sin1"]`
+- `export const preferredRegion = 'sin1'` trong cả ba route handler
+
+### Domain
+
+`maix8.study` (site tĩnh MAIX8 Research, project `writetoearn`) **không dùng chung project với app này** —
+app này là Next.js có server, còn `vercel.json` ở gốc Writetoearn hardcode build tĩnh. Hai project riêng.
+
+Gắn `scan.maix8.study`: Vercel → project `market-scan` → Settings → Domains → Add,
+rồi bind vào branch `claude/market-scan-multi-tf-wt14mq` (`gitBranch`) — đúng kiểu `maix8.study`
+đang bind branch, để push nhánh nào thì domain theo nhánh đó.
+
+### Snapshot
+
+Tự tắt trên serverless (đĩa ephemeral, không giữ được lịch sử) và báo lý do ra banner
+"dữ liệu thiếu". Muốn lưu thật thì trỏ `SNAPSHOT_DIR` vào ổ lưu trữ thật.
