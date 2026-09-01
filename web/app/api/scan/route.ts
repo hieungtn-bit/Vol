@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server';
 import { ALWAYS_INCLUDE, MAX_SCAN_SYMBOLS } from '@/config/universe';
 import { ictString } from '@/lib/format';
 import { scanSymbol, sourcesInfo } from '@/lib/scan';
-import { saveSnapshot } from '@/lib/snapshot';
+import { saveSnapshot, SNAPSHOT_NOTE } from '@/lib/snapshot';
 import { venueState } from '@/lib/sources';
 import type { ScanSnapshot, SymbolScan } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Chạy ở Singapore. Region mặc định của Vercel là iad1 (US East) và Binance/OKX
+// chặn IP US — deploy vào US thì mọi call sàn trả 451 và trang chỉ còn WAIT rỗng.
+export const preferredRegion = 'sin1';
+
 
 const CONCURRENCY = 4;   // 4 symbol một lượt — đủ nhanh, không đấm exchange
 
@@ -50,6 +54,7 @@ export async function GET(req: Request) {
   if (venueState.perpAlive === false) {
     degraded.push(`Perp Binance không truy cập được — ${venueState.perpReason} Taker perp = N/A, funding/OI lấy từ OKX.`);
   }
+  if (SNAPSHOT_NOTE) degraded.push(SNAPSHOT_NOTE);
   for (const r of ok) for (const e of r.errors) degraded.push(`${r.symbol}: ${e}`);
 
   const snap: ScanSnapshot = {

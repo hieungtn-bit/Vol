@@ -3,7 +3,16 @@ import path from 'node:path';
 import type { ScanSnapshot } from './types';
 
 // Lưu snapshot để so lại về sau: "lúc đó hệ nói gì, giá đi đâu".
-const DIR = process.env.SNAPSHOT_DIR ?? './data/snapshots';
+//
+// Trên serverless (Vercel) đĩa chỉ ghi được ở /tmp và biến mất theo instance, nên
+// snapshot ở đó là ảo tưởng lưu trữ — thà tắt và nói rõ còn hơn để người dùng tưởng
+// mình đang có lịch sử. Muốn lưu thật thì trỏ SNAPSHOT_DIR vào volume/S3/DB.
+const ON_SERVERLESS = !!process.env.VERCEL && !process.env.SNAPSHOT_DIR;
+const DIR = ON_SERVERLESS ? '' : (process.env.SNAPSHOT_DIR ?? './data/snapshots');
+
+export const SNAPSHOT_NOTE = ON_SERVERLESS
+  ? 'Snapshot tắt trên serverless — đĩa ephemeral, không lưu được lịch sử. Chạy local hoặc trỏ SNAPSHOT_DIR vào ổ lưu trữ thật.'
+  : null;
 
 export async function saveSnapshot(snap: ScanSnapshot): Promise<string | null> {
   if (!DIR) return null;

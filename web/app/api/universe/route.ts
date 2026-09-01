@@ -4,6 +4,10 @@ import { fetchAllTickers } from '@/lib/sources';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Chạy ở Singapore. Region mặc định của Vercel là iad1 (US East) và Binance/OKX
+// chặn IP US — deploy vào US thì mọi call sàn trả 451 và trang chỉ còn WAIT rỗng.
+export const preferredRegion = 'sin1';
+
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
