@@ -5,6 +5,7 @@ import SymbolDrawer from '@/components/SymbolDrawer';
 import { BiasBadge } from '@/components/ui';
 import { fmtPct, fmtPrice, fmtUsd, ictString } from '@/lib/format';
 import { ALWAYS_INCLUDE, DEFAULT_MIN_QUOTE_VOL } from '@/config/universe';
+import { apiPath } from '@/config/site';
 import type { ScanSnapshot, SymbolScan, TF } from '@/lib/types';
 
 const TFS: TF[] = ['15m', '1h', '4h', '1d'];
@@ -34,8 +35,7 @@ export default function Page() {
 
   const loadUniverse = useCallback(async () => {
     try {
-      const q = new URLSearchParams({ minVol: String(minVol), extra });
-      const r = await fetch(`/api/universe?${q}`);
+      const r = await fetch(apiPath('universe', { minVol: String(minVol), extra }));
       const j = await r.json();
       if (j.ok) setUniverse(j.symbols);
       else setErr(j.error ?? 'không lấy được universe');
@@ -57,7 +57,7 @@ export default function Page() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await fetch(`/api/scan?symbols=${targets.join(',')}`);
+      const r = await fetch(apiPath('scan', { symbols: targets.join(',') }));
       const j = await r.json();
       if (j.ok) setSnap(j as ScanSnapshot);
       else setErr(j.error ?? 'scan lỗi');
