@@ -60,6 +60,14 @@ async function main() {
   console.log('\n── TỔNG ──');
   row('tất cả', all);
 
+  // Tách theo THỜI GIAN. Mọi "cải thiện" chỉ đo trên toàn bộ mẫu đều có nguy cơ là
+  // uốn tham số theo dữ liệu. Nửa sau là phần chưa dùng để chỉnh gì cả.
+  const sorted = [...all].sort((a, b) => a.signalTime - b.signalTime);
+  const cut = Math.floor(sorted.length / 2);
+  console.log('\n── tách theo thời gian (nửa sau là ngoài mẫu) ──');
+  row('nửa đầu', sorted.slice(0, cut));
+  row('nửa sau', sorted.slice(cut));
+
   console.log('\n── theo hạng tin cậy ──');
   for (const c of ['GOLD', 'A', 'B', 'C'] as Conviction[]) row(c, all.filter((t) => t.conviction === c));
 

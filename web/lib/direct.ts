@@ -118,24 +118,49 @@ export function decideDirection(
   // 1. Cấu trúc HH/HL/LL/LH
   push('Cấu trúc HH/HL/LH/LL', (structure.bias / 100) * W.structure, structure.note);
 
-  // 2. Vị trí so với value: mép dưới ủng hộ long, mép trên ủng hộ short.
-  //    Giữa VA thì gần như trung tính — không có mép nào để bám.
+  // 2. Vị trí so với value — CÓ ĐIỀU KIỆN CHẤP NHẬN.
+  //
+  // Bản đầu mã hoá "chạm VAH thì fade xuống" một cách vô điều kiện. Backtest 1181
+  // lệnh nói vế đó có edge ÂM (-0.24): khi nó ủng hộ hướng đã vào thì avgR -0.01,
+  // khi nó chống lại thì avgR +0.23. Tức giả định fade vô điều kiện là sai.
+  //
+  // Lý thuyết market profile vốn đã nói khác: giá được CHẤP NHẬN ngoài value nghĩa
+  // là value đang dịch chuyển — đi tiếp, không phải hồi. Chỉ khi bị TỪ CHỐI (ló ra
+  // rồi đóng lại vào trong) mới là fade.
+  //
+  // Chấp nhận ở đây đo bằng chính VA (hai nến đóng liên tiếp cùng phía ngoài), KHÔNG
+  // mượn accept/grab của PA — vế PA đã chấm cái đó rồi, mượn lại là chấm hai lần.
+  const closedBars = inp.candles.filter((c) => c.closed);
+  const lastBar = closedBars[closedBars.length - 1];
+  const prevClose = closedBars.length >= 2 ? closedBars[closedBars.length - 2].c : null;
+
   const vaW = vp.va70.high - vp.va70.low;
   let locPts = 0;
   let locNote: string;
   if (vaW > 0) {
     const pos = (last - vp.va70.low) / vaW;        // 0 = VAL, 1 = VAH
-    // CHẶN BIÊN [-1, 1]. Không chặn thì giá nằm ngoài VA cho pos = 5 → centered = -9
-    // → -180 điểm, tức một mình vế này nuốt hết cấu trúc + taker + OI + funding cộng
-    // lại. Đó là lỗi làm cả bảng ra SHORT trong khi taker đang nghiêng mua.
-    // Ngoài VA vẫn là lý lẽ hồi về value, nhưng nó chỉ đáng đúng trọng số của nó.
     const centered = Math.max(-1, Math.min(1, (0.5 - pos) * 2));
-    locPts = centered * W.valueLocation;
-    locNote = pos < 0
-      ? `giá dưới VAL ${P(vp.va70.low)} — vùng phe mua hay đỡ`
-      : pos > 1
-        ? `giá trên VAH ${P(vp.va70.high)} — vùng phe bán hay chặn`
-        : `giá ở ${(pos * 100).toFixed(0)}% bề rộng VA (${P(vp.va70.low)}–${P(vp.va70.high)}), POC ${P(vp.poc)}`;
+    const outUp = last > vp.va70.high;
+    const outDn = last < vp.va70.low;
+    const heldUp = outUp && prevClose != null && prevClose > vp.va70.high;
+    const heldDn = outDn && prevClose != null && prevClose < vp.va70.low;
+
+    if (heldUp) {
+      locPts = W.valueLocation;
+      locNote = `hai nến liền đóng trên VAH ${P(vp.va70.high)} — value đang dịch lên, đi theo`;
+    } else if (heldDn) {
+      locPts = -W.valueLocation;
+      locNote = `hai nến liền đóng dưới VAL ${P(vp.va70.low)} — value đang dịch xuống, đi theo`;
+    } else if (outUp) {
+      locPts = -W.valueLocation * 0.5;
+      locNote = `lần đầu đóng trên VAH ${P(vp.va70.high)} — chưa được chấp nhận, nghiêng về hồi lại value`;
+    } else if (outDn) {
+      locPts = W.valueLocation * 0.5;
+      locNote = `lần đầu đóng dưới VAL ${P(vp.va70.low)} — chưa được chấp nhận, nghiêng về hồi lại value`;
+    } else {
+      locPts = centered * W.valueLocation * 0.5;
+      locNote = `trong value, ở ${(pos * 100).toFixed(0)}% bề rộng (${P(vp.va70.low)}–${P(vp.va70.high)}), POC ${P(vp.poc)}`;
+    }
   } else {
     locNote = 'VA quá hẹp để định vị.';
   }
@@ -151,8 +176,6 @@ export function decideDirection(
   push('Taker Buy/Sell', flowPts, flow.note);
 
   // 4. Price action của cây đã đóng
-  const closed = inp.candles.filter((c) => c.closed);
-  const lastBar = closed[closed.length - 1];
   let paPts = 0;
   const paBits: string[] = [];
   if (lastBar) {
