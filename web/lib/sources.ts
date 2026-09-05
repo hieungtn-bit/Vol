@@ -286,19 +286,28 @@ export async function fetchPerpPositioning(
 ): Promise<PerpPositioning> {
   if (venueState.perpAlive === false) return { retailLongPct: null, topLongPct: null };
   return cached(`pos:${symbol}:${period}`, DEFAULT_TTL, async () => {
-    const pick = async (path: string, key: string): Promise<number | null> => {
+    // Cả hai endpoint đều trả field tên `longAccount` — kể cả endpoint "position",
+    // nơi con số thực ra là tỷ trọng GIÁ TRỊ VỊ THẾ chứ không phải số tài khoản.
+    // Tên field gây hiểu nhầm, nên thử `longPosition` trước rồi mới rơi về
+    // `longAccount`; không có vế nào thì trả null chứ không đoán.
+    const pick = async (path: string, keys: string[]): Promise<number | null> => {
       try {
         const r = await getJSON<any[]>(`${FAPI}${path}?symbol=${symbol}&period=${period}&limit=1`);
-        const v = r?.[r.length - 1]?.[key];
-        return v != null ? +v : null;
+        const row = r?.[r.length - 1];
+        if (!row) return null;
+        for (const k of keys) {
+          const v = row[k];
+          if (v != null && isFinite(+v)) return +v;
+        }
+        return null;
       } catch {
         return null;
       }
     };
-    // longAccount/longPosition đã là tỷ lệ 0–1
+    // Giá trị trả về là tỷ lệ 0–1.
     const [retail, top] = await Promise.all([
-      pick('/futures/data/globalLongShortAccountRatio', 'longAccount'),
-      pick('/futures/data/topLongShortPositionRatio', 'longPosition'),
+      pick('/futures/data/globalLongShortAccountRatio', ['longAccount']),
+      pick('/futures/data/topLongShortPositionRatio', ['longPosition', 'longAccount']),
     ]);
     return {
       retailLongPct: retail != null ? retail * 100 : null,
