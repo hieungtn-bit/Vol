@@ -1,9 +1,10 @@
 import { ictSessionStart } from './format';
 import { analyzePriceAction, atr } from './priceAction';
 import { buildDelta, buildDerivatives } from './derivatives';
-import { decideBias, type HTFContext, type DecideInput } from './decide';
-import { decideDirection, type DirectionalCall } from './direct';
-import { analyzeStructure, type MarketStructure } from './structure';
+import { type HTFContext } from './decide';
+import { type DirectionalCall } from './direct';
+import { decideBoth, prepareTF } from './analyze';
+import { type MarketStructure } from './structure';
 import { buildFlow, type FlowInfo } from './flow';
 import {
   fetchBinancePerp, fetchKlines, fetchOkx, fetchPerpPositioning, fetchPerpTakerRatio,
@@ -132,16 +133,6 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
       direction[tf] = null; structure[tf] = null;
       continue;
     }
-    const a = atr(closed);
-    const vp = computeVolumeProfile(closed, { mode: 'close', atr: a });
-    if (!vp) {
-      tfs[tf] = emptyRec(symbol, tf, last, `không dựng được volume profile ${tf}`);
-      direction[tf] = null; structure[tf] = null;
-      continue;
-    }
-    const pa = analyzePriceAction(candles);
-    const delta = buildDelta(candles, vp, 'binance-spot');
-
     const parent = PARENT[tf];
     const parentRec = parent ? tfs[parent] : undefined;
     const parentPa = parent ? analyzePriceAction(byTf[parent]) : null;
@@ -156,18 +147,21 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
         }
       : null;
 
-    const decideInput: DecideInput = {
-      symbol, tf, candles, vp, pa, delta, deriv, htf,
-      hasClosedBar: hasClosedBar(candles, tf),
-      last: closed[closed.length - 1].c,
-    };
-    tfs[tf] = decideBias(decideInput);
+    // Dựng đầu vào qua prepareTF — CÙNG một hàm mà backtest dùng.
+    const prepared = prepareTF({
+      symbol, tf, candles, deriv, htf, hasClosedBar: hasClosedBar(candles, tf),
+    });
+    if (!prepared) {
+      tfs[tf] = emptyRec(symbol, tf, last, `không dựng được volume profile ${tf}`);
+      direction[tf] = null; structure[tf] = null;
+      continue;
+    }
 
-    // Bản điện luôn-ra-hướng dùng CHUNG dữ liệu, chỉ khác cách kết luận.
-    const st = analyzeStructure(candles);
-    structure[tf] = st;
     if (!flow) flow = buildFlow(perpTaker, k15, positioning, deriv.funding);
-    direction[tf] = decideDirection(decideInput, st, flow);
+    const both = decideBoth(prepared, flow);
+    tfs[tf] = both.strict;
+    structure[tf] = prepared.structure;
+    direction[tf] = both.directional;
   }
 
   const pa15 = analyzePriceAction(k15);

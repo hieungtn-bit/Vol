@@ -79,6 +79,41 @@ export async function fetchKlines(symbol: string, tf: TF, limit = 500): Promise<
   });
 }
 
+/**
+ * Tải NHIỀU nến lịch sử bằng cách phân trang lùi. Binance trả tối đa 1000 nến mỗi
+ * lần, nên muốn vài nghìn nến cho backtest thì phải đi từng trang.
+ *
+ * KHÔNG dùng cache: backtest chạy một lần với chuỗi dài, cache chỉ tổ phình bộ nhớ.
+ */
+export async function fetchKlinesHistory(
+  symbol: string,
+  tf: TF,
+  bars: number,
+): Promise<Candle[]> {
+  const step = TF_MS[tf];
+  const out: Candle[] = [];
+  let endTime = Date.now();
+
+  while (out.length < bars) {
+    const want = Math.min(1000, bars - out.length);
+    const path =
+      `/api/v3/klines?symbol=${symbol}&interval=${INTERVAL[tf]}&limit=${want}&endTime=${endTime}`;
+    let raw: RawKline[];
+    try {
+      raw = await getJSON<RawKline[]>(SPOT + path, 20_000);
+    } catch {
+      raw = await getJSON<RawKline[]>(SPOT_FALLBACK + path, 20_000);
+    }
+    if (raw.length === 0) break;
+    out.unshift(...toCandles(raw, step));
+    endTime = raw[0][0] - 1;
+    if (raw.length < want) break;   // hết lịch sử
+  }
+
+  // Nến cuối có thể chưa đóng — backtest chỉ được dùng nến đã đóng.
+  return out.filter((c) => c.closed);
+}
+
 export interface Ticker24h {
   symbol: string;
   lastPrice: number;
