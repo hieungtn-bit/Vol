@@ -1,5 +1,8 @@
 # logic.md — luật của engine, một trang
 
+> Đây là bản **tóm tắt**. Tài liệu chuẩn đầy đủ, kèm bảng hằng số và kết quả backtest,
+> nằm ở [`ALGORITHM.md`](./ALGORITHM.md). Hai bên lệch nhau thì tin `ALGORITHM.md`.
+
 Mọi symbol chạy **cùng một engine**. Không có ngoại lệ hardcode cho bất kỳ mã nào.
 
 ## 0. Nguyên tắc cứng
