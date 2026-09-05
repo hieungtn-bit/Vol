@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeStructure } from '@/lib/structure';
-import { buildFlow, fundingFlow, perpTakerFlow, spotTakerFlow } from '@/lib/flow';
+import { buildFlow, fundingFlow, perpTakerFlow, positioningSplit, spotTakerFlow } from '@/lib/flow';
 import { decideDirection } from '@/lib/direct';
 import { analyzePriceAction } from '@/lib/priceAction';
 import { buildDelta } from '@/lib/derivatives';
@@ -257,5 +257,27 @@ describe('volume không được chấm hướng hai lần', () => {
     expect(Math.abs(weak.pa.points)).toBeLessThan(Math.abs(norm.pa.points));
     expect(big.vol.detail).toContain('×1.4');
     expect(weak.vol.detail).toContain('×0.5');
+  });
+});
+
+describe('bán lẻ vs nhóm lớn', () => {
+  it('chênh nhỏ hơn 5 điểm → không nói gì (tránh nhiễu)', () => {
+    expect(positioningSplit({ retailLongPct: 60, topLongPct: 62 })).toBeNull();
+  });
+
+  it('nhóm lớn long nhiều hơn → nói tiền lớn đứng phía mua', () => {
+    const s = positioningSplit({ retailLongPct: 50, topLongPct: 68 })!;
+    expect(s).toContain('Nhóm lớn long nhiều hơn');
+    expect(s).toContain('18.0');
+  });
+
+  it('bán lẻ long nhiều hơn → nói đám đông đang đứng long một mình', () => {
+    const s = positioningSplit({ retailLongPct: 72, topLongPct: 60 })!;
+    expect(s).toContain('đám đông đang đứng long một mình');
+  });
+
+  it('thiếu một vế → null, không suy diễn', () => {
+    expect(positioningSplit({ retailLongPct: 60, topLongPct: null })).toBeNull();
+    expect(positioningSplit({ retailLongPct: null, topLongPct: 60 })).toBeNull();
   });
 });
