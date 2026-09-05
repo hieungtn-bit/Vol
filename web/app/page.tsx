@@ -67,7 +67,7 @@ export default function LivePage() {
       if (!j.ok) throw new Error(j.error ?? 'scan lỗi');
       setRows(j.symbols.map((s: any) => ({
         symbol: s.symbol, price: s.price, change24h: s.change24h,
-        quoteVolume24h: s.quoteVolume24h, direction: s.direction, flow: s.flow,
+        quoteVolume24h: s.quoteVolume24h, direction: s.direction, reads: s.reads, flow: s.flow,
       })));
       setDegraded(j.degraded ?? []);
       setUpdated(j.ictTime ?? null);
@@ -100,6 +100,13 @@ export default function LivePage() {
   const tally = useMemo(() => {
     let long = 0, short = 0, gold = 0, ok = 0;
     for (const r of rows) for (const tf of TFS) {
+      const nr = r.reads?.[tf];
+      if (nr) {
+        if (nr.bias === 'mua') long++;
+        else if (nr.bias === 'ban') short++;
+        if (nr.gate.pass) ok++;
+        continue;
+      }
       const c = r.direction?.[tf];
       if (!c) continue;
       if (c.side === 'LONG') long++; else short++;
@@ -111,7 +118,9 @@ export default function LivePage() {
 
   const shown = useMemo(() => {
     let out = rows;
-    if (tradeableOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.tradeable));
+    if (tradeableOnly) {
+      out = out.filter((r) => TFS.some((tf) => r.reads?.[tf]?.gate.pass ?? r.direction?.[tf]?.tradeable));
+    }
     if (goldOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.golden));
     return out;
   }, [rows, goldOnly, tradeableOnly]);

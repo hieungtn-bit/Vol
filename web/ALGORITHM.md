@@ -298,6 +298,24 @@ theo thiết kế là bậc *gần nhất* nên RR TP1 < 1 là bình thường.
 
 ---
 
+## 9b. ⚠ Thước mới — mọi số backtest ở mục 10 KHÔNG còn áp dụng
+
+Từ bản này, Volume Profile chuyển sang **thước theo bậc giá + năm lớp thời gian**
+(`lib/ruler.ts`, `lib/layers.ts`), trạng thái chuyển sang **ba nhãn loại trừ nhau**
+(`lib/vpState.ts`), và điểm hợp lưu chuyển sang **bảng mới** (`lib/confluence.ts`).
+
+**Ba thứ này thay đổi cả tín hiệu lẫn mức giá, nên toàn bộ avgR / PF / sụt giảm ở
+mục 10 là số đo trên hệ CŨ và không mô tả hệ hiện tại.** Chúng được giữ lại làm
+lịch sử hiệu chuẩn, không phải làm tuyên bố về hiệu quả.
+
+Các hệ số của bảng điểm mới (+2 / +2 / +1.5 / +1 / +1 / +0.5 và −4 / −2 / −1.5 /
+−2 / −1) do người đặt theo kinh nghiệm desk, **chưa qua backtest lần nào**. Muốn
+nói lại về hiệu quả thì phải chạy lại toàn bộ backtest trên thước mới. Cửa sổ và
+giả định phí không đổi (phí 0.05%/chiều + 0.02% trượt giá khi dính stop; cửa sổ
+15m 1000 nến / 1h 168 / 4h 126 / 1d 90).
+
+---
+
 ## 10. Backtest
 
 `npm run backtest -- --symbols BTCUSDT,ETHUSDT --tf 1h --bars 3000`

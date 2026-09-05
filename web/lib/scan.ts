@@ -11,6 +11,8 @@ import {
   fetchTicker, SOURCES, TF_MS, venueState,
 } from './sources';
 import { computeVolumeProfile } from './volumeProfile';
+import { buildLayers } from './layers';
+import { readTF, type TFRead } from './tfRead';
 import type {
   Candle, CompositeProfiles, Recommendation, SymbolScan, TF, VolumeProfile,
 } from './types';
@@ -20,7 +22,12 @@ import { TFS } from './types';
 // vùng giá thị trường ĐANG chấp nhận. Profile 1h kéo 6 tháng thì POC nằm ở
 // một cái kệ lịch sử nào đó và mọi TP đều vô dụng.
 //   15m ≈ 2 ngày · 1h ≈ 7 ngày · 4h ≈ 3 tuần · 1D ≈ 3 tháng
-const LIMIT: Record<TF, number> = { '15m': 192, '1h': 168, '4h': 126, '1d': 90 };
+// 15m phải đủ 960 nến = 10 ngày cho lớp dài nhất. Thiếu thì lớp 10 ngày trả
+// null chứ không lấy tạm cửa sổ ngắn hơn rồi vẫn gọi là 10 ngày.
+// 15m lấy 1000 chứ không phải đúng 960: cây cuối cùng thường CHƯA ĐÓNG, nên
+// lấy tròn 960 thì sau khi lọc chỉ còn 959 và lớp 10 ngày không bao giờ dựng
+// được — im lặng rơi xuống lớp 48 giờ.
+const LIMIT: Record<TF, number> = { '15m': 1000, '1h': 168, '4h': 126, '1d': 90 };
 
 /** TF lớn hơn liền kề — dùng làm context, KHÔNG dùng để ghi đè bias TF nhỏ. */
 const PARENT: Record<TF, TF | null> = { '15m': '1h', '1h': '4h', '4h': '1d', '1d': null };
@@ -70,7 +77,25 @@ export function buildComposite(k15: Candle[], last: number, atr15: number): Comp
  * types.ts để `unknown` vì nó không thể import direct.ts (direct.ts import ngược lại
  * types.ts qua decide.ts — vòng tròn). Chỗ khai báo kiểu đúng là ở đây.
  */
+/**
+ * Điểm funding quy ra điểm hợp lưu, theo bậc của đề bài.
+ * Dấu DƯƠNG = ủng hộ mua. Rate dương nghĩa là bên mua trả bên bán, tức đám đông
+ * đang đứng mua — nên nó ủng hộ BÁN, và ở mức cực thì càng không được thêm cùng
+ * đám đông.
+ */
+export function fundingPoints(rate: number | null): number {
+  if (rate == null) return 0;
+  const a = Math.abs(rate);
+  const dir = rate > 0 ? -1 : 1;
+  if (a < 0.00005) return 0;          // < 0.005% — trung tính
+  if (a < 0.0002) return dir * 0.5;   // 0.005–0.02% — nhẹ
+  if (a < 0.0005) return dir * 1;     // 0.02–0.05% — căng
+  return dir * 1;                     // > 0.05% — cực, tuyệt đối không thêm cùng đám đông
+}
+
 export interface SymbolScanLive extends Omit<SymbolScan, 'direction' | 'structure' | 'flow'> {
+  /** Hợp đồng API mới: một object cho mỗi khung, theo thước và trạng thái mới. */
+  reads: Record<TF, TFRead | null>;
   direction: Record<TF, DirectionalCall | null>;
   structure: Record<TF, MarketStructure | null>;
   flow: FlowInfo | null;
@@ -166,7 +191,21 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
 
   const pa15 = analyzePriceAction(k15);
 
+  // ---- Hợp đồng API mới ----
+  const layers = buildLayers(k15, byTf['1h'], Date.now());
+  const closed4h = byTf['4h'].filter((c) => c.closed);
+  const last4hClosed = closed4h.length ? closed4h[closed4h.length - 1] : null;
+  const fp = fundingPoints(deriv.funding.quality === 'REAL' ? deriv.funding.rate : null);
+  const reads = {} as Record<TF, TFRead | null>;
+  for (const tf of ordered) {
+    reads[tf] = readTF({
+      tf, candles: byTf[tf], layers, last4hClosed,
+      spotPerpAgree: flow?.agree ?? false, fundingPoints: fp, oi: deriv.oi,
+    });
+  }
+
   return {
+    reads,
     symbol,
     ts: Date.now(),
     price: ticker?.lastPrice ?? last,
