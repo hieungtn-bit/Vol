@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { fmtPct, fmtPrice, fmtUsd } from '@/lib/format';
 import type { DirectionalCall } from '@/lib/direct';
+import { positioningSplit } from '@/lib/flow';
 import type { FlowInfo } from '@/lib/flow';
 import type { TF } from '@/lib/types';
 
@@ -79,6 +80,27 @@ function FundingChip({ flow }: { flow: FlowInfo | null }) {
   return (
     <span className={`rounded border px-1.5 py-0.5 text-2xs ${longPays ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'}`}>
       {longPays ? 'LONG trả SHORT' : 'SHORT trả LONG'} · {f.annualPct != null ? `${f.annualPct.toFixed(0)}%/năm` : ''}
+    </span>
+  );
+}
+
+/** Bán lẻ vs nhóm lớn. Chỗ hai bên ngược nhau mới là chỗ đáng đọc. */
+function PositionChip({ flow }: { flow: FlowInfo | null }) {
+  const p = flow?.positioning;
+  if (!p || p.retailLongPct == null) return null;
+  const split = positioningSplit(p);
+  const diff = p.topLongPct != null ? p.topLongPct - p.retailLongPct : null;
+  return (
+    <span
+      className={`rounded border px-1.5 py-0.5 text-2xs ${
+        diff == null ? 'border-line text-slate-400'
+        : diff > 5 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+        : diff < -5 ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+        : 'border-line text-slate-400'}`}
+      title={split ?? 'Bán lẻ và nhóm lớn đứng gần như nhau.'}
+    >
+      lẻ {p.retailLongPct.toFixed(0)}% · lớn {p.topLongPct != null ? `${p.topLongPct.toFixed(0)}%` : 'N/A'} long
+      {diff != null && Math.abs(diff) > 5 ? ` (${diff > 0 ? '+' : ''}${diff.toFixed(0)})` : ''}
     </span>
   );
 }
@@ -160,6 +182,7 @@ export function BoardRow({ r }: { r: LiveRow }) {
             <BuySellBar buyPct={r.flow?.spotTaker?.buyPct ?? null} label="spot" />
             <div className="flex flex-wrap items-center gap-1.5">
               <FundingChip flow={r.flow} />
+              <PositionChip flow={r.flow} />
               {r.flow?.agree && <span className="text-2xs text-emerald-400">đồng thuận</span>}
             </div>
           </div>
