@@ -15,6 +15,7 @@ export default function LivePage() {
   const [symbols, setSymbols] = useState<string[]>(ALWAYS_INCLUDE);
   const [extra, setExtra] = useState('');
   const [auto, setAuto] = useState(true);          // bản điện thì mặc định phải tự chạy
+  const [goldOnly, setGoldOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [degraded, setDegraded] = useState<string[]>([]);
@@ -68,21 +69,28 @@ export default function LivePage() {
 
   // Đếm nhanh hai phe để nhìn phát biết thị trường đang nghiêng đâu
   const tally = useMemo(() => {
-    let long = 0, short = 0;
+    let long = 0, short = 0, gold = 0;
     for (const r of rows) for (const tf of TFS) {
       const c = r.direction?.[tf];
-      if (c?.side === 'LONG') long++;
-      else if (c?.side === 'SHORT') short++;
+      if (!c) continue;
+      if (c.side === 'LONG') long++; else short++;
+      if (c.golden) gold++;
     }
-    return { long, short, total: long + short };
+    return { long, short, gold, total: long + short };
   }, [rows]);
+
+  const shown = useMemo(
+    () => (goldOnly ? rows.filter((r) => TFS.some((tf) => r.direction?.[tf]?.golden)) : rows),
+    [rows, goldOnly],
+  );
 
   return (
     <main className="mx-auto max-w-[1400px] p-2 sm:p-4">
       <div className="mb-3 rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-2xs leading-snug text-amber-200">
         <b>Không phải lời khuyên đầu tư. Chốt TP1. Không 10x gỡ lỗ.</b>{' '}
         Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên hạng tin cậy mới là thứ phải đọc:
-        <b> A</b> = bằng chứng lệch hẳn · <b>B</b> = lệch vừa · <b>C</b> = hai phía gần cân nhau,
+        <b className="text-amber-300"> ★ vàng</b> = mọi vế bằng chứng cùng một hướng, RR đủ, không cảnh báo ·
+        <b> A</b> = lệch hẳn · <b>B</b> = lệch vừa · <b>C</b> = hai phía gần cân nhau,
         chỉ là thiên hướng chứ không phải lệnh để vào tiền. Rủi ro 0.5–1% tài khoản mỗi lệnh.
       </div>
 
@@ -100,6 +108,10 @@ export default function LivePage() {
               <span className="text-emerald-400">{tally.long} LONG</span>
               {' / '}
               <span className="text-red-400">{tally.short} SHORT</span>
+              {' · '}
+              <span className={tally.gold > 0 ? 'text-amber-300' : 'text-muted'}>
+                ★ {tally.gold} vàng
+              </span>
             </div>
           )}
         </div>
@@ -123,6 +135,10 @@ export default function LivePage() {
         <label className="flex items-center gap-1.5 text-2xs text-muted">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
           Tự chạy 60s
+        </label>
+        <label className="flex items-center gap-1.5 text-2xs text-amber-300">
+          <input type="checkbox" checked={goldOnly} onChange={(e) => setGoldOnly(e.target.checked)} />
+          ★ Chỉ tín hiệu vàng
         </label>
         {auto && (
           <span className="mono text-2xs text-muted">
@@ -156,12 +172,14 @@ export default function LivePage() {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
+            {shown.length === 0 && (
               <tr><td colSpan={7} className="px-3 py-6 text-center text-2xs text-muted">
-                {busy ? 'Đang quét…' : 'Chưa có dữ liệu.'}
+                {busy ? 'Đang quét…'
+                  : goldOnly ? 'Không có tín hiệu vàng nào lúc này — và đó là kết quả bình thường, nó vốn phải hiếm.'
+                  : 'Chưa có dữ liệu.'}
               </td></tr>
             )}
-            {rows.map((r) => <BoardRow key={r.symbol} r={r} />)}
+            {shown.map((r) => <BoardRow key={r.symbol} r={r} />)}
           </tbody>
         </table>
       </div>

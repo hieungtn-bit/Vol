@@ -16,7 +16,24 @@ import type { SizeHint, TF } from './types';
 // Hạng C = kèo yếu, chỉ nên coi là thiên hướng chứ không phải lệnh để vào tiền.
 // ============================================================
 
-export type Conviction = 'A' | 'B' | 'C';
+/**
+ * GOLD nằm TRÊN A: chỉ bật khi mọi vế bằng chứng có điểm đều chỉ cùng một hướng,
+ * độ lệch đủ lớn, RR đủ và không dính cảnh báo nào. Nó hiếm — và phải hiếm, nếu
+ * không thì nó chỉ là một cái nhãn A khác.
+ */
+export type Conviction = 'GOLD' | 'A' | 'B' | 'C';
+
+/** Ngưỡng của hạng vàng. Đổi ở đây, đừng rải số ma khắp nơi. */
+export const GOLD = {
+  /** |net| tối thiểu — cao hơn hẳn ngưỡng 30 của hạng A. */
+  minNet: 40,
+  /** RR TP1 tối thiểu. Kèo đẹp mà RR xấu thì vẫn không phải kèo đẹp. */
+  minRR1: 1.5,
+  /** Số vế thực sự có điểm. Ba vế đồng thuận trong khi bốn vế còn lại N/A không phải đồng thuận. */
+  minContributing: 4,
+  /** Dưới ngưỡng này coi như nhiễu, không tính là "ngược hướng". */
+  noiseFloor: 1,
+};
 
 export interface Evidence {
   label: string;
@@ -32,6 +49,10 @@ export interface DirectionalCall {
   tf: TF;
   side: 'LONG' | 'SHORT';
   conviction: Conviction;
+  /** true khi đạt hạng vàng. */
+  golden: boolean;
+  /** Nếu chưa đạt hạng vàng thì còn thiếu đúng những gì. Rỗng nghĩa là đã đạt. */
+  goldenBlockers: string[];
   /** -100 (short rõ) .. +100 (long rõ). */
   net: number;
   longScore: number;
@@ -184,7 +205,7 @@ export function decideDirection(
   const shortScore = 100 - longScore;
   const side: 'LONG' | 'SHORT' = net >= 0 ? 'LONG' : 'SHORT';
   const mag = Math.abs(net);
-  const conviction: Conviction = mag >= 30 ? 'A' : mag >= 15 ? 'B' : 'C';
+  let conviction: Conviction = mag >= 30 ? 'A' : mag >= 15 ? 'B' : 'C';
 
   const lv: Levels = side === 'LONG' ? buildLongLevels(inp) : buildShortLevels(inp);
   const entryRef = side === 'LONG' ? lv.entry[1] : lv.entry[0];
@@ -208,7 +229,39 @@ export function decideDirection(
     warnings.push('Ngược cấu trúc LH+LL — long ở đây là counter-trend, chốt TP1 bắt buộc.');
   }
 
-  const size: SizeHint = conviction === 'A' && warnings.length === 0 ? 'Normal' : 'Small';
+  // ---- Hạng vàng ----
+  // Xét SAU khi đã có mức giá và cảnh báo, vì RR và cảnh báo cũng là điều kiện.
+  const wantLong = side === 'LONG';
+  const contributing = ev.filter((e) => Math.abs(e.points) >= GOLD.noiseFloor);
+  const against = contributing.filter((e) => (wantLong ? e.points < 0 : e.points > 0));
+
+  const goldenBlockers: string[] = [];
+  if (against.length > 0) {
+    goldenBlockers.push(
+      `${against.length} vế ngược hướng: ${against.map((e) => e.label).join(', ')}`,
+    );
+  }
+  if (contributing.length < GOLD.minContributing) {
+    goldenBlockers.push(
+      `chỉ ${contributing.length} vế có điểm (cần ≥ ${GOLD.minContributing}) — phần còn lại N/A hoặc trung tính`,
+    );
+  }
+  if (mag < GOLD.minNet) {
+    goldenBlockers.push(`độ lệch ${mag.toFixed(0)} (cần ≥ ${GOLD.minNet})`);
+  }
+  if (rr1 == null || rr1 < GOLD.minRR1) {
+    goldenBlockers.push(`RR TP1 ${rr1 == null ? 'N/A' : rr1.toFixed(2)} (cần ≥ ${GOLD.minRR1})`);
+  }
+  if (warnings.length > 0) {
+    goldenBlockers.push(`còn ${warnings.length} cảnh báo`);
+  }
+
+  const golden = goldenBlockers.length === 0;
+  if (golden) conviction = 'GOLD';
+
+  const size: SizeHint = (conviction === 'GOLD' || conviction === 'A') && warnings.length === 0
+    ? 'Normal'
+    : 'Small';
 
   const trigger = side === 'LONG'
     ? `${TRIG[tf]} đóng trên ${P(Math.max(vp.va70.low, lv.entry[1]))} sau khi giữ ${P(lv.entry[0])}`
@@ -219,7 +272,7 @@ export function decideDirection(
     : `đóng nến ${TRIG[tf]} ${side === 'LONG' ? 'dưới' : 'trên'} ${P(lv.sl)} thì hủy`;
 
   const call: DirectionalCall = {
-    symbol, tf, side, conviction, net,
+    symbol, tf, side, conviction, golden, goldenBlockers, net,
     longScore, shortScore,
     entry: lv.entry, sl: lv.sl, tp1: lv.tp1, tp2: lv.tp2,
     rr1, rr2, runner: lv.runner, size, trigger, invalidation,
@@ -239,7 +292,10 @@ export function decideDirection(
 export function buildDirectPlan(c: DirectionalCall): string {
   const P = (x: number | null) => (x == null ? 'N/A' : String(x));
   const L: string[] = [];
-  L.push(`[${c.symbol}] [${c.tf}] [${c.side}] hạng ${c.conviction} · long ${c.longScore} / short ${c.shortScore}`);
+  L.push(
+    `[${c.symbol}] [${c.tf}] [${c.side}] ${c.golden ? '★ TÍN HIỆU VÀNG' : `hạng ${c.conviction}`}` +
+    ` · long ${c.longScore} / short ${c.shortScore}`,
+  );
   L.push(`Entry: ${c.entry[0]} – ${c.entry[1]}`);
   L.push(`Trigger đóng: ${c.trigger}`);
   L.push(`SL: ${c.sl}`);
@@ -259,6 +315,9 @@ export function buildDirectPlan(c: DirectionalCall): string {
   if (c.warnings.length) {
     L.push('Cảnh báo:');
     for (const w of c.warnings) L.push(`  ! ${w}`);
+  }
+  if (!c.golden) {
+    L.push(`Chưa đạt tín hiệu vàng vì: ${c.goldenBlockers.join(' · ')}`);
   }
   L.push('Cấm: market giữa VA, TP xuyên nhiều HVN, add sau lỗ.');
   return L.join('\n');

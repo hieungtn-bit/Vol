@@ -96,9 +96,25 @@ Bỏ WAIT không phải là giả vờ lúc nào cũng có kèo đẹp. Nó đư
 
 | Hạng | Điều kiện | Nghĩa |
 |---|---|---|
+| **★ vàng** | xem dưới | mọi vế bằng chứng cùng một hướng |
 | **A** | \|net\| ≥ 30 | bằng chứng lệch hẳn về một phía |
 | **B** | 15 ≤ \|net\| < 30 | lệch vừa |
 | **C** | \|net\| < 15 | hai phía gần cân nhau — chỉ là thiên hướng, không phải lệnh để vào tiền |
+
+### Tín hiệu vàng
+
+Nằm **trên** hạng A. Phải đạt **đủ năm** điều kiện, thiếu một là trượt:
+
+1. **Không vế nào ngược hướng** — mọi bằng chứng có \|điểm\| ≥ 1 đều chỉ cùng một phía.
+2. **Ít nhất 4 vế thực sự có điểm** — ba vế đồng thuận trong khi bốn vế còn lại N/A thì
+   không phải đồng thuận, chỉ là thiếu dữ liệu.
+3. \|net\| ≥ **40** (cao hơn hẳn ngưỡng 30 của hạng A).
+4. **RR TP1 ≥ 1.5** — kèo đẹp mà RR xấu thì vẫn không phải kèo đẹp.
+5. **Không còn cảnh báo nào.**
+
+Nó **phải hiếm**; nếu bật thường xuyên thì nó chỉ là một cái nhãn A khác. Khi chưa đạt,
+hệ in ra `goldenBlockers` — thiếu đúng cái gì, chứ không chỉ nói "chưa đủ". Bảng có bộ
+lọc **★ Chỉ tín hiệu vàng** và bộ đếm trên đầu.
 
 `net` ∈ [−100, +100]; `longScore = 50 + net/2`, `shortScore = 100 − longScore`.
 Hướng = bên có điểm cao hơn. Size chỉ được `Normal` khi hạng A **và** không có cảnh báo nào.
@@ -133,6 +149,18 @@ Luôn quy thêm ra %/năm (`rate × 3 × 365`) để thấy giá thật của vi
 Kèm hai số "ai đang ĐỨNG ở đâu" (khác với "ai đang ĐÁNH"):
 `globalLongShortAccountRatio` đếm theo tài khoản nên nghiêng về bán lẻ, `topLongShortPositionRatio`
 theo giá trị vị thế của nhóm lớn. **Chỗ hai số này ngược nhau mới là chỗ đáng đọc.**
+
+### Vàng (PAXGUSDT)
+
+Vàng chạy **đúng một engine như mọi symbol khác**, không có luật riêng. Trên Binance nó
+là `PAXGUSDT` — vàng token hoá, 1 PAXG = 1 troy ounce vàng vật chất. Nó nằm trong
+`ALWAYS_INCLUDE` nên không bị ngưỡng volume loại ra.
+
+Khác biệt cần biết khi đọc vàng ở đây: thanh khoản mỏng hơn crypto rất nhiều, và phái
+sinh có thể không có — khi đó taker perp / OI / funding là `N/A` và **không được cộng
+điểm cũng không được vào danh sách lý do**, đúng luật chung. Hệ quả thực tế: vàng khó
+đạt điều kiện "≥ 4 vế có điểm" của tín hiệu vàng hơn crypto, và đó là kết quả trung
+thực chứ không phải hệ bỏ sót.
 
 ### Buy/Sell tách chợ
 

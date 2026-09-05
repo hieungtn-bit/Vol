@@ -2,8 +2,13 @@
 // Cấu hình universe. Sửa file này, không sửa code engine.
 // ============================================================
 
-/** Luôn có mặt trong watchlist dù volume không đạt ngưỡng. */
-export const ALWAYS_INCLUDE = ['BTCUSDT', 'ETHUSDT', 'ENAUSDT'];
+/**
+ * Luôn có mặt trong watchlist dù volume không đạt ngưỡng.
+ * PAXGUSDT là vàng token hoá (1 PAXG = 1 troy ounce vàng vật chất) — cách duy nhất
+ * đọc vàng bằng đúng engine này, vì toàn bộ dữ liệu đến từ Binance. Thanh khoản mỏng
+ * hơn crypto nhiều và phái sinh có thể không có; chỗ nào thiếu thì hệ ghi N/A.
+ */
+export const ALWAYS_INCLUDE = ['BTCUSDT', 'ETHUSDT', 'ENAUSDT', 'PAXGUSDT'];
 
 /** Ngưỡng quote volume 24h mặc định (USD). */
 export const DEFAULT_MIN_QUOTE_VOL = 5_000_000;

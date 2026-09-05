@@ -281,3 +281,80 @@ describe('bán lẻ vs nhóm lớn', () => {
     expect(positioningSplit({ retailLongPct: null, topLongPct: 60 })).toBeNull();
   });
 });
+
+describe('hạng tín hiệu vàng', () => {
+  /** Dựng một call rồi cho phép bẻ từng điều kiện để xem hạng vàng có tắt đúng không. */
+  function callWith(specs: Spec[], perpRows: { buy: number; sell: number }[] | null, oiRead?: string) {
+    const candles = mkCandles(specs);
+    const closed = candles.filter((c) => c.closed);
+    const vp = computeVolumeProfile(closed, { binSize: 0.2 })!;
+    const pa = analyzePriceAction(candles);
+    const st = analyzeStructure(candles);
+    const deriv = noDerivatives();
+    if (oiRead) {
+      deriv.oi = {
+        quality: 'REAL', venue: 'binance-perp', open: 1e6, unit: 'base coin',
+        chg1h: 2, chg24h: 4, read: oiRead as never,
+        squeezeWarning: false, oiOverVol: 0.3, note: 'test',
+      };
+    }
+    const flow = buildFlow(perpRows, candles, noPos, deriv.funding);
+    return decideDirection(
+      { symbol: 'T', tf: '15m', candles, vp, pa, delta: buildDelta(candles, vp, 'binance-spot'),
+        deriv, htf: null, hasClosedBar: true, last: closed[closed.length - 1].c },
+      st, flow,
+    );
+  }
+
+  it('golden và goldenBlockers luôn ngược nhau — rỗng khi đạt, có lý do khi chưa', () => {
+    for (const specs of [trend(true), trend(false), flat(60, 100, 100)]) {
+      const c = callWith(specs, [{ buy: 60, sell: 40 }]);
+      expect(c.golden).toBe(c.goldenBlockers.length === 0);
+      if (c.golden) expect(c.conviction).toBe('GOLD');
+      else expect(c.conviction).not.toBe('GOLD');
+    }
+  });
+
+  it('có vế ngược hướng thì KHÔNG bao giờ là vàng', () => {
+    // cấu trúc tăng nhưng taker bán áp đảo → chắc chắn có vế chống lại
+    const c = callWith(trend(true), [{ buy: 5, sell: 95 }, { buy: 5, sell: 95 }]);
+    const wantLong = c.side === 'LONG';
+    const against = c.evidence.filter((e) => Math.abs(e.points) >= 1 && (wantLong ? e.points < 0 : e.points > 0));
+    expect(against.length).toBeGreaterThan(0);
+    expect(c.golden).toBe(false);
+    expect(c.goldenBlockers.join(' ')).toContain('ngược hướng');
+  });
+
+  it('thị trường đi ngang, bằng chứng lèo tèo → không phải vàng, và nói rõ thiếu gì', () => {
+    const c = callWith(flat(60, 100, 100), [{ buy: 50, sell: 50 }]);
+    expect(c.golden).toBe(false);
+    expect(c.goldenBlockers.length).toBeGreaterThan(0);
+  });
+
+  it('vàng đòi RR TP1 ≥ 1.5 — RR kém thì bị chặn dù mọi thứ khác đẹp', () => {
+    const c = callWith(trend(true), [{ buy: 90, sell: 10 }, { buy: 88, sell: 12 }], 'new-longs');
+    if (!c.golden && c.rr1 != null && c.rr1 < 1.5) {
+      expect(c.goldenBlockers.join(' ')).toContain('RR TP1');
+    }
+    // và nếu đã vàng thì RR bắt buộc phải đạt
+    if (c.golden) expect(c.rr1!).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it('đã vàng thì không còn cảnh báo nào và size là Normal', () => {
+    for (const specs of [trend(true), trend(false)]) {
+      for (const rows of [[{ buy: 90, sell: 10 }], [{ buy: 10, sell: 90 }], null]) {
+        const c = callWith(specs, rows);
+        if (c.golden) {
+          expect(c.warnings).toEqual([]);
+          expect(c.size).toBe('Normal');
+          expect(Math.abs(c.net)).toBeGreaterThanOrEqual(40);
+        }
+      }
+    }
+  });
+
+  it('plan text ghi ★ khi vàng, ghi lý do thiếu khi chưa', () => {
+    const c = callWith(flat(60, 100, 100), null);
+    expect(c.planText).toContain(c.golden ? '★ TÍN HIỆU VÀNG' : 'Chưa đạt tín hiệu vàng vì:');
+  });
+});

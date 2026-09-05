@@ -23,11 +23,17 @@ const SIDE_CLS = {
   SHORT: 'bg-red-500/20 text-red-300 border-red-500/50',
 } as const;
 
-const CONV_CLS = {
+const CONV_CLS: Record<string, string> = {
+  GOLD: 'bg-amber-300 text-black',
   A: 'bg-white/90 text-black',
   B: 'bg-white/40 text-white',
   C: 'bg-white/15 text-slate-300',
-} as const;
+};
+
+const CONV_LABEL: Record<string, string> = { GOLD: '★', A: 'A', B: 'B', C: 'C' };
+
+/** Viền vàng cho badge đạt tín hiệu vàng — phải nhìn phát thấy giữa một bảng đầy hạng C. */
+const GOLD_RING = 'ring-2 ring-amber-300 ring-offset-1 ring-offset-panel';
 
 /** Thanh Buy/Sell: xanh trái, đỏ phải, số % ngay trên thanh. */
 export function BuySellBar({ buyPct, label }: { buyPct: number | null; label: string }) {
@@ -60,12 +66,18 @@ function SideBadge({ c, onClick }: { c: DirectionalCall | null; onClick?: () => 
   return (
     <button
       onClick={onClick}
-      className={`w-full rounded border px-1 py-1 leading-tight ${SIDE_CLS[c.side]} hover:brightness-125`}
-      title={`${c.side} · hạng ${c.conviction} · long ${c.longScore}/short ${c.shortScore}`}
+      className={`w-full rounded border px-1 py-1 leading-tight ${SIDE_CLS[c.side]} ${c.golden ? GOLD_RING : ''} hover:brightness-125`}
+      title={
+        c.golden
+          ? `TÍN HIỆU VÀNG · ${c.side} · mọi vế bằng chứng cùng hướng · long ${c.longScore}/short ${c.shortScore}`
+          : `${c.side} · hạng ${c.conviction} · long ${c.longScore}/short ${c.shortScore}\nChưa vàng vì: ${c.goldenBlockers.join(' · ')}`
+      }
     >
       <div className="flex items-center justify-center gap-1">
         <span className="text-2xs font-bold">{c.side}</span>
-        <span className={`rounded px-1 text-[9px] font-bold ${CONV_CLS[c.conviction]}`}>{c.conviction}</span>
+        <span className={`rounded px-1 text-[9px] font-bold ${CONV_CLS[c.conviction]}`}>
+          {CONV_LABEL[c.conviction]}
+        </span>
       </div>
       <div className="mono text-[10px] opacity-80">{c.longScore}/{c.shortScore}</div>
     </button>
@@ -112,7 +124,9 @@ function Detail({ c }: { c: DirectionalCall }) {
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="mono text-xs font-semibold">{c.tf}</span>
         <span className={`rounded border px-1.5 py-0.5 text-2xs font-bold ${SIDE_CLS[c.side]}`}>{c.side}</span>
-        <span className={`rounded px-1 text-[10px] font-bold ${CONV_CLS[c.conviction]}`}>hạng {c.conviction}</span>
+        <span className={`rounded px-1 text-[10px] font-bold ${CONV_CLS[c.conviction]}`}>
+          {c.golden ? '★ TÍN HIỆU VÀNG' : `hạng ${c.conviction}`}
+        </span>
         <span className="text-2xs text-muted">long {c.longScore} · short {c.shortScore}</span>
         <span className="text-2xs text-muted">size {c.size}</span>
       </div>
@@ -144,6 +158,17 @@ function Detail({ c }: { c: DirectionalCall }) {
           ))}
         </ul>
       </div>
+
+      {c.golden ? (
+        <p className="mt-1.5 rounded border border-amber-300/50 bg-amber-300/10 px-1.5 py-1 text-2xs text-amber-200">
+          ★ <b>Tín hiệu vàng</b> — mọi vế bằng chứng có điểm đều cùng chỉ về {c.side}, độ lệch{' '}
+          {Math.abs(c.net).toFixed(0)}, RR TP1 {c.rr1?.toFixed(2)}, không cảnh báo nào.
+        </p>
+      ) : (
+        <p className="mt-1.5 text-2xs leading-snug text-slate-500">
+          <b>Chưa đạt tín hiệu vàng vì:</b> {c.goldenBlockers.join(' · ')}
+        </p>
+      )}
 
       {c.warnings.length > 0 && (
         <ul className="mt-1.5 space-y-0.5">
