@@ -138,3 +138,27 @@ rồi bind vào branch `claude/market-scan-multi-tf-wt14mq` (`gitBranch`) — đ
 
 Tự tắt trên serverless (đĩa ephemeral, không giữ được lịch sử) và báo lý do ra banner
 "dữ liệu thiếu". Muốn lưu thật thì trỏ `SNAPSHOT_DIR` vào ổ lưu trữ thật.
+
+### Vì sao production hiện là một deployment proxy
+
+`scan.maix8.study` trỏ vào deployment **production** của project `market-scan`, nhưng
+**Production Branch của project vẫn là nhánh mặc định của repo Vol** (nhánh VP-Desk,
+không chứa app). Hệ quả: mọi push của nhánh phát triển chỉ tạo *preview*, và domain
+kẹt ở bản build đầu tiên.
+
+Cách chữa tạm đang dùng: production là một app Next mỏng chỉ có `next.config.mjs`,
+rewrite `/:path(.*)` sang **branch alias** của nhánh phát triển — mà branch alias thì
+luôn bám commit mới nhất. Nhờ vậy domain tự theo code mới, không cần đẩy production
+mỗi lần.
+
+Hai chi tiết bắt buộc của proxy, thiếu là hỏng:
+
+- `trailingSlash: true` khớp với upstream. Lệch nhau thì một bên gỡ dấu `/` còn bên
+  kia thêm lại → vòng lặp 308.
+- `:path(.*)` chứ **không** phải `:path*`. `:path*` khớp theo segment nên dừng trước
+  dấu `/` cuối: `/strict/` bị chuyển thành `/strict`, upstream 308 trả về `/strict/`,
+  Location tương đối nên quay lại chính proxy → lặp vô tận.
+
+**Cách đúng, một thao tác:** Vercel → project `market-scan` → Settings → Git →
+Production Branch → `claude/market-scan-multi-tf-wt14mq`. Làm xong thì push tiếp sẽ
+đè thẳng lên production và lớp proxy này tự biến mất.
