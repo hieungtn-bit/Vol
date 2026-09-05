@@ -136,6 +136,7 @@ function Detail({ c }: { c: DirectionalCall }) {
         <div className="flex justify-between border-b border-line/60 py-0.5"><span className="text-muted">SL</span><span className="mono">{P(c.sl)}</span></div>
         <div className="flex justify-between border-b border-line/60 py-0.5"><span className="text-muted">TP1 (50%)</span><span className="mono">{P(c.tp1)}{c.rr1 != null ? ` · RR ${c.rr1.toFixed(2)}` : ''}</span></div>
         <div className="flex justify-between border-b border-line/60 py-0.5"><span className="text-muted">TP2 (30%)</span><span className="mono">{P(c.tp2)}{c.rr2 != null ? ` · RR ${c.rr2.toFixed(2)}` : ''}</span></div>
+        <div className="flex justify-between border-b border-line/60 py-0.5"><span className="text-muted">R kỳ vọng</span><span className="mono">{c.rrBlended != null ? c.rrBlended.toFixed(2) : 'N/A'}</span></div>
       </div>
 
       <p className="mt-1 text-2xs leading-snug text-slate-300"><b>Trigger:</b> {c.trigger}</p>
@@ -162,7 +163,8 @@ function Detail({ c }: { c: DirectionalCall }) {
       {c.golden ? (
         <p className="mt-1.5 rounded border border-amber-300/50 bg-amber-300/10 px-1.5 py-1 text-2xs text-amber-200">
           ★ <b>Tín hiệu vàng</b> — mọi vế bằng chứng có điểm đều cùng chỉ về {c.side}, độ lệch{' '}
-          {Math.abs(c.net).toFixed(0)}, RR TP1 {c.rr1?.toFixed(2)}, không cảnh báo nào.
+          {Math.abs(c.net).toFixed(0)}, RR TP2 {c.rr2?.toFixed(2)}, R kỳ vọng{' '}
+          {c.rrBlended?.toFixed(2)}, không cảnh báo nào.
         </p>
       ) : (
         <p className="mt-1.5 text-2xs leading-snug text-slate-500">

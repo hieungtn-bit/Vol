@@ -109,8 +109,16 @@ Nằm **trên** hạng A. Phải đạt **đủ năm** điều kiện, thiếu m
 2. **Ít nhất 4 vế thực sự có điểm** — ba vế đồng thuận trong khi bốn vế còn lại N/A thì
    không phải đồng thuận, chỉ là thiếu dữ liệu.
 3. \|net\| ≥ **40** (cao hơn hẳn ngưỡng 30 của hạng A).
-4. **RR TP1 ≥ 1.5** — kèo đẹp mà RR xấu thì vẫn không phải kèo đẹp.
+4. **RR TP2 ≥ 2** và **R kỳ vọng ≥ 1**, kèm sàn **RR TP1 ≥ 0.5**.
 5. **Không còn cảnh báo nào.**
+
+**Vì sao không đo RR TP1.** TP1 theo thiết kế là bậc *gần nhất* (mép VA / POC), nên
+RR TP1 < 1 là chuyện bình thường — đó là chốt non 50% cho nhẹ vị thế, không phải kèo
+tồi. Dữ liệu thật xác nhận: RR TP1 gần như luôn dưới 1. Lấy nó làm ngưỡng là tự đá vào
+thiết kế của chính mình và biến hạng vàng thành code chết.
+
+Thứ đáng đo là R của **cả kế hoạch**: `R kỳ vọng = 0.5×RR1 + 0.3×RR2` (bỏ qua runner
+cho thận trọng). Cảnh báo cũng bám vào con số này, không bám RR TP1.
 
 Nó **phải hiếm**; nếu bật thường xuyên thì nó chỉ là một cái nhãn A khác. Khi chưa đạt,
 hệ in ra `goldenBlockers` — thiếu đúng cái gì, chứ không chỉ nói "chưa đủ". Bảng có bộ
@@ -124,7 +132,7 @@ Hướng = bên có điểm cao hơn. Size chỉ được `Normal` khi hạng A 
 | Vế | Trọng số | Cách đọc |
 |---|---|---|
 | Cấu trúc HH/HL/LH/LL | 25 | đỉnh sau vs đỉnh trước, đáy sau vs đáy trước; 3 swing gần nhất, cái mới nặng hơn |
-| Vị trí trong Value Area | 20 | ở VAL → ủng hộ long, ở VAH → ủng hộ short, giữa VA → gần trung tính |
+| Vị trí trong Value Area | 20 | ở VAL → ủng hộ long, ở VAH → ủng hộ short, giữa VA → gần trung tính. **Chặn biên ±1**: giá ngoài VA cho tỷ lệ vị trí > 1, không chặn thì một mình vế này ra −180 điểm và nuốt hết các vế còn lại |
 | Taker Buy/Sell | 20 | perp 0.65 + spot 0.35; ×1.15 khi hai chợ đồng thuận |
 | Price Action | 18 | hướng nến đóng + accept/grab + pin/engulf, **nhân** hệ số volume |
 | Open Interest | 12 | long mới +1 · short cover +0.6 · short mới −1 · long cover −0.6 |

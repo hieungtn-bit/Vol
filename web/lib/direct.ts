@@ -27,8 +27,15 @@ export type Conviction = 'GOLD' | 'A' | 'B' | 'C';
 export const GOLD = {
   /** |net| tối thiểu — cao hơn hẳn ngưỡng 30 của hạng A. */
   minNet: 40,
-  /** RR TP1 tối thiểu. Kèo đẹp mà RR xấu thì vẫn không phải kèo đẹp. */
-  minRR1: 1.5,
+  /**
+   * TP1 theo thiết kế là bậc GẦN NHẤT (mép VA / POC), nên RR TP1 < 1 là chuyện
+   * bình thường và không có nghĩa kèo tồi — đó là chốt non 50% cho nhẹ vị thế.
+   * Thứ đáng đo là R của CẢ KẾ HOẠCH: 50% ở TP1 + 30% ở TP2.
+   */
+  minRR2: 2,
+  minBlended: 1,
+  /** Sàn cho TP1 để chặn trường hợp bậc đầu sát entry tới mức vô nghĩa. */
+  minRR1: 0.5,
   /** Số vế thực sự có điểm. Ba vế đồng thuận trong khi bốn vế còn lại N/A không phải đồng thuận. */
   minContributing: 4,
   /** Dưới ngưỡng này coi như nhiễu, không tính là "ngược hướng". */
@@ -63,6 +70,8 @@ export interface DirectionalCall {
   tp2: number;
   rr1: number | null;
   rr2: number | null;
+  /** R kỳ vọng nếu cả hai mốc chốt đều chạm: 0.5×RR1 + 0.3×RR2. */
+  rrBlended: number | null;
   runner: string | null;
   size: SizeHint;
   trigger: string;
@@ -116,7 +125,11 @@ export function decideDirection(
   let locNote: string;
   if (vaW > 0) {
     const pos = (last - vp.va70.low) / vaW;        // 0 = VAL, 1 = VAH
-    const centered = (0.5 - pos) * 2;               // +1 ở VAL, -1 ở VAH
+    // CHẶN BIÊN [-1, 1]. Không chặn thì giá nằm ngoài VA cho pos = 5 → centered = -9
+    // → -180 điểm, tức một mình vế này nuốt hết cấu trúc + taker + OI + funding cộng
+    // lại. Đó là lỗi làm cả bảng ra SHORT trong khi taker đang nghiêng mua.
+    // Ngoài VA vẫn là lý lẽ hồi về value, nhưng nó chỉ đáng đúng trọng số của nó.
+    const centered = Math.max(-1, Math.min(1, (0.5 - pos) * 2));
     locPts = centered * W.valueLocation;
     locNote = pos < 0
       ? `giá dưới VAL ${P(vp.va70.low)} — vùng phe mua hay đỡ`
@@ -211,12 +224,20 @@ export function decideDirection(
   const entryRef = side === 'LONG' ? lv.entry[1] : lv.entry[0];
   const rr1 = rr(entryRef, lv.sl, lv.tp1);
   const rr2 = rr(entryRef, lv.sl, lv.tp2);
+  // Kế hoạch là 50% ở TP1, 30% ở TP2, 20% runner. R kỳ vọng bỏ qua runner cho thận trọng.
+  const rrBlended = rr1 != null && rr2 != null ? 0.5 * rr1 + 0.3 * rr2 : null;
 
   const warnings: string[] = [];
   if (conviction === 'C') {
     warnings.push('Hạng C — bằng chứng hai phía gần cân nhau. Đây là thiên hướng, không phải kèo để vào tiền lớn.');
   }
-  if (rr1 != null && rr1 < 1) warnings.push(`RR TP1 = ${rr1.toFixed(2)} < 1 — lỗ kỳ vọng nếu vào full size.`);
+  // RR TP1 < 1 KHÔNG phải cảnh báo: TP1 vốn là bậc gần nhất. Cái đáng cảnh báo là
+  // R của cả kế hoạch chốt 50/30 mà vẫn dưới 1.
+  if (rrBlended != null && rrBlended < 1) {
+    warnings.push(
+      `R kỳ vọng của kế hoạch (50% ở TP1 + 30% ở TP2) = ${rrBlended.toFixed(2)} < 1 — lỗ kỳ vọng.`,
+    );
+  }
   const slPct = (Math.abs(entryRef - lv.sl) / last) * 100;
   if (slPct > 3) warnings.push(`SL cách entry ${slPct.toFixed(2)}% — isolated đòn bẩy cao là cháy.`);
   if (!lv.tp1InVA) warnings.push('TP1 nằm ngoài VA — đã kéo về mép value gần nhất.');
@@ -249,6 +270,12 @@ export function decideDirection(
   if (mag < GOLD.minNet) {
     goldenBlockers.push(`độ lệch ${mag.toFixed(0)} (cần ≥ ${GOLD.minNet})`);
   }
+  if (rr2 == null || rr2 < GOLD.minRR2) {
+    goldenBlockers.push(`RR TP2 ${rr2 == null ? 'N/A' : rr2.toFixed(2)} (cần ≥ ${GOLD.minRR2})`);
+  }
+  if (rrBlended == null || rrBlended < GOLD.minBlended) {
+    goldenBlockers.push(`R kỳ vọng ${rrBlended == null ? 'N/A' : rrBlended.toFixed(2)} (cần ≥ ${GOLD.minBlended})`);
+  }
   if (rr1 == null || rr1 < GOLD.minRR1) {
     goldenBlockers.push(`RR TP1 ${rr1 == null ? 'N/A' : rr1.toFixed(2)} (cần ≥ ${GOLD.minRR1})`);
   }
@@ -275,7 +302,7 @@ export function decideDirection(
     symbol, tf, side, conviction, golden, goldenBlockers, net,
     longScore, shortScore,
     entry: lv.entry, sl: lv.sl, tp1: lv.tp1, tp2: lv.tp2,
-    rr1, rr2, runner: lv.runner, size, trigger, invalidation,
+    rr1, rr2, rrBlended, runner: lv.runner, size, trigger, invalidation,
     evidence: ev,
     structureNote: structure.note,
     flowNote: flow.note,
@@ -301,6 +328,7 @@ export function buildDirectPlan(c: DirectionalCall): string {
   L.push(`SL: ${c.sl}`);
   L.push(`TP1: ${c.tp1} gỡ 50%${c.rr1 != null ? ` · RR ${c.rr1.toFixed(2)}` : ''}`);
   L.push(`TP2: ${c.tp2} gỡ 30%${c.rr2 != null ? ` · RR ${c.rr2.toFixed(2)}` : ''}`);
+  if (c.rrBlended != null) L.push(`R kỳ vọng (50%@TP1 + 30%@TP2): ${c.rrBlended.toFixed(2)}`);
   L.push(`Runner: ${c.runner ?? 'không mở'}`);
   L.push(`Hủy: ${c.invalidation}`);
   L.push(`Size: ${c.size} · rủi ro 0.5–1% tài khoản`);

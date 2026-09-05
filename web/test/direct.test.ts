@@ -331,13 +331,30 @@ describe('hạng tín hiệu vàng', () => {
     expect(c.goldenBlockers.length).toBeGreaterThan(0);
   });
 
-  it('vàng đòi RR TP1 ≥ 1.5 — RR kém thì bị chặn dù mọi thứ khác đẹp', () => {
+  it('vàng đo R của CẢ KẾ HOẠCH, không đo RR TP1', () => {
     const c = callWith(trend(true), [{ buy: 90, sell: 10 }, { buy: 88, sell: 12 }], 'new-longs');
-    if (!c.golden && c.rr1 != null && c.rr1 < 1.5) {
-      expect(c.goldenBlockers.join(' ')).toContain('RR TP1');
+    // TP1 theo thiết kế là bậc gần nhất nên RR1 < 1 là bình thường, không phải lỗi.
+    // Ngưỡng thật nằm ở RR TP2 và R kỳ vọng của kế hoạch chốt 50/30.
+    if (!c.golden) {
+      const why = c.goldenBlockers.join(' ');
+      const rrBlocked = /RR TP2|R kỳ vọng/.test(why);
+      const otherBlocked = /ngược hướng|độ lệch|cảnh báo|vế có điểm/.test(why);
+      expect(rrBlocked || otherBlocked).toBe(true);
+    } else {
+      expect(c.rr2!).toBeGreaterThanOrEqual(2);
+      expect(c.rrBlended!).toBeGreaterThanOrEqual(1);
     }
-    // và nếu đã vàng thì RR bắt buộc phải đạt
-    if (c.golden) expect(c.rr1!).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it('R kỳ vọng = 0.5×RR1 + 0.3×RR2, và cảnh báo bám vào nó chứ không bám RR1', () => {
+    const c = callWith(trend(true), [{ buy: 70, sell: 30 }], 'new-longs');
+    if (c.rr1 != null && c.rr2 != null) {
+      expect(c.rrBlended!).toBeCloseTo(0.5 * c.rr1 + 0.3 * c.rr2, 6);
+    }
+    const warn = c.warnings.join(' ');
+    // không được còn cảnh báo kiểu "RR TP1 < 1" nữa
+    expect(warn).not.toContain('RR TP1');
+    if (c.rrBlended != null && c.rrBlended < 1) expect(warn).toContain('R kỳ vọng');
   });
 
   it('đã vàng thì không còn cảnh báo nào và size là Normal', () => {
