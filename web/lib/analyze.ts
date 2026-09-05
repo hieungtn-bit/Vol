@@ -3,7 +3,7 @@ import { decideDirection, type DirectionalCall } from './direct';
 import { buildDelta } from './derivatives';
 import { analyzePriceAction, atr } from './priceAction';
 import { analyzeStructure, type MarketStructure } from './structure';
-import { computeVolumeProfile } from './volumeProfile';
+import { fitProfileWindow, type Migration } from './migration';
 import type { Candle, Derivatives, Recommendation, TF } from './types';
 import type { FlowInfo } from './flow';
 
@@ -24,6 +24,10 @@ export const MIN_BARS = 30;
 export interface PreparedTF {
   input: DecideInput;
   structure: MarketStructure;
+  /** Value có dời chỗ trong cửa sổ không, và profile đã cắt tới đâu. */
+  migration: Migration;
+  /** Lý do thu cửa sổ profile, null khi dùng nguyên cửa sổ. */
+  fitNote: string | null;
 }
 
 export interface PrepareOpts {
@@ -35,6 +39,10 @@ export interface PrepareOpts {
   htf: HTFContext | null;
   /** TF này đã có nến đóng thuộc chu kỳ vừa xong chưa. */
   hasClosedBar: boolean;
+  /** Cắt profile tại điểm value dời chỗ. Mặc định bật; tắt được để backtest so. */
+  valueMigration?: boolean;
+  /** Thu cửa sổ khi VA rộng quá bấy nhiêu lần ATR. null = không thu. */
+  maxVAoverATR?: number | null;
 }
 
 /** Trả về null khi không đủ dữ liệu — phía gọi tự quyết định báo lỗi thế nào. */
@@ -43,7 +51,11 @@ export function prepareTF(o: PrepareOpts): PreparedTF | null {
   if (closed.length < MIN_BARS) return null;
 
   const a = atr(closed);
-  const vp = computeVolumeProfile(closed, { mode: 'close', atr: a });
+  const fitted = fitProfileWindow(closed, a, { mode: 'close', atr: a }, {
+    migration: o.valueMigration !== false,
+    maxVAoverATR: o.maxVAoverATR,
+  });
+  const { vp, migration } = fitted;
   if (!vp) return null;
 
   const pa = analyzePriceAction(o.candles);
@@ -61,6 +73,8 @@ export function prepareTF(o: PrepareOpts): PreparedTF | null {
       last: closed[closed.length - 1].c,
     },
     structure: analyzeStructure(o.candles),
+    migration,
+    fitNote: fitted.fitNote,
   };
 }
 

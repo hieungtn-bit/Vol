@@ -213,17 +213,60 @@ vế này ra −180 điểm, một mình nuốt hết các vế còn lại.
 ### Cửa chất lượng — `tradeable`
 
 Hạng tin cậy trả lời "bằng chứng lệch bao nhiêu". Cửa chất lượng trả lời câu khác:
-**"kèo này có đáng đặt tiền không"**. Ba điều kiện, tất cả do backtest hiệu chuẩn:
+**"kèo này có đáng đặt tiền không"**. Bốn điều kiện, tất cả do backtest hiệu chuẩn:
 
 | Điều kiện | Vì sao |
 |---|---|
-| **Nhất trí** — không vế nào (trên mức nhiễu) ngược hướng | nhóm nhất trí avgR **0.16**, nhóm bị chống 0.01 |
-| **Hạng ≥ B** (`\|net\| ≥ 15`) | hạng C avgR **−0.04**, và gánh gần hết phần sụt giảm |
-| **R kỳ vọng ≤ 1.5** | nhóm > 1.5 avgR **−0.01**, nhóm 0.5–1 là +0.09 |
+| **Nhất trí** — không vế nào (trên mức nhiễu) ngược hướng | nhóm nhất trí avgR **0.17**, nhóm bị chống 0.01 |
+| **Hạng ≥ B** (`\|net\| ≥ 15`) | hạng C avgR âm, và gánh gần hết phần sụt giảm |
+| **R kỳ vọng ≤ 1.5** | nhóm > 1.5 avgR âm, nhóm 0.5–1 là +0.09 |
+| **Phí ≤ 10% của 1R** (stop ≳ 1.2% giá) | xem ngay dưới — điều kiện mạnh nhất, và phản trực giác nhất |
 
 Kèo trượt cửa **vẫn ra hướng** — luật cứng "không có WAIT" không đổi. Nó chỉ bị hạ
 xuống *thiên hướng để theo dõi*, ghi rõ trượt vì điều kiện nào, và `size` bị ép về
 `Small`. Bản điện mặc định lọc theo cửa này, bỏ tick là xem được hết.
+
+### Điều kiện phí — vì sao stop hẹp là chỗ mất tiền
+
+Tách R **gộp** và R **ròng** theo độ rộng stop, trên 5.661 lệnh:
+
+| Stop (% giá) | n | R gộp | phí | R ròng |
+|---|---|---|---|---|
+| 0–0.5% | 397 | 0.01 | **0.394** | **−0.39** |
+| 0.5–1% | 2289 | 0.17 | 0.141 | 0.03 |
+| 1–1.5% | 1676 | 0.17 | 0.092 | 0.08 |
+| 1.5–2% | 636 | 0.18 | 0.065 | 0.12 |
+| 2–3% | 495 | 0.33 | 0.046 | 0.28 |
+
+**R gộp gần như bằng nhau ở mọi độ rộng stop.** Chất lượng kèo không đổi. Toàn bộ
+chênh lệch ròng là phí — vì phí quy ra R tỉ lệ **nghịch** với độ rộng stop. Một kèo
+stop 0.5% phải thắng thêm 0.39R chỉ để hoà phí, trong khi cả cái edge đo được chỉ có
+0.17R. Đây là sự thật cơ học, không phải chế độ thị trường: nó còn đúng chừng nào
+còn trả phí taker.
+
+Ngưỡng 10% ứng với stop ≈ 1.2% giá. Ngưỡng 8% (stop 1.5%) đo ra ngoài mẫu tốt hơn
+(0.15 vs 0.11 ở mức lọc thấp hơn), nhưng ngồi lên đúng đỉnh một đường cong đo trên
+n=599 là uốn tham số — nên lấy mức có lý do cơ học thay vì mức đẹp nhất.
+
+**Hệ quả: cảnh báo "SL rộng quá 3% giá" đã bị đảo.** Nhóm 2–3% là nhóm **tốt nhất**
+(0.28) còn nhóm 0–1% mới âm. Cảnh báo vẫn còn nhưng chỉ nhắc về đòn bẩy, không còn
+hàm ý stop rộng là kèo xấu.
+
+### Cửa đầy đủ đo được gì
+
+| | n | % | avgR | PF | DD | ngoài mẫu avgR / PF |
+|---|---|---|---|---|---|---|
+| không lọc | 5661 | 100% | 0.05 | 1.11 | 116.9R | −0.00 / 0.99 |
+| ba điều kiện cũ | 1177 | 21% | 0.19 | 1.66 | 11.0R | 0.11 / 1.38 |
+| **bốn điều kiện** | **394** | **7%** | **0.31** | **2.16** | **6.3R** | **0.39 / 2.86** |
+
+Ngoài mẫu **cao hơn** trong mẫu (0.39 vs 0.31) — không có dấu hiệu uốn tham số. Dương
+trên cả ba khung (15m 0.41 · 1h 0.44 · 4h 0.27), cả sáu mã (0.11–0.41), cả hai chiều
+(LONG 0.30 / SHORT 0.32).
+
+**Cái giá phải trả, nói thẳng:** chỉ còn 7% số tín hiệu. 394 lệnh trên 6 mã × 3 khung
+trong ~4 tháng, tức khoảng một kèo mỗi mã-khung mỗi mười ngày. Và 295 trong 394 lệnh
+đó là 4h, nên mẫu của 15m (n=29) và 1h (n=70) còn mỏng.
 
 **Size đi theo cửa, không theo số cảnh báo.** Bản trước lấy "không cảnh báo nào" làm
 điều kiện của size Normal. Đo lại: 0 cảnh báo avgR 0.10, 1 cảnh báo 0.04, ≥2 cảnh báo
@@ -293,32 +336,10 @@ Nói thẳng: **hệ gốc sau phí gần như không có lợi thế.**
 
 ### Cửa chất lượng — thứ thật sự tạo ra lợi thế
 
-Lọc cùng bộ 5521 lệnh bằng ba điều kiện của mục 8:
+Toàn bộ số đo của cửa nằm ở mục 8. Tóm tắt: không lọc thì ngoài mẫu avgR −0.00 / PF
+0.99; qua đủ bốn điều kiện thì **0.39 / PF 2.86** trên 7% số tín hiệu.
 
-| Luật chọn | n | % | avgR | PF | DD | ngoài mẫu avgR / PF |
-|---|---|---|---|---|---|---|
-| tất cả (gốc) | 5521 | 100% | 0.05 | 1.13 | 105.9R | 0.01 / 1.02 |
-| nhất trí | 1491 | 27% | 0.16 | 1.49 | 13.4R | 0.08 / 1.27 |
-| hạng ≥ B | 2862 | 52% | 0.13 | 1.36 | 35.9R | 0.08 / 1.24 |
-| **nhất trí + ≥B + Rkv ≤ 1.5** | **1200** | **22%** | **0.18** | **1.61** | **8.7R** | **0.11 / 1.42** |
-
-Giữ 22% số kèo, avgR gấp 3.6 lần, sụt giảm tối đa nhỏ hơn **12 lần**.
-
-Luật này không sống nhờ một mã hay một khung — điều kiện để tin nó:
-
-| | avgR | | avgR |
-|---|---|---|---|
-| 15m | 0.07 | BTC | 0.12 |
-| 1h | 0.17 | ETH | 0.21 |
-| 4h | 0.24 | SOL | 0.19 |
-| LONG | 0.18 | BNB | 0.16 |
-| SHORT | 0.18 | XRP | 0.17 |
-| | | ENA | 0.24 |
-
-Cả ba khung, cả sáu mã, cả hai chiều đều dương. 15m từ **−0.05 thành +0.07** — khung
-tệ nhất được cứu bằng đúng luật chọn kèo, không phải bằng tham số riêng cho 15m.
-
-### Năm lần backtest lật ngược thiết kế
+### Tám lần backtest lật ngược thiết kế
 
 1. **Hạng tin cậy từng chạy ngược.** Baseline: C 0.09 > B 0.07 > A 0.02 — càng "chắc"
    càng tệ.
@@ -340,14 +361,34 @@ tệ nhất được cứu bằng đúng luật chọn kèo, không phải bằn
    *độ đồng thuận về hướng*, còn vế VA không làm nhiệm vụ chọn hướng — nó quyết định
    **vị trí vào lệnh**. Bỏ nó đi thì hệ vào giữa value nhiều hơn, và đó đúng là điều
    luật cứng số 2 cấm. **Edge âm trong bảng đó không phải lý do đủ để bỏ một vế.**
+6. **"Stop rộng là kèo xấu" — sai hoàn toàn.** Cảnh báo `SL > 3% giá` có từ bản đầu.
+   Đo: nhóm stop 2–3% cho avgR **0.28**, nhóm 0–1% cho **−0.03**. Chặn stop rộng làm
+   mọi chỉ số tệ đi (ngoài mẫu 0.05 → 0.01 ở ngưỡng 2%). Điều kiện đúng là ngược lại:
+   stop phải đủ RỘNG để phí không nuốt hết edge (mục 8).
+7. **"Entry xa giá là mức giá rác" — cũng sai.** Bắt đầu từ một output hỏng thật của
+   ENAUSDT 1d (entry cách giá 7.9%). Đo phân nhóm theo khoảng cách entry: 0–0.5% cho
+   **−0.02** (60% số lệnh), 1–2% cho 0.16, trên 4% cho **0.42**. Entry xa là lệnh chờ
+   kiên nhẫn ở một mức thật, entry sát giá là đuổi giá. Chặn entry xa làm ngoài mẫu
+   tụt 0.05 → 0.02.
+8. **Cắt "value dời chỗ": đúng về khái niệm, vô dụng về số.** Dựng hẳn một bộ phát
+   hiện (`lib/migration.ts`, 17 test) đo chồng lấn hai value area cộng độ mỏng của
+   vùng giữa. Nó phân biệt đúng cú NHẢY với cú TRÔI ĐỀU. Nhưng đo trên 5.661 lệnh:
+   ngoài mẫu 0.01 → −0.00, sụt giảm tối đa 105.6R → 116.9R. Và nó **không kích hoạt**
+   trên chính ca ENAUSDT đã sinh ra nó — vì ENA đi bộ lên chứ không nhảy. Giữ code,
+   **mặc định tắt**, cùng chỗ với dời-SL-về-hoà-vốn.
 
 ### Ba giới hạn phải nhớ trước khi tin những con số trên
 
 - **Mù phái sinh.** `fapi` chặn IP nhiều vùng, nên OI / funding / taker perp là `N/A`
   trong backtest chạy từ đó. **Ba vế ấy chưa từng được kiểm chứng** — bảng edge ghi
-  `n=0` cho cả ba, và đó là sự thật chứ không phải chúng vô dụng.
+  `n=0` cho cả ba, và đó là sự thật chứ không phải chúng vô dụng. Vế **lịch sử
+  funding** (mục 6) nằm trong cùng vùng mù: nó được đặt bằng lập luận, lấy trọng số
+  từ ngân sách của chính vế funding chứ không cộng thêm, và mọi dòng nó in ra đều
+  kèm chữ "chưa qua backtest".
 - **Một chế độ thị trường.** 4h phủ ~500 ngày, 1h ~4 tháng, 15m ~1 tháng. Không suy ra
   được chu kỳ khác.
+- **Cửa đầy đủ rất kén.** 7% số tín hiệu, và 295/394 lệnh là 4h — mẫu 15m (n=29) và
+  1h (n=70) còn mỏng.
 - **0.130R phí mỗi lệnh là giả định.** Đúng với taker Binance perp và stop rộng cỡ
   mẫu này. Vào bằng maker, hoặc stop rộng hơn, thì con số khác.
 
@@ -394,8 +435,12 @@ Chỗ **duy nhất** liệt kê con số. Sửa ở mã nguồn thì sửa cả 
 | Kỷ luật: ra lệnh | score ≥ 7 / 10 |
 | Hạng A / B / C | \|net\| ≥ 30 / ≥ 15 / < 15 |
 | Hạng vàng | \|net\| ≥ 40 + nhất trí + ≥ 3 vế có điểm |
-| **Cửa chất lượng** (`tradeable`) | **nhất trí + hạng ≥ B + R kỳ vọng ≤ 1.5** |
+| **Cửa chất lượng** (`tradeable`) | **nhất trí + hạng ≥ B + R kỳ vọng ≤ 1.5 + phí ≤ 10% của 1R** |
 | Ngưỡng "TP2 quá xa" (`GATE.maxRRBlended`) | 1.5 |
+| Ngưỡng "mục tiêu quá sát" (`GATE.minRRBlended`) | 0.5 — **không phải 1**, nhóm 0.5–1 là nhóm tốt nhất |
+| Phí tối đa theo R (`GATE.maxFeeShare`) | 0.10 → stop ≳ 1.2% giá |
+| Phí giả định (`FEES`) | 0.05% mỗi chiều + 0.02% trượt giá |
+| Lịch sử funding (`FUNDING_HIST`) | đảo sau ≥ 4 kỳ ×0.5 · chuỗi ≥ 8 kỳ ×0.25 — **chưa qua backtest** |
 | Size Normal | qua cửa **và** hạng ≥ A (không còn phụ thuộc số cảnh báo) |
 | RR TP1 bị trừ điểm | < 1.2 |
 | Cảnh báo SL rộng | > 3% giá |
@@ -410,6 +455,8 @@ Chỗ **duy nhất** liệt kê con số. Sửa ở mã nguồn thì sửa cả 
 | Backtest: chờ khớp / giữ tối đa | 12 / 60 nến |
 | Backtest: phí mỗi chiều / trượt giá khi dính stop | 0.05% / 0.02% notional |
 | Backtest: dời SL về hoà vốn sau TP1 | **tắt** — đo ra là xấu (mục 10) |
+| Cắt value dời chỗ (`valueMigration`) | **tắt** — đo ra là xấu (mục 10) |
+| Ngưỡng phát hiện value dời chỗ | chồng lấn VA < 0.2 **và** vùng giữa dày < 25% mức trung bình |
 
 ---
 

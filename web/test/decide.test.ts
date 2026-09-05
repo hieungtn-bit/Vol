@@ -124,7 +124,7 @@ describe('thiếu funding', () => {
         ...inp.deriv,
         funding: {
           quality: 'REAL' as const, venue: 'okx-swap', rate: 0.00005,
-          nextFundingTime: null, markPrice: 100, flat: true, extreme: false,
+          nextFundingTime: null, markPrice: 100, flat: true, extreme: false, history: null,
           note: 'Funding phẳng — bỏ qua.',
         },
       },

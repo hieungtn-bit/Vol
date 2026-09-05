@@ -164,6 +164,8 @@ export interface PerpSnapshot {
   alive: boolean;
   reason: string;
   fundingRate: number | null;
+  /** Các kỳ funding ĐÃ CHỐT, cũ → mới. null khi không lấy được. */
+  fundingHistory: number[] | null;
   nextFundingTime: number | null;
   markPrice: number | null;
   openInterest: number | null;   // base coin
@@ -180,17 +182,22 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
       venueState.perpAlive = false;
       venueState.perpReason = reason;
       return {
-        alive: false, reason, fundingRate: null, nextFundingTime: null,
+        alive: false, reason, fundingRate: null, fundingHistory: null, nextFundingTime: null,
         markPrice: null, openInterest: null, oiHist: null, oiUsd: null, vol24hUsd: null,
       };
     };
     try {
-      const [pi, oi, t24] = await Promise.all([
+      const [pi, oi, t24, fh] = await Promise.all([
         getJSON<any>(`${FAPI}/fapi/v1/premiumIndex?symbol=${symbol}`),
         getJSON<any>(`${FAPI}/fapi/v1/openInterest?symbol=${symbol}`).catch(() => null),
         // Volume 24h của chính chợ perp — mẫu số duy nhất hợp lệ cho tỷ lệ OI/vol.
         getJSON<any>(`${FAPI}/fapi/v1/ticker/24hr?symbol=${symbol}`).catch(() => null),
+        // Lịch sử funding: rate hiện tại không nói được "đã kéo dài bao lâu".
+        getJSON<any[]>(`${FAPI}/fapi/v1/fundingRate?symbol=${symbol}&limit=12`).catch(() => null),
       ]);
+      const fundingHistory = Array.isArray(fh)
+        ? fh.map((x) => Number(x.fundingRate)).filter((x) => Number.isFinite(x))
+        : null;
       let oiHist: { t: number; oi: number }[] | null = null;
       let oiUsd: number | null = null;
       try {
@@ -210,6 +217,7 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
         alive: true,
         reason: 'binance-fapi',
         fundingRate: pi?.lastFundingRate != null ? +pi.lastFundingRate : null,
+        fundingHistory,
         nextFundingTime: pi?.nextFundingTime != null ? +pi.nextFundingTime : null,
         markPrice: mark,
         openInterest: oi?.openInterest != null ? +oi.openInterest : null,

@@ -16,8 +16,8 @@ export default function LivePage() {
   const [extra, setExtra] = useState('');
   const [auto, setAuto] = useState(true);          // bản điện thì mặc định phải tự chạy
   const [goldOnly, setGoldOnly] = useState(false);
-  // Mặc định BẬT: backtest đo được là bỏ các kèo trượt cửa giữ lại 22% số lệnh
-  // nhưng nâng avgR 0.05 → 0.18 và hạ sụt giảm tối đa từ 105.9R xuống 8.7R.
+  // Mặc định BẬT: backtest đo được là bỏ các kèo trượt cửa giữ lại 7% số lệnh
+  // nhưng nâng avgR 0.05 → 0.31 và hạ sụt giảm tối đa từ 116.9R xuống 6.3R.
   const [tradeableOnly, setTradeableOnly] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -95,10 +95,12 @@ export default function LivePage() {
       <div className="mb-3 rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-2xs leading-snug text-amber-200">
         <b>Không phải lời khuyên đầu tư. Chốt TP1. Không 10x gỡ lỗ.</b>{' '}
         Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên <b>cửa chất lượng</b> mới là thứ phải đọc.
-        <b className="text-emerald-300"> Qua cửa</b> = mọi vế cùng hướng + hạng ≥ B + TP2 không quá xa;
-        backtest 5.521 lệnh cho thấy lọc bằng đúng ba điều này giữ 22% số kèo mà nâng
-        avgR 0.05 → 0.18 và hạ sụt giảm tối đa 105.9R → 8.7R. Kèo <b>trượt cửa vẫn có hướng</b>,
-        nhưng là thiên hướng để theo dõi, không phải lệnh để vào tiền.
+        <b className="text-emerald-300"> Qua cửa</b> = mọi vế cùng hướng + hạng ≥ B + TP2 không quá xa
+        + <b>stop đủ rộng để phí không ăn quá 10% của 1R</b>. Backtest 5.661 lệnh: lọc bằng
+        đúng bốn điều này giữ 7% số kèo mà nâng avgR 0.05 → 0.31, PF 1.11 → 2.16,
+        sụt giảm tối đa 116.9R → 6.3R (ngoài mẫu 0.39 / PF 2.86). Đổi lại, kèo qua cửa
+        rất hiếm. Kèo <b>trượt cửa vẫn có hướng</b>, nhưng là thiên hướng để theo dõi,
+        không phải lệnh để vào tiền.
         <b className="text-amber-300"> ★ vàng</b> = mọi vế đồng thuận và độ lệch ≥ 40 ·
         <b> A</b> = lệch hẳn · <b>B</b> = lệch vừa · <b>C</b> = hai phía gần cân nhau.
         Rủi ro 0.5–1% tài khoản mỗi lệnh.

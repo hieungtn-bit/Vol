@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideDirection } from '@/lib/direct';
+import { GATE, decideDirection, feeInR } from '@/lib/direct';
 import { analyzeStructure } from '@/lib/structure';
 import { buildFlow } from '@/lib/flow';
 import { analyzePriceAction } from '@/lib/priceAction';
@@ -72,7 +72,7 @@ function call(specs: Spec[], buyPct: number, oiRead: OIRead, fundingRate: number
   };
   deriv.funding = {
     quality: 'REAL', venue: 'binance-perp', rate: fundingRate, nextFundingTime: null,
-    markPrice: 101, flat: false, extreme: false, note: 'test',
+    markPrice: 101, flat: false, extreme: false, history: null, note: 'test',
   };
   const flow = buildFlow(
     [{ buy: buyPct, sell: 100 - buyPct }, { buy: buyPct, sell: 100 - buyPct }],
@@ -128,12 +128,41 @@ describe('vế Value Area phải bị chặn biên', () => {
 });
 
 describe('cửa chất lượng (ngưỡng do backtest hiệu chuẩn)', () => {
-  it('cửa đúng bằng ba điều kiện đã hiệu chuẩn, không hơn không kém', () => {
+  const feeOk = (c: ReturnType<typeof call>) => {
+    const e = c.side === 'LONG' ? c.entry[1] : c.entry[0];
+    const f = feeInR(e, Math.abs(e - c.sl));
+    return f == null || f <= GATE.maxFeeShare;
+  };
+
+  it('cửa đúng bằng bốn điều kiện đã hiệu chuẩn, không hơn không kém', () => {
     for (const buy of [10, 45, 88]) {
       const c = call(cleanShortSetup(), buy, 'new-shorts', -0.0003);
-      const expected = c.unanimous && c.conviction !== 'C' && (c.rrBlended ?? 0) <= 1.5;
+      const expected = c.unanimous
+        && c.conviction !== 'C'
+        && (c.rrBlended ?? 0) <= GATE.maxRRBlended
+        && feeOk(c);
       expect(c.tradeable).toBe(expected);
     }
+  });
+
+  it('stop quá hẹp thì trượt cửa vì PHÍ, dù mọi vế đồng thuận', () => {
+    // Đây là điều kiện phản trực giác nhất: R gộp không đổi theo độ rộng stop,
+    // nên stop hẹp không phải kèo xấu — nó chỉ không đủ chỗ để trả phí.
+    const c = call(cleanShortSetup(), 10, 'new-shorts', -0.0003);
+    const e = c.side === 'LONG' ? c.entry[1] : c.entry[0];
+    const f = feeInR(e, Math.abs(e - c.sl))!;
+    if (f > GATE.maxFeeShare) {
+      expect(c.tradeable).toBe(false);
+      expect(c.gateBlockers.some((b) => b.includes('phí ăn'))).toBe(true);
+      expect(c.warnings.some((w) => w.includes('phí vào-ra'))).toBe(true);
+      expect(['LONG', 'SHORT']).toContain(c.side);   // vẫn có hướng
+    }
+  });
+
+  it('phí quy ra R tỉ lệ nghịch với độ rộng stop', () => {
+    expect(feeInR(100, 0.5)).toBeCloseTo(feeInR(100, 1)! * 2, 10);
+    expect(feeInR(100, 0)).toBeNull();
+    expect(feeInR(0, 1)).toBeNull();
   });
 
   it('kèo sạch thì nhất trí — và hạng vàng VẪN có thể trượt cửa vì TP2 quá xa', () => {
@@ -143,8 +172,8 @@ describe('cửa chất lượng (ngưỡng do backtest hiệu chuẩn)', () => {
     // Fixture này có R kỳ vọng ~2.96: đúng vùng backtest đo ra avgR âm. Hạng vàng
     // nói "mọi vế đồng thuận", cửa nói "kèo này đáng đặt tiền không" — hai câu hỏi
     // khác nhau, và một kèo đồng thuận với TP2 quá xa vẫn là kèo không nên vào.
-    expect(c.gateBlockers.every((b) => b.includes('TP2 quá xa'))).toBe(true);
-    expect(c.tradeable).toBe((c.rrBlended ?? 0) <= 1.5);
+    expect(c.gateBlockers.some((b) => b.includes('TP2 quá xa'))).toBe(true);
+    expect(c.tradeable).toBe(false);
   });
 
   it('có vế ngược hướng → trượt cửa nhưng VẪN CÓ HƯỚNG, không thành WAIT', () => {

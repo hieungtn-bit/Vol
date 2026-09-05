@@ -40,7 +40,7 @@ export function noDerivatives(): Derivatives {
   return {
     funding: {
       quality: 'UNAVAILABLE', venue: null, rate: null, nextFundingTime: null,
-      markPrice: null, flat: false, extreme: false, note: 'N/A — không dùng làm lý do.',
+      markPrice: null, flat: false, extreme: false, history: null, note: 'N/A — không dùng làm lý do.',
     },
     oi: {
       quality: 'UNAVAILABLE', venue: null, open: null, unit: null, chg1h: null, chg24h: null,

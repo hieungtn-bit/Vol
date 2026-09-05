@@ -118,6 +118,7 @@ async function main() {
     { name: 'nhất trí + Rkv ≤ 1.5', ok: (t) => t.unanimous && (t.rrBlended ?? 0) <= 1.5 },
     { name: 'nhất trí + ≥B + Rkv ≤ 1.5', ok: (t) => t.unanimous && RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 },
     { name: '≥B + Rkv ≤ 1.5', ok: (t) => RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 },
+    { name: 'CỬA ĐẦY ĐỦ (4 điều kiện)', ok: (t) => t.unanimous && RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 && t.slPct >= 1.2 },
   ];
   for (const r of rules) {
     const kept = all.filter(r.ok);
@@ -133,7 +134,7 @@ async function main() {
 
   // Luật thắng cuộc bẻ ra theo khung và theo mã: một luật chỉ đáng tin khi nó
   // không sống nhờ đúng một khung hoặc đúng một mã.
-  const best = { name: 'nhất trí + ≥B + Rkv ≤ 1.5', ok: (t: Trade) => t.unanimous && RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 };
+  const best = { name: 'CỬA ĐẦY ĐỦ (4 điều kiện)', ok: (t: Trade) => t.unanimous && RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 && t.slPct >= 1.2 };
   const kept = all.filter(best.ok);
   console.log(`\n  ["${best.name}" bẻ ra theo khung và theo mã]`);
   for (const tf of tfs) row(`  ${tf}`, kept.filter((t) => t.tf === tf));
@@ -141,22 +142,37 @@ async function main() {
   row('  LONG', kept.filter((t) => t.side === 'LONG'));
   row('  SHORT', kept.filter((t) => t.side === 'SHORT'));
 
+  // SL hẹp lỗ vì PHÍ hay vì kèo tồi? Phí tính theo R tỉ lệ nghịch với độ rộng
+  // stop, nên phải tách gộp/ròng ra mới trả lời được — và câu trả lời quyết định
+  // luật này có bền hay không.
+  console.log('\n── ĐỘ RỘNG STOP: GỘP vs RÒNG (phí có phải là lý do không?) ──');
+  for (const [lo, hi] of [[0, 0.5], [0.5, 1], [1, 1.5], [1.5, 2], [2, 3], [3, 999]]) {
+    const g = all.filter((t) => t.slPct >= lo && t.slPct < hi);
+    if (!g.length) continue;
+    const gross = g.reduce((s, t) => s + t.rGross, 0) / g.length;
+    const cost = g.reduce((s, t) => s + t.costR, 0) / g.length;
+    const net = g.reduce((s, t) => s + t.r, 0) / g.length;
+    console.log(`  ${pad(`${lo}–${hi}%`, 12)} n=${pad(g.length, 5)} gộp=${pad(num(gross), 7)} phí=${pad(num(cost, 3), 7)} ròng=${num(net)}`);
+  }
+
+  console.log('\n── "cửa đầy đủ + SL ≥ 1.5%" bẻ ra theo khung và mã ──');
+  const R2: Record<Conviction, number> = { C: 0, B: 1, A: 2, GOLD: 3 };
+  const win = all.filter((t) => R2[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 && t.slPct >= 1.5);
+  for (const tf of tfs) row(`  ${tf}`, win.filter((t) => t.tf === tf));
+  for (const sym of symbols) row(`  ${sym}`, win.filter((t) => t.symbol === sym));
+  row('  LONG', win.filter((t) => t.side === 'LONG'));
+  row('  SHORT', win.filter((t) => t.side === 'SHORT'));
+
   if (arg('variants', '1') !== '0') {
     console.log('\n── SO BIẾN THỂ (cùng dữ liệu, chỉ đổi một luật mỗi lần) ──');
     console.log('  Cột "ngoài mẫu" là nửa sau theo thời gian — phần chưa dùng để chỉnh gì.');
-    const WSETS: Record<string, Weights> = {
-      // tổng luôn = 103 để ngưỡng hạng còn so sánh được
-      'VA nhẹ, cấu trúc + taker nặng': { structure: 30, valueLocation: 10, takerFlow: 25, priceAction: 20, openInterest: 10, funding: 8 },
-      'bỏ hẳn vế Value Area': { structure: 32, valueLocation: 0, takerFlow: 26, priceAction: 23, openInterest: 14, funding: 8 },
-    };
+    const G = { minConviction: 'B' as const, maxRRBlended: 1.5, valueMigration: false };
     const variants: { name: string; opt: Partial<BTOptions> }[] = [
-      { name: 'gốc', opt: {} },
-      { name: 'trọng số: VA nhẹ', opt: { weights: WSETS['VA nhẹ, cấu trúc + taker nặng'] } },
-      { name: 'trọng số: bỏ hẳn VA', opt: { weights: WSETS['bỏ hẳn vế Value Area'] } },
-      { name: 'VA nhẹ + ≥B', opt: { weights: WSETS['VA nhẹ, cấu trúc + taker nặng'], minConviction: 'B' } },
-      { name: 'bỏ VA + ≥B', opt: { weights: WSETS['bỏ hẳn vế Value Area'], minConviction: 'B' } },
-      { name: '≥B (trọng số gốc)', opt: { minConviction: 'B' } },
-      { name: '≥B + Rkv≤1.5 (trọng số gốc)', opt: { minConviction: 'B', maxRRBlended: 1.5 } },
+      { name: 'gốc (không cửa nào)', opt: { valueMigration: false } },
+      { name: 'cửa cũ: nhất trí+≥B+Rkv≤1.5', opt: { ...G } },
+      { name: 'CỬA MỚI: + phí ≤ 10% của 1R', opt: { ...G, minSLPct: 1.2 } },
+      { name: 'cửa mới, ngưỡng phí 8% (SL≥1.5%)', opt: { ...G, minSLPct: 1.5 } },
+      { name: 'cắt value dời chỗ (đo riêng)', opt: { valueMigration: true } },
     ];
     for (const v of variants) {
       const opt: BTOptions = { ...DEFAULT_BT, minConviction, ...v.opt };

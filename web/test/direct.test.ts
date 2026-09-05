@@ -108,7 +108,7 @@ describe('dòng tiền Buy/Sell', () => {
 describe('funding — ai trả ai', () => {
   const mk = (rate: number, flatFr: boolean, extreme = false): FundingInfo => ({
     quality: 'REAL', venue: 'binance-perp', rate, nextFundingTime: null,
-    markPrice: 100, flat: flatFr, extreme, note: '',
+    markPrice: 100, flat: flatFr, extreme, history: null, note: '',
   });
 
   it('funding dương → LONG trả SHORT', () => {
@@ -349,7 +349,15 @@ describe('hạng tín hiệu vàng', () => {
     const warn = c.warnings.join(' ');
     // không được còn cảnh báo kiểu "RR TP1 < 1" nữa
     expect(warn).not.toContain('RR TP1');
-    if (c.rrBlended != null && c.rrBlended < 1) expect(warn).toContain('R kỳ vọng');
+    // Ngưỡng là 0.5, KHÔNG phải 1: backtest đo nhóm 0.5–1 là nhóm tốt nhất
+    // (avgR 0.09), chỉ nhóm dưới 0.5 mới yếu (0.02). Cảnh báo phải bám số đo.
+    if (c.rrBlended != null && c.rrBlended < 0.5) expect(warn).toContain('R kỳ vọng');
+    if (c.rrBlended != null && c.rrBlended >= 0.5 && c.rrBlended <= 1.5) {
+      expect(warn).not.toContain('R kỳ vọng');
+    }
+    // Câu "lỗ kỳ vọng" là sai: R kỳ vọng giả định cả hai mốc đều chạm, nó không
+    // phải kỳ vọng có xác suất. Không được xuất hiện ở đâu nữa.
+    expect(warn).not.toContain('lỗ kỳ vọng');
   });
 
   it('đã vàng thì mọi vế có điểm đều cùng hướng và độ lệch ≥ 40', () => {

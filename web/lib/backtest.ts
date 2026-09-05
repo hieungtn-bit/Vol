@@ -49,6 +49,16 @@ export interface BTOptions {
   maxRRBlended: number | null;
   /** Bộ trọng số chấm điểm. null = dùng bộ đang chạy thật. */
   weights: Weights | null;
+  /** Cắt profile tại điểm value dời chỗ. */
+  valueMigration: boolean;
+  /** Thu cửa sổ profile khi VA rộng quá bấy nhiêu lần ATR. null = không thu. */
+  maxVAoverATR: number | null;
+  /** Bỏ tín hiệu có SL cách entry quá bấy nhiêu % giá. null = không lọc. */
+  maxSLPct: number | null;
+  /** Bỏ tín hiệu có SL SÁT entry hơn bấy nhiêu % giá. null = không lọc. */
+  minSLPct: number | null;
+  /** Bỏ tín hiệu có vùng entry cách giá hiện tại quá bấy nhiêu % . null = không lọc. */
+  maxEntryDistPct: number | null;
 }
 
 export const DEFAULT_BT: BTOptions = {
@@ -62,6 +72,11 @@ export const DEFAULT_BT: BTOptions = {
   minNet: null,
   maxRRBlended: null,
   weights: null,
+  valueMigration: true,
+  maxVAoverATR: null,
+  maxSLPct: null,
+  minSLPct: null,
+  maxEntryDistPct: null,
 };
 
 const RANK: Record<Conviction, number> = { C: 0, B: 1, A: 2, GOLD: 3 };
@@ -97,6 +112,10 @@ export interface Trade {
   /** Để hiệu chuẩn ngưỡng hạng vàng bằng dữ liệu thay vì bằng cảm tính. */
   warningCount: number;
   rrBlended: number | null;
+  /** Khoảng cách entry→SL tính theo % giá. Stop rộng = phí nặng theo R và kèo tồi. */
+  slPct: number;
+  /** Vùng entry cách giá lúc ra tín hiệu bao nhiêu % — entry quá xa là mức giá rác. */
+  entryDistPct: number;
   unanimous: boolean;
   /** Tín hiệu có qua cửa chất lượng không. */
   tradeable: boolean;
@@ -121,7 +140,7 @@ export function blindDerivatives(): Derivatives {
   return {
     funding: {
       quality: 'UNAVAILABLE', venue: null, rate: null, nextFundingTime: null,
-      markPrice: null, flat: false, extreme: false, note: 'N/A — backtest mù phái sinh.',
+      markPrice: null, flat: false, extreme: false, history: null, note: 'N/A — backtest mù phái sinh.',
     },
     oi: {
       quality: 'UNAVAILABLE', venue: null, open: null, unit: null, chg1h: null, chg24h: null,
@@ -148,10 +167,15 @@ export function signalAt(
   i: number,
   window = BT_WINDOW[tf],
   weights: Weights | null = null,
+  valueMigration = true,
+  maxVAoverATR: number | null = null,
 ): DirectionalCall | null {
   const slice = sliceAsOf(candles, i, window);
   const deriv = blindDerivatives();
-  const prepared = prepareTF({ symbol, tf, candles: slice, deriv, htf: null, hasClosedBar: true });
+  const prepared = prepareTF({
+    symbol, tf, candles: slice, deriv, htf: null, hasClosedBar: true,
+    valueMigration, maxVAoverATR,
+  });
   if (!prepared) return null;
   const flow = buildFlow(null, slice, { retailLongPct: null, topLongPct: null }, deriv.funding);
   return decideDirection(prepared.input, prepared.structure, flow, weights ?? undefined);
@@ -254,6 +278,8 @@ export function simulate(
       evidence: call.evidence.map((e) => ({ label: e.label, points: e.points })),
       warningCount: call.warnings.length,
       rrBlended: call.rrBlended,
+      slPct: (risk / entry) * 100,
+      entryDistPct: (Math.abs(entry - candles[from].c) / candles[from].c) * 100,
       unanimous: call.unanimous,
       tradeable: call.tradeable,
     };
@@ -272,11 +298,19 @@ export function runBacktest(
 
   for (let i = window; i < candles.length - 2; i++) {
     if (opt.onePositionAtATime && i <= busyUntil) continue;
-    const call = signalAt(symbol, tf, candles, i, window, opt.weights);
+    const call = signalAt(symbol, tf, candles, i, window, opt.weights, opt.valueMigration, opt.maxVAoverATR);
     if (!call) continue;
     if (RANK[call.conviction] < RANK[opt.minConviction]) continue;
     if (opt.minNet !== null && Math.abs(call.net) < opt.minNet) continue;
     if (opt.maxRRBlended !== null && call.rrBlended !== null && call.rrBlended > opt.maxRRBlended) continue;
+    const eRef = call.side === 'LONG' ? call.entry[1] : call.entry[0];
+    const slPct = eRef > 0 ? (Math.abs(eRef - call.sl) / eRef) * 100 : 0;
+    if (opt.maxSLPct !== null && slPct > opt.maxSLPct) continue;
+    if (opt.minSLPct !== null && slPct < opt.minSLPct) continue;
+    if (opt.maxEntryDistPct !== null) {
+      const px = candles[i].c;
+      if (px > 0 && (Math.abs(eRef - px) / px) * 100 > opt.maxEntryDistPct) continue;
+    }
 
     const t = simulate(candles, i, call, opt);
     if (!t) continue;
@@ -410,6 +444,16 @@ export function calibrate(trades: Trade[]): { dim: string; bucket: string; n: nu
   for (const [lo, hi] of [[-99, 0.5], [0.5, 1], [1, 1.5], [1.5, 99]]) {
     put('R kỳ vọng', `${lo}–${hi}`,
       trades.filter((t) => t.rrBlended != null && t.rrBlended >= lo && t.rrBlended < hi));
+  }
+  // Độ rộng stop: stop rộng vừa ăn phí nặng theo R, vừa là dấu hiệu mức giá được
+  // dựng từ một node ở quá xa — đúng ca ENA 1d ra entry cách giá 7.9%.
+  for (const [lo, hi] of [[0, 1], [1, 2], [2, 3], [3, 5], [5, 999]]) {
+    put('SL cách entry (% giá)', `${lo}–${hi}%`,
+      trades.filter((t) => t.slPct >= lo && t.slPct < hi));
+  }
+  for (const [lo, hi] of [[0, 0.5], [0.5, 1], [1, 2], [2, 4], [4, 999]]) {
+    put('entry cách giá (%)', `${lo}–${hi}%`,
+      trades.filter((t) => t.entryDistPct >= lo && t.entryDistPct < hi));
   }
 
   // Ứng viên cho định nghĩa hạng vàng mới, đối chiếu với định nghĩa cũ.

@@ -152,7 +152,27 @@ export interface FundingInfo {
   /** |FR| < 0.02%/8h → phẳng → CẤM dùng làm lý do. */
   flat: boolean;
   extreme: boolean;
+  /** Lịch sử funding gần nhất, mới nhất đứng cuối. null khi không lấy được. */
+  history: FundingHistory | null;
   note: string;
+}
+
+/**
+ * Lịch sử funding. Rate hiện tại nói ai đang trả ai LÚC NÀY; lịch sử nói việc đó
+ * đã kéo dài bao lâu và có vừa đảo chiều không — hai câu hỏi khác nhau.
+ */
+export interface FundingHistory {
+  /** Các kỳ đã chốt, cũ → mới. */
+  rates: number[];
+  /** Số kỳ liên tiếp gần nhất cùng dấu, tính cả kỳ mới nhất. */
+  streak: number;
+  /** Dấu của chuỗi đó: 1 = long trả short, -1 = short trả long, 0 = phẳng. */
+  streakSign: 0 | 1 | -1;
+  /** Kỳ mới nhất đổi dấu so với kỳ trước. */
+  flipped: boolean;
+  /** Số kỳ cùng dấu NGAY TRƯỚC cú đảo. 0 khi không đảo. */
+  brokeStreak: number;
+  text: string;
 }
 
 export type OIRead =

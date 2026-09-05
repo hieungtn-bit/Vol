@@ -107,15 +107,25 @@ lượng** và **hạng tin cậy**:
 
 ### Cửa chất lượng (`tradeable`) — thứ phải đọc trước tiên
 
-Hạng nói bằng chứng lệch bao nhiêu. Cửa nói **kèo này có đáng đặt tiền không**. Ba điều
-kiện, tất cả do backtest hiệu chuẩn: **nhất trí** + **hạng ≥ B** + **R kỳ vọng ≤ 1.5**.
+Hạng nói bằng chứng lệch bao nhiêu. Cửa nói **kèo này có đáng đặt tiền không**. Bốn
+điều kiện, tất cả do backtest hiệu chuẩn: **nhất trí** + **hạng ≥ B** +
+**R kỳ vọng ≤ 1.5** + **phí ≤ 10% của 1R** (stop ≳ 1.2% giá).
 
-Trên 5521 lệnh (6 mã × 15m/1h/4h, đã trừ phí), lọc bằng đúng ba điều kiện này:
+Trên 5661 lệnh (6 mã × 15m/1h/4h, đã trừ phí):
 
-| | n | avgR | PF | sụt giảm tối đa | ngoài mẫu avgR |
+| | n | avgR | PF | sụt giảm tối đa | ngoài mẫu |
 |---|---|---|---|---|---|
-| không lọc | 5521 | 0.05 | 1.13 | 105.9R | 0.01 |
-| **qua cửa** | 1200 (22%) | **0.18** | **1.61** | **8.7R** | **0.11** |
+| không lọc | 5661 | 0.05 | 1.11 | 116.9R | −0.00 |
+| **qua cửa** | 394 (7%) | **0.31** | **2.16** | **6.3R** | **0.39 / PF 2.86** |
+
+Ngoài mẫu cao hơn trong mẫu — không có dấu hiệu uốn tham số. Cái giá: chỉ còn 7% số
+tín hiệu, tức khoảng một kèo mỗi mã-khung mỗi mười ngày.
+
+**Điều kiện phí là cái phản trực giác nhất.** Tách R gộp và R ròng theo độ rộng stop:
+R **gộp** gần như bằng nhau ở mọi độ rộng (0.17 / 0.17 / 0.18), toàn bộ chênh lệch
+ròng là phí — vì phí quy ra R tỉ lệ **nghịch** với độ rộng stop. Kèo stop 0.5% phải
+thắng thêm 0.39R chỉ để hoà phí, trong khi cả edge chỉ có 0.17R. Hệ quả: cảnh báo
+"SL rộng quá 3%" đã bị đảo — nhóm stop 2–3% mới là nhóm tốt nhất (0.28).
 
 Kèo trượt cửa **vẫn ra hướng** — luật "không có WAIT" không đổi. Nó chỉ bị đánh dấu
 *chỉ theo dõi*, ghi rõ trượt vì điều kiện nào, và size bị ép về Small. Bản điện mặc
@@ -263,12 +273,20 @@ Lợi thế nằm ở khâu **chọn kèo**, không ở khâu chấm điểm —
 Áp cửa vào, avgR theo khung thành 15m 0.07 · 1h 0.17 · 4h 0.24, và cả sáu mã đều dương
 (0.12 → 0.24), LONG 0.18 · SHORT 0.18.
 
-Hai cải tiến nghe rất hợp lý mà đo ra là **xấu**, nên đã bỏ:
+Năm cải tiến nghe rất hợp lý mà đo ra là **xấu**, nên đã bỏ:
 
 - **Dời SL về hoà vốn sau TP1.** Riêng 1h thì có vẻ đúng; chạy đủ ba khung thì ngoài
   mẫu 0.01 → −0.01. Nó cắt đuôi thắng nhiều hơn phần nó cứu.
 - **Hạ trọng số vế Value Area** (bảng edge cho vế này −0.04). Đo: sụt giảm tối đa
   105.9R → 172.9R. Vế VA không chọn hướng, nó chọn **vị trí vào lệnh** — bỏ nó thì hệ
   vào giữa value nhiều hơn, đúng thứ luật cứng số 2 cấm.
+- **Chặn stop rộng** ("SL > 3% giá là kèo xấu"). Ngược hẳn: nhóm 2–3% cho 0.28, nhóm
+  0–1% cho −0.03.
+- **Chặn entry xa giá.** Bắt đầu từ một output hỏng thật (ENA 1d, entry cách giá 7.9%).
+  Đo: entry 0–0.5% cho −0.02, trên 4% cho **0.42**. Entry xa là lệnh chờ ở mức thật,
+  entry sát giá là đuổi giá.
+- **Cắt "value dời chỗ".** Dựng hẳn bộ phát hiện với 17 test, phân biệt đúng cú nhảy
+  với cú trôi đều — nhưng ngoài mẫu 0.01 → −0.00, và nó **không kích hoạt** trên chính
+  ca ENA đã sinh ra nó, vì ENA đi bộ lên chứ không nhảy. Giữ code, mặc định tắt.
 
 Chi tiết đầy đủ ở [`ALGORITHM.md`](./ALGORITHM.md) mục 10.

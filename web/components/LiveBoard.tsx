@@ -168,8 +168,9 @@ function Detail({ c }: { c: DirectionalCall }) {
       {c.tradeable ? (
         <p className="mt-1.5 rounded border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-1 text-2xs text-emerald-200">
           <b>Qua cửa chất lượng</b> — mọi vế cùng hướng, hạng {c.conviction}, R kỳ vọng{' '}
-          {c.rrBlended?.toFixed(2) ?? 'N/A'} ≤ 1.5. Backtest 5.521 lệnh: nhóm qua cửa có
-          avgR 0.18 / PF 1.61, nhóm chung là 0.05 / 1.13.
+          {c.rrBlended?.toFixed(2) ?? 'N/A'} ≤ 1.5, và stop đủ rộng để phí không ăn quá
+          10% của 1R. Backtest 5.661 lệnh: nhóm qua cửa avgR 0.31 / PF 2.16 (ngoài mẫu
+          0.39 / 2.86), nhóm chung 0.05 / 1.11.
         </p>
       ) : (
         <p className="mt-1.5 rounded border border-slate-500/40 bg-slate-500/10 px-1.5 py-1 text-2xs text-slate-300">

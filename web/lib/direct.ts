@@ -59,9 +59,65 @@ export const GOLD = {
  * Cửa chất lượng — ngưỡng do backtest hiệu chuẩn, không phải chọn tay.
  * Xem mục 11 của ALGORITHM.md.
  */
+/**
+ * Phí giả định để quy ra R. Taker Binance perp, vào một lần ra một lần, cộng
+ * trượt giá khi thoát bằng stop. Đúng bộ số backtest đang dùng.
+ */
+export const FEES = { perSide: 0.0005, slip: 0.0002 };
+
+/** Phí quy ra R cho một stop rộng `risk` trên giá `entry`. */
+export function feeInR(entry: number, risk: number): number | null {
+  if (!(entry > 0) || !(risk > 0)) return null;
+  return ((FEES.perSide * 2 + FEES.slip) * entry) / risk;
+}
+
+/**
+ * Ngưỡng đọc lịch sử funding. Đặt bằng lập luận, KHÔNG bằng đo — backtest chạy mù
+ * phái sinh nên chưa kiểm chứng được vế này. Vì thế các hệ số đều nhỏ và lấy từ
+ * ngân sách của chính vế funding, không cộng thêm trọng số mới.
+ */
+export const FUNDING_HIST = {
+  /** Chuỗi trước cú đảo phải dài ít nhất bấy nhiêu kỳ mới coi là sự kiện. */
+  minStreak: 4,
+  /** Chuỗi chưa đảo dài tới mức này thì coi là bên trả tiền đã mỏi. */
+  longStreak: 8,
+  /** Phần trọng số funding dành cho cú đảo. */
+  flipShare: 0.5,
+  /** Phần trọng số funding dành cho chuỗi dài chưa đảo. */
+  tiredShare: 0.25,
+};
+
 export const GATE = {
   /** Trên mức này thì TP2 xa quá, backtest đo ra avgR âm. */
   maxRRBlended: 1.5,
+  /**
+   * Phí không được ăn quá bấy nhiêu phần của 1R.
+   *
+   * Đây là điều kiện quan trọng nhất và cũng phản trực giác nhất mà backtest tìm
+   * ra. Tách gộp/ròng theo độ rộng stop trên 5661 lệnh:
+   *
+   *   stop 0–0.5%  → R gộp 0.01, phí 0.394 → ròng −0.39
+   *   stop 0.5–1%  → R gộp 0.17, phí 0.141 → ròng  0.03
+   *   stop 1–1.5%  → R gộp 0.17, phí 0.092 → ròng  0.08
+   *   stop 1.5–2%  → R gộp 0.18, phí 0.065 → ròng  0.12
+   *   stop 2–3%    → R gộp 0.33, phí 0.046 → ròng  0.28
+   *
+   * R GỘP gần như bằng nhau ở mọi độ rộng — chất lượng kèo không đổi. Toàn bộ
+   * chênh lệch là phí, vì phí tính theo R tỉ lệ NGHỊCH với độ rộng stop. Một kèo
+   * stop 0.5% phải thắng thêm 0.39R chỉ để hoà phí, trong khi cả cái edge đo được
+   * chỉ có 0.17R. Đây là sự thật cơ học, không phải chế độ thị trường: nó còn
+   * đúng chừng nào còn trả phí taker.
+   *
+   * Ngưỡng 0.10 ứng với stop ≈ 1.2% giá. Đo được 1.5% cho kết quả ngoài mẫu tốt
+   * hơn (0.15 vs 0.11), nhưng ngồi lên đúng đỉnh của một đường cong đo trên
+   * n=599 là uốn tham số — nên lấy mức có lý do cơ học thay vì mức đẹp nhất.
+   */
+  maxFeeShare: 0.1,
+  /**
+   * Dưới mức này thì mục tiêu sát stop quá. KHÔNG phải "lỗ kỳ vọng" — backtest đo
+   * nhóm 0.5–1 là nhóm tốt nhất, chỉ nhóm dưới 0.5 mới yếu (avgR 0.02 vs 0.09).
+   */
+  minRRBlended: 0.5,
 };
 
 export interface Evidence {
@@ -280,6 +336,31 @@ export function decideDirection(
   }
   push('Funding (ai trả ai)', fundPts, flow.funding.text);
 
+  // 7b. LỊCH SỬ funding — đã kéo dài bao lâu, và vừa đảo chưa.
+  //
+  //     Rate hiện tại nói ai đang trả ai LÚC NÀY. Nó không nói được một chuỗi sáu
+  //     kỳ long trả short vừa lật thành short trả long — mà đó mới là sự kiện.
+  //     Chuỗi càng dài, bên trả tiền càng đông và càng mỏi; cú đảo sau một chuỗi
+  //     dài là dấu hiệu bên đó bắt đầu bỏ chạy.
+  //
+  //     CẢNH BÁO: vế này CHƯA TỪNG được backtest kiểm chứng, vì backtest chạy mù
+  //     phái sinh (fapi chặn IP). Nên nó KHÔNG được cấp thêm trọng số — nó chỉ
+  //     chia lại phần ngân sách của chính vế funding. Tổng trọng số không đổi, và
+  //     một vế chưa đo được thì không được phép làm nặng thêm kết luận.
+  let histPts = 0;
+  const fh = fnd.history;
+  if (fh && fh.flipped && fh.brokeStreak >= FUNDING_HIST.minStreak) {
+    // Đảo sau chuỗi dài: nghiêng về phía bên VỪA THÀNH bên trả tiền phải chịu ép.
+    // streakSign 1 = long trả short → đám đông vừa lật sang long → điểm âm.
+    histPts = -fh.streakSign * W.funding * FUNDING_HIST.flipShare;
+  } else if (fh && !fh.flipped && fh.streak >= FUNDING_HIST.longStreak && fh.streakSign !== 0) {
+    // Chuỗi rất dài mà chưa đảo: bên trả tiền đã mỏi, rủi ro ép ngược tăng dần.
+    histPts = -fh.streakSign * W.funding * FUNDING_HIST.tiredShare;
+  }
+  if (fh) {
+    push('Lịch sử funding (chuỗi / đảo chiều)', histPts, `${fh.text} · chưa qua backtest`);
+  }
+
   const split = positioningSplit(flow.positioning);
   if (split) push('Thế đứng lẻ vs lớn', 0, split);
 
@@ -302,15 +383,34 @@ export function decideDirection(
   if (conviction === 'C') {
     warnings.push('Hạng C — bằng chứng hai phía gần cân nhau. Đây là thiên hướng, không phải kèo để vào tiền lớn.');
   }
-  // RR TP1 < 1 KHÔNG phải cảnh báo: TP1 vốn là bậc gần nhất. Cái đáng cảnh báo là
-  // R của cả kế hoạch chốt 50/30 mà vẫn dưới 1.
-  if (rrBlended != null && rrBlended < 1) {
+  // R kỳ vọng < 1 KHÔNG phải "lỗ kỳ vọng". Con số này giả định CẢ HAI mốc chốt đều
+  // chạm, nên nó là tỷ lệ lời/lỗ của kế hoạch, không phải kỳ vọng có xác suất.
+  // Backtest còn nói ngược hẳn: nhóm 0.5–1 là nhóm TỐT NHẤT (avgR 0.09, PF 1.23),
+  // hơn cả nhóm 1–1.5 (0.07). Chỉ nhóm dưới 0.5 mới thật sự yếu (0.02).
+  if (rrBlended != null && rrBlended < GATE.minRRBlended) {
     warnings.push(
-      `R kỳ vọng của kế hoạch (50% ở TP1 + 30% ở TP2) = ${rrBlended.toFixed(2)} < 1 — lỗ kỳ vọng.`,
+      `R kỳ vọng ${rrBlended.toFixed(2)} — mục tiêu quá sát so với stop. ` +
+      `Backtest: nhóm dưới ${GATE.minRRBlended} chỉ đạt avgR 0.02, kém hẳn nhóm 0.5–1 (0.09).`,
     );
   }
   const slPct = (Math.abs(entryRef - lv.sl) / last) * 100;
-  if (slPct > 3) warnings.push(`SL cách entry ${slPct.toFixed(2)}% — isolated đòn bẩy cao là cháy.`);
+  const feeR = feeInR(entryRef, Math.abs(entryRef - lv.sl));
+  if (feeR != null && feeR > GATE.maxFeeShare) {
+    warnings.push(
+      `Stop chỉ ${slPct.toFixed(2)}% giá — phí vào-ra ăn mất ${(feeR * 100).toFixed(0)}% của 1R. ` +
+      'Backtest: R gộp không đổi theo độ rộng stop, nhưng nhóm stop dưới 0.5% giá ' +
+      'ròng −0.39R chỉ vì phí.',
+    );
+  }
+  // "SL rộng quá 3% giá" từng là cảnh báo. Backtest nói ngược: nhóm 2–3% là nhóm
+  // TỐT NHẤT (avgR 0.28) còn nhóm 0–1% mới âm. Giữ lại nhắc về đòn bẩy, bỏ hàm ý
+  // rằng stop rộng là kèo xấu.
+  if (slPct > 3) {
+    warnings.push(
+      `SL cách entry ${slPct.toFixed(2)}% — tự nó không phải kèo xấu (backtest: nhóm ` +
+      'stop rộng cho R ròng cao hơn), nhưng isolated đòn bẩy cao ở đây là cháy. Hạ size.',
+    );
+  }
   if (!lv.tp1InVA) warnings.push('TP1 nằm ngoài VA — đã kéo về mép value gần nhất.');
   if (lv.crossings >= 3) warnings.push(`Đoạn TP1→TP2 xuyên ${lv.crossings} HVN — phần cuối chạy như runner.`);
   if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
@@ -369,6 +469,12 @@ export function decideDirection(
   if (conviction === 'C') gateBlockers.push(`độ lệch ${mag.toFixed(0)} — dưới hạng B (cần ≥ 15)`);
   if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
     gateBlockers.push(`R kỳ vọng ${rrBlended.toFixed(2)} > ${GATE.maxRRBlended} — TP2 quá xa`);
+  }
+  if (feeR != null && feeR > GATE.maxFeeShare) {
+    gateBlockers.push(
+      `phí ăn ${(feeR * 100).toFixed(0)}% của 1R (stop chỉ ${slPct.toFixed(2)}% giá) — ` +
+      `quá ${(GATE.maxFeeShare * 100).toFixed(0)}%`,
+    );
   }
   const tradeable = gateBlockers.length === 0;
 

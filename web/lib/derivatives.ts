@@ -1,5 +1,5 @@
 import type {
-  Candle, DeltaInfo, Derivatives, FundingInfo, OIInfo, OIRead, VolumeProfile,
+  Candle, DeltaInfo, Derivatives, FundingHistory, FundingInfo, OIInfo, OIRead, VolumeProfile,
 } from './types';
 import type { OkxSnapshot, PerpSnapshot } from './sources';
 
@@ -11,6 +11,41 @@ import type { OkxSnapshot, PerpSnapshot } from './sources';
 
 const FLAT_FR = 0.0002;      // 0.02% / 8h
 const EXTREME_FR = 0.0005;   // 0.05% / 8h — mới đáng gọi là lệch
+
+/**
+ * Đọc lịch sử funding.
+ *
+ * Rate hiện tại trả lời "ai đang trả ai LÚC NÀY". Lịch sử trả lời hai câu khác:
+ * việc đó đã kéo dài bao lâu, và nó có vừa ĐẢO CHIỀU không. Sáu kỳ liên tiếp
+ * long trả short rồi đảo thành short trả long là một sự kiện; một kỳ dương lẻ
+ * loi thì không. Hệ này trước đây chỉ đọc rate hiện tại và vứt hẳn phần đó đi.
+ */
+export function buildFundingHistory(rates: number[] | null): FundingHistory | null {
+  if (!rates || rates.length < 2) return null;
+  const sign = (x: number) => (Math.abs(x) < FLAT_FR ? 0 : x > 0 ? 1 : -1) as 0 | 1 | -1;
+
+  const last = rates[rates.length - 1];
+  const streakSign = sign(last);
+  let streak = 0;
+  for (let i = rates.length - 1; i >= 0 && sign(rates[i]) === streakSign; i--) streak++;
+
+  const prevSign = rates.length >= 2 ? sign(rates[rates.length - 2]) : 0;
+  const flipped = streakSign !== 0 && prevSign !== 0 && streakSign !== prevSign;
+
+  let brokeStreak = 0;
+  if (flipped) {
+    for (let i = rates.length - 2; i >= 0 && sign(rates[i]) === prevSign; i--) brokeStreak++;
+  }
+
+  const who = (sg: 0 | 1 | -1) => (sg === 1 ? 'long trả short' : sg === -1 ? 'short trả long' : 'phẳng');
+  const text = flipped
+    ? `Funding vừa ĐẢO: ${brokeStreak} kỳ ${who(prevSign)} rồi lật sang ${who(streakSign)}.`
+    : streakSign === 0
+      ? `Funding phẳng ${streak} kỳ liên tiếp — không bên nào bị ép.`
+      : `${streak} kỳ liên tiếp ${who(streakSign)}.`;
+
+  return { rates, streak, streakSign, flipped, brokeStreak, text };
+}
 
 export function buildFunding(perp: PerpSnapshot, okx: OkxSnapshot): FundingInfo {
   let rate: number | null = null;
@@ -30,14 +65,16 @@ export function buildFunding(perp: PerpSnapshot, okx: OkxSnapshot): FundingInfo 
     return {
       quality: 'UNAVAILABLE', venue: null, rate: null, nextFundingTime: null,
       markPrice: okx.markPrice ?? perp.markPrice, flat: false, extreme: false,
+      history: null,
       note: 'N/A — không dùng làm lý do.',
     };
   }
 
   const flat = Math.abs(rate) < FLAT_FR;
   const extreme = Math.abs(rate) >= EXTREME_FR;
+  const history = venue === 'binance-perp' ? buildFundingHistory(perp.fundingHistory) : null;
   return {
-    quality: 'REAL', venue, rate, nextFundingTime: next, markPrice: mark, flat, extreme,
+    quality: 'REAL', venue, rate, nextFundingTime: next, markPrice: mark, flat, extreme, history,
     note: flat
       ? `Funding phẳng (${(rate * 100).toFixed(4)}%/8h) — bỏ qua, không làm lý do.`
       : extreme
