@@ -1,66 +1,47 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import SymbolDrawer from '@/components/SymbolDrawer';
-import { BiasBadge } from '@/components/ui';
-import { fmtPct, fmtPrice, fmtUsd, ictString } from '@/lib/format';
-import { ALWAYS_INCLUDE, DEFAULT_MIN_QUOTE_VOL } from '@/config/universe';
+import { BoardRow, type LiveRow } from '@/components/LiveBoard';
 import { apiPath } from '@/config/site';
-import type { ScanSnapshot, SymbolScan, TF } from '@/lib/types';
+import { ALWAYS_INCLUDE } from '@/config/universe';
+import { ictString } from '@/lib/format';
+import type { TF } from '@/lib/types';
 
 const TFS: TF[] = ['15m', '1h', '4h', '1d'];
+const REFRESH_MS = 60_000;
 
-type UniverseRow = { symbol: string; quoteVolume: number; pinned: boolean };
-
-export default function Page() {
-  const [minVol, setMinVol] = useState(DEFAULT_MIN_QUOTE_VOL);
-  const [limit, setLimit] = useState(12);
-  const [auto, setAuto] = useState(false);
+export default function LivePage() {
+  const [rows, setRows] = useState<LiveRow[]>([]);
+  const [symbols, setSymbols] = useState<string[]>(ALWAYS_INCLUDE);
   const [extra, setExtra] = useState('');
-  const [universe, setUniverse] = useState<UniverseRow[]>([]);
-  const [snap, setSnap] = useState<ScanSnapshot | null>(null);
+  const [auto, setAuto] = useState(true);          // bản điện thì mặc định phải tự chạy
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-  // Đồng hồ chỉ chạy ở client. Nếu render sẵn giờ trên server thì HTML server và
-  // HTML client lệch nhau một nhịp → hydration mismatch.
+  const [degraded, setDegraded] = useState<string[]>([]);
+  const [updated, setUpdated] = useState<string | null>(null);
+  const [left, setLeft] = useState(REFRESH_MS / 1000);
   const [clock, setClock] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    setClock(ictString());
-    const t = setInterval(() => setClock(ictString()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  const loadUniverse = useCallback(async () => {
-    try {
-      const r = await fetch(apiPath('universe', { minVol: String(minVol), extra }));
-      const j = await r.json();
-      if (j.ok) setUniverse(j.symbols);
-      else setErr(j.error ?? 'không lấy được universe');
-    } catch (e) {
-      setErr((e as Error).message);
-    }
-  }, [minVol, extra]);
-
-  useEffect(() => { void loadUniverse(); }, [loadUniverse]);
-
   const targets = useMemo(() => {
-    const extras = extra.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
-    const list = universe.length ? universe.map((u) => u.symbol) : ALWAYS_INCLUDE;
-    return [...new Set([...ALWAYS_INCLUDE, ...extras, ...list])].slice(0, limit);
-  }, [universe, extra, limit]);
+    const ex = extra.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+    return [...new Set([...symbols, ...ex])].slice(0, 24);
+  }, [symbols, extra]);
 
-  const scan = useCallback(async () => {
-    if (targets.length === 0) return;
+  const load = useCallback(async () => {
     setBusy(true);
     setErr(null);
     try {
       const r = await fetch(apiPath('scan', { symbols: targets.join(',') }));
       const j = await r.json();
-      if (j.ok) setSnap(j as ScanSnapshot);
-      else setErr(j.error ?? 'scan lỗi');
+      if (!j.ok) throw new Error(j.error ?? 'scan lỗi');
+      setRows(j.symbols.map((s: any) => ({
+        symbol: s.symbol, price: s.price, change24h: s.change24h,
+        quoteVolume24h: s.quoteVolume24h, direction: s.direction, flow: s.flow,
+      })));
+      setDegraded(j.degraded ?? []);
+      setUpdated(j.ictTime ?? null);
+      setLeft(REFRESH_MS / 1000);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -69,158 +50,127 @@ export default function Page() {
   }, [targets]);
 
   useEffect(() => {
-    if (timer.current) { clearInterval(timer.current); timer.current = null; }
-    if (auto) {
-      void scan();
-      timer.current = setInterval(() => { void scan(); }, 60_000);
-    }
-    return () => { if (timer.current) clearInterval(timer.current); };
-  }, [auto, scan]);
+    setClock(ictString());
+    const t = setInterval(() => {
+      setClock(ictString());
+      setLeft((s) => (s > 0 ? s - 1 : 0));
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
 
-  const rows = snap?.symbols ?? [];
-  const active = open ? rows.find((r) => r.symbol === open) ?? null : null;
+  useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (timer.current) { clearInterval(timer.current); timer.current = null; }
+    if (auto) timer.current = setInterval(() => { void load(); }, REFRESH_MS);
+    return () => { if (timer.current) clearInterval(timer.current); };
+  }, [auto, load]);
+
+  // Đếm nhanh hai phe để nhìn phát biết thị trường đang nghiêng đâu
+  const tally = useMemo(() => {
+    let long = 0, short = 0;
+    for (const r of rows) for (const tf of TFS) {
+      const c = r.direction?.[tf];
+      if (c?.side === 'LONG') long++;
+      else if (c?.side === 'SHORT') short++;
+    }
+    return { long, short, total: long + short };
+  }, [rows]);
 
   return (
     <main className="mx-auto max-w-[1400px] p-2 sm:p-4">
-      {/* Banner cảnh báo — luôn hiện, không đóng được */}
       <div className="mb-3 rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-2xs leading-snug text-amber-200">
         <b>Không phải lời khuyên đầu tư. Chốt TP1. Không 10x gỡ lỗ.</b>{' '}
-        WAIT là khuyến nghị hợp lệ và thường đúng hơn ép Long/Short. Rủi ro gợi ý 0.5–1% tài khoản mỗi lệnh.
-        Isolated đòn bẩy cao + SL rộng = cháy, hệ sẽ cảnh báo đỏ khi gặp.
+        Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên hạng tin cậy mới là thứ phải đọc:
+        <b> A</b> = bằng chứng lệch hẳn · <b>B</b> = lệch vừa · <b>C</b> = hai phía gần cân nhau,
+        chỉ là thiên hướng chứ không phải lệnh để vào tiền. Rủi ro 0.5–1% tài khoản mỗi lệnh.
       </div>
 
       <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold">Market Scan · Multi-TF</h1>
+          <h1 className="text-lg font-semibold">Bản điện · Long/Short liên tục</h1>
           <p className="text-2xs text-muted">
-            Price Action + Volume Profile + OI + Funding. Mỗi khung 15m / 1h / 4h / 1D quyết định độc lập.
+            HH/HL/LH/LL · Value Area · Price Action · Volume · Open Interest · Funding (ai trả ai) · Taker Buy/Sell
           </p>
-          <a href="live/" className="text-2xs text-sky-300 underline hover:brightness-125">
-            → Bản điện luôn ra hướng (Long/Short, không WAIT) + tỷ lệ Buy/Sell
-          </a>
         </div>
-        <div className="mono text-xs text-muted">{clock ?? '—'}</div>
+        <div className="text-right">
+          <div className="mono text-xs text-muted">{clock ?? '—'}</div>
+          {tally.total > 0 && (
+            <div className="mono text-2xs">
+              <span className="text-emerald-400">{tally.long} LONG</span>
+              {' / '}
+              <span className="text-red-400">{tally.short} SHORT</span>
+            </div>
+          )}
+        </div>
       </header>
 
-      {/* Hàng filter */}
-      <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-line bg-panel p-2">
-        <label className="text-2xs text-muted">
-          Min vol 24h (USD)
-          <input
-            type="number" value={minVol} step={1_000_000} min={0}
-            onChange={(e) => setMinVol(Number(e.target.value))}
-            className="mono mt-0.5 block w-36 rounded border border-line bg-panel2 px-2 py-1 text-xs text-white"
-          />
-        </label>
-        <label className="text-2xs text-muted">
-          Số symbol
-          <input
-            type="number" value={limit} min={1} max={40}
-            onChange={(e) => setLimit(Math.max(1, Math.min(40, Number(e.target.value))))}
-            className="mono mt-0.5 block w-20 rounded border border-line bg-panel2 px-2 py-1 text-xs text-white"
-          />
-        </label>
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-panel p-2">
         <label className="text-2xs text-muted">
           Thêm symbol (phẩy)
           <input
             value={extra} placeholder="SOLUSDT,LINKUSDT"
             onChange={(e) => setExtra(e.target.value)}
-            className="mono mt-0.5 block w-48 rounded border border-line bg-panel2 px-2 py-1 text-xs text-white"
+            className="mono mt-0.5 block w-52 rounded border border-line bg-panel2 px-2 py-1 text-xs text-white"
           />
         </label>
         <button
-          onClick={() => void scan()} disabled={busy}
+          onClick={() => void load()} disabled={busy}
           className="rounded border border-sky-600/50 bg-sky-600/20 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:brightness-125 disabled:opacity-50"
         >
-          {busy ? 'Đang quét…' : 'Quét ngay'}
+          {busy ? 'Đang quét…' : 'Quét lại ngay'}
         </button>
         <label className="flex items-center gap-1.5 text-2xs text-muted">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-          Auto 60s
+          Tự chạy 60s
         </label>
+        {auto && (
+          <span className="mono text-2xs text-muted">
+            làm mới sau {left}s
+            <span className={`ml-1.5 inline-block h-1.5 w-1.5 rounded-full ${busy ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+          </span>
+        )}
         <div className="ml-auto text-2xs text-muted">
-          {snap ? `Cập nhật ${snap.ictTime} · ${snap.symbols.length} symbol` : `${targets.length} symbol sẵn sàng`}
+          {updated ? `Cập nhật ${updated}` : '—'} · <a className="underline hover:text-sky-300" href="strict/">bảng kỷ luật (có WAIT)</a>
         </div>
       </div>
 
-      {err && (
-        <div className="mb-3 rounded border border-red-600/40 bg-red-600/10 px-3 py-2 text-2xs text-red-300">⚠ {err}</div>
-      )}
+      {err && <div className="mb-3 rounded border border-red-600/40 bg-red-600/10 px-3 py-2 text-2xs text-red-300">⚠ {err}</div>}
 
-      {snap && snap.degraded.length > 0 && (
+      {degraded.length > 0 && (
         <div className="mb-3 rounded border border-slate-600/40 bg-slate-600/10 px-3 py-2 text-2xs text-slate-300">
           <b>Dữ liệu thiếu (ghi rõ, không bịa):</b>
-          <ul className="mt-1 space-y-0.5">
-            {snap.degraded.slice(0, 6).map((d, i) => <li key={i}>– {d}</li>)}
-          </ul>
+          <ul className="mt-1 space-y-0.5">{degraded.slice(0, 5).map((d, i) => <li key={i}>– {d}</li>)}</ul>
         </div>
       )}
 
-      {/* Bảng chính */}
       <div className="scroll-x rounded-lg border border-line bg-panel">
         <table className="tbl w-full text-xs">
           <thead>
             <tr>
               <th>Symbol</th>
-              <th className="text-right">Price</th>
               <th className="text-right">24h%</th>
-              <th className="text-right">Vol 24h</th>
-              <th className="text-right">Range pos</th>
+              <th className="text-right">Vol</th>
+              <th>Buy / Sell · ai trả ai</th>
               {TFS.map((tf) => <th key={tf} className="text-center">{tf}</th>)}
-              <th>Ghi chú</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={10} className="px-3 py-6 text-center text-2xs text-muted">
-                Bấm <b>Quét ngay</b> để chạy. Mặc định watchlist gồm {ALWAYS_INCLUDE.join(', ')}.
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-2xs text-muted">
+                {busy ? 'Đang quét…' : 'Chưa có dữ liệu.'}
               </td></tr>
             )}
-            {rows.map((s) => <Row key={s.symbol} s={s} onOpen={() => setOpen(s.symbol)} />)}
+            {rows.map((r) => <BoardRow key={r.symbol} r={r} />)}
           </tbody>
         </table>
       </div>
 
-      {snap && (
-        <p className="mt-2 text-2xs text-muted">
-          Nguồn: spot <span className="mono">{new URL(snap.sources.spot).host}</span> ·
-          perp <span className="mono">{snap.sources.perp.includes('CHẾT') ? 'N/A' : new URL(snap.sources.perp).host}</span> ·
-          okx <span className="mono">{new URL(snap.sources.okx).host}</span>.
-          Snapshot mỗi lần scan được lưu JSON để so lại.
-        </p>
-      )}
-
-      {active && <SymbolDrawer scan={active} onClose={() => setOpen(null)} />}
+      <p className="mt-2 text-2xs leading-snug text-muted">
+        Bấm vào badge của một khung để mở Entry / SL / TP / bằng chứng chấm điểm của khung đó.
+        Taker perp và taker spot là hai chợ khác nhau nên luôn hiển thị tách rời — chỉ khi cả hai
+        cùng nghiêng một phía mới ghi &ldquo;đồng thuận&rdquo;.
+      </p>
     </main>
-  );
-}
-
-function Row({ s, onOpen }: { s: SymbolScan; onOpen: () => void }) {
-  const bs = s.tfs['15m'].vp.binSize;
-  const anyWarn = TFS.some((tf) => s.tfs[tf].warnings.length > 0);
-  const counter = TFS.some((tf) => s.tfs[tf].counterTrend);
-
-  return (
-    <tr>
-      <td>
-        <button onClick={onOpen} className="mono font-semibold text-sky-300 hover:underline">{s.symbol}</button>
-      </td>
-      <td className="mono text-right">{fmtPrice(s.price, bs)}</td>
-      <td className={`mono text-right ${s.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtPct(s.change24h)}</td>
-      <td className="mono text-right text-muted">{fmtUsd(s.quoteVolume24h)}</td>
-      <td className="mono text-right">
-        <span className={s.rangePos > 80 ? 'text-red-300' : s.rangePos < 20 ? 'text-emerald-300' : ''}>
-          {s.rangePos.toFixed(0)}%
-        </span>
-      </td>
-      {TFS.map((tf) => (
-        <td key={tf} className="w-16"><BiasBadge r={s.tfs[tf]} onClick={onOpen} /></td>
-      ))}
-      <td className="text-2xs text-muted">
-        {anyWarn && <span className="mr-2 text-red-400">⚠ cảnh báo</span>}
-        {counter && <span className="mr-2 text-amber-400">counter-trend</span>}
-        {s.composite.dualRead ? s.composite.dualRead.slice(0, 60) + '…' : ''}
-      </td>
-    </tr>
   );
 }

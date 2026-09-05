@@ -1,19 +1,18 @@
-// Base path đặt một chỗ duy nhất rồi bơm xuống client qua `env`, để code gọi API
-// và cấu hình build không bao giờ lệch nhau. Đặt NEXT_PUBLIC_BASE_PATH="" để chạy
-// ở gốc domain (ví dụ khi test trên URL *.vercel.app của chính project này).
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '/scan';
+// App sống ở GỐC domain (scan.maix8.study). Trước đây nó chạy dưới /scan để nấp sau
+// rewrite của maix8.study; từ khi có subdomain riêng thì basePath chỉ tổ đẻ ra
+// scan.maix8.study/scan/. Vẫn để override được bằng env cho ai muốn gắn lại vào
+// một path con.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
 
-  // App được phục vụ dưới maix8.study/scan qua rewrite của project writetoearn.
-  // Không có basePath thì mọi asset sẽ đi xin /_next/... ở gốc domain — nơi site
-  // tĩnh MAIX8 Research đang ở — và trang lên trắng.
+  // Chỉ bật khi thật sự phục vụ dưới một path con; rỗng thì Next tự bỏ qua.
   basePath: basePath || undefined,
 
-  // Phải khớp `trailingSlash: true` của vercel.json bên writetoearn. Lệch nhau thì
-  // hai bên đá redirect qua lại: outer thêm dấu /, Next gỡ dấu / → vòng lặp 308.
+  // Giữ trailingSlash để mọi đường dẫn có đúng một dạng chuẩn, và để apiPath()
+  // (vốn thêm dấu / cuối) không dính 308 thừa ở mỗi lần gọi API.
   trailingSlash: true,
 
   env: { NEXT_PUBLIC_BASE_PATH: basePath },
