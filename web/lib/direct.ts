@@ -1,0 +1,265 @@
+import { buildLongLevels, buildShortLevels, rr, type DecideInput, type Levels } from './decide';
+import { fmtPrice } from './format';
+import { OI_READ_VI } from './derivatives';
+import { positioningSplit, type FlowInfo } from './flow';
+import type { MarketStructure } from './structure';
+import type { SizeHint, TF } from './types';
+
+// ============================================================
+// Engine LUÔN RA HƯỚNG.
+//
+// Khác hẳn decideBias(): ở đây không có WAIT. Mỗi symbol × mỗi khung luôn nhận
+// một hướng LONG hoặc SHORT, kèm HẠNG TIN CẬY (A/B/C) nói thẳng kèo đó tốt hay
+// tệ. Bỏ WAIT không có nghĩa là giả vờ mọi lúc đều có kèo đẹp — nó có nghĩa là
+// luôn trả lời "nếu buộc phải chọn thì chọn bên nào", và nói rõ mức độ chắc.
+//
+// Hạng C = kèo yếu, chỉ nên coi là thiên hướng chứ không phải lệnh để vào tiền.
+// ============================================================
+
+export type Conviction = 'A' | 'B' | 'C';
+
+export interface Evidence {
+  label: string;
+  /** Bằng chứng này nghiêng về đâu. */
+  side: 'long' | 'short' | 'neutral';
+  /** Điểm đã ký: dương = ủng hộ long, âm = ủng hộ short. */
+  points: number;
+  detail: string;
+}
+
+export interface DirectionalCall {
+  symbol: string;
+  tf: TF;
+  side: 'LONG' | 'SHORT';
+  conviction: Conviction;
+  /** -100 (short rõ) .. +100 (long rõ). */
+  net: number;
+  longScore: number;
+  shortScore: number;
+  entry: [number, number];
+  sl: number;
+  tp1: number;
+  tp2: number;
+  rr1: number | null;
+  rr2: number | null;
+  runner: string | null;
+  size: SizeHint;
+  trigger: string;
+  invalidation: string;
+  evidence: Evidence[];
+  structureNote: string;
+  flowNote: string;
+  fundingText: string;
+  buyPctPerp: number | null;
+  buyPctSpot: number | null;
+  warnings: string[];
+  planText: string;
+}
+
+const W = {
+  structure: 25,
+  valueLocation: 20,
+  takerFlow: 20,
+  priceAction: 18,
+  openInterest: 12,
+  funding: 8,
+};
+
+const TRIG: Record<TF, string> = { '15m': '15m', '1h': '1h', '4h': '4h', '1d': '1D' };
+
+export function decideDirection(
+  inp: DecideInput,
+  structure: MarketStructure,
+  flow: FlowInfo,
+): DirectionalCall {
+  const { vp, pa, last, tf, symbol } = inp;
+  const P = (x: number | null) => fmtPrice(x, vp.binSize);
+  const ev: Evidence[] = [];
+
+  const push = (label: string, points: number, detail: string) => {
+    ev.push({
+      label,
+      side: points > 0.5 ? 'long' : points < -0.5 ? 'short' : 'neutral',
+      points: Math.round(points * 10) / 10,
+      detail,
+    });
+  };
+
+  // 1. Cấu trúc HH/HL/LL/LH
+  push('Cấu trúc HH/HL/LH/LL', (structure.bias / 100) * W.structure, structure.note);
+
+  // 2. Vị trí so với value: mép dưới ủng hộ long, mép trên ủng hộ short.
+  //    Giữa VA thì gần như trung tính — không có mép nào để bám.
+  const vaW = vp.va70.high - vp.va70.low;
+  let locPts = 0;
+  let locNote: string;
+  if (vaW > 0) {
+    const pos = (last - vp.va70.low) / vaW;        // 0 = VAL, 1 = VAH
+    const centered = (0.5 - pos) * 2;               // +1 ở VAL, -1 ở VAH
+    locPts = centered * W.valueLocation;
+    locNote = pos < 0
+      ? `giá dưới VAL ${P(vp.va70.low)} — vùng phe mua hay đỡ`
+      : pos > 1
+        ? `giá trên VAH ${P(vp.va70.high)} — vùng phe bán hay chặn`
+        : `giá ở ${(pos * 100).toFixed(0)}% bề rộng VA (${P(vp.va70.low)}–${P(vp.va70.high)}), POC ${P(vp.poc)}`;
+  } else {
+    locNote = 'VA quá hẹp để định vị.';
+  }
+  push('Vị trí trong Value Area', locPts, locNote);
+
+  // 3. Taker flow — ai đang chủ động đánh
+  let flowPts = 0;
+  const combinedBuy = flow.perpTaker?.buyPct ?? flow.spotTaker?.buyPct ?? null;
+  if (combinedBuy != null) {
+    flowPts = ((combinedBuy - 50) / 50) * W.takerFlow;
+    if (flow.agree) flowPts *= 1.15;               // perp và spot đồng thuận thì tin hơn
+  }
+  push('Taker Buy/Sell', flowPts, flow.note);
+
+  // 4. Price action của cây đã đóng
+  const closed = inp.candles.filter((c) => c.closed);
+  const lastBar = closed[closed.length - 1];
+  let paPts = 0;
+  const paBits: string[] = [];
+  if (lastBar) {
+    const green = lastBar.c > lastBar.o;
+    paPts += (green ? 1 : -1) * W.priceAction * 0.4;
+    paBits.push(`nến ${TRIG[tf]} cuối đóng ${green ? 'xanh' : 'đỏ'}`);
+  }
+  if (pa.acceptedOutside === 'up') { paPts += W.priceAction * 0.6; paBits.push('close giữ ngoài range phía trên = accept'); }
+  if (pa.acceptedOutside === 'down') { paPts -= W.priceAction * 0.6; paBits.push('close giữ ngoài range phía dưới = accept'); }
+  if (pa.grab === 'up') { paPts -= W.priceAction * 0.4; paBits.push('wick lên rồi đóng trong = grab thanh khoản, không phải break'); }
+  if (pa.grab === 'down') { paPts += W.priceAction * 0.4; paBits.push('wick xuống rồi đóng trong = grab thanh khoản, không phải break'); }
+  if (pa.signalHasVolume) {
+    if (pa.signal === 'pin-bull' || pa.signal === 'engulf-bull') { paPts += W.priceAction * 0.4; paBits.push(`${pa.signal} có volume`); }
+    if (pa.signal === 'pin-bear' || pa.signal === 'engulf-bear') { paPts -= W.priceAction * 0.4; paBits.push(`${pa.signal} có volume`); }
+  }
+  // Volume KHÔNG tự chấm hướng. Nếu nó cũng cộng/trừ theo hướng cây cuối thì cùng
+  // một cây nến bị tính hai lần (một lần ở PA, một lần ở đây) và một cây 15m đơn lẻ
+  // nặng bằng cả OI. Ở đây volume chỉ NHÂN vào độ tin của PA.
+  let volMult = 1;
+  let volNote = 'volume không đáng chú ý';
+  if (pa.volMedian20 > 0) {
+    const ratio = pa.lastVol / pa.volMedian20;
+    if (ratio >= 1.5) { volMult = 1.4; volNote = `volume cây cuối gấp ${ratio.toFixed(2)}× median 20 — xác nhận mạnh (PA ×1.4)`; }
+    else if (ratio < 0.6) { volMult = 0.5; volNote = `volume teo (${ratio.toFixed(2)}× median) — mọi tín hiệu nến ở đây đều yếu (PA ×0.5)`; }
+    else volNote = `volume ${ratio.toFixed(2)}× median — bình thường (PA ×1)`;
+  }
+  paPts *= volMult;
+
+  push('Price Action', paPts, paBits.join(' · ') || 'không có tín hiệu nến rõ');
+
+  // 5. Open Interest
+  const oi = inp.deriv.oi;
+  let oiPts = 0;
+  if (oi.quality === 'REAL' && oi.read !== 'na' && oi.read !== 'flat') {
+    const map: Record<string, number> = {
+      'new-longs': 1, 'short-cover': 0.6, 'new-shorts': -1, 'long-cover': -0.6,
+    };
+    oiPts = (map[oi.read] ?? 0) * W.openInterest;
+  }
+  push('Open Interest', oiPts, oi.read === 'na' ? 'N/A — không tính điểm' : OI_READ_VI[oi.read]);
+
+  // 6. Volume đã được tính vào PA ở trên dưới dạng hệ số nhân. Vẫn in ra thành một
+  //    dòng để người đọc thấy vì sao PA nặng hay nhẹ, nhưng điểm riêng của nó là 0.
+  push('Volume (hệ số cho PA)', 0, volNote);
+
+  // 7. Funding — ai đang trả ai.
+  //    Mức thường: bên trả tiền là bên đông, đi cùng xu hướng, tính điểm nhẹ theo chiều đó.
+  //    Mức cực đoan: đám đông quá lệch thành nhiên liệu cho cú ép ngược — đảo dấu.
+  let fundPts = 0;
+  const fnd = inp.deriv.funding;
+  if (fnd.quality === 'REAL' && !fnd.flat && fnd.rate != null) {
+    const dir = fnd.rate > 0 ? 1 : -1;             // dương = đám đông đứng long
+    fundPts = fnd.extreme ? -dir * W.funding : dir * W.funding * 0.4;
+  }
+  push('Funding (ai trả ai)', fundPts, flow.funding.text);
+
+  const split = positioningSplit(flow.positioning);
+  if (split) push('Thế đứng lẻ vs lớn', 0, split);
+
+  // ---- Tổng hợp ----
+  const net = Math.max(-100, Math.min(100, ev.reduce((s, e) => s + e.points, 0)));
+  const longScore = Math.round(50 + net / 2);
+  const shortScore = 100 - longScore;
+  const side: 'LONG' | 'SHORT' = net >= 0 ? 'LONG' : 'SHORT';
+  const mag = Math.abs(net);
+  const conviction: Conviction = mag >= 30 ? 'A' : mag >= 15 ? 'B' : 'C';
+
+  const lv: Levels = side === 'LONG' ? buildLongLevels(inp) : buildShortLevels(inp);
+  const entryRef = side === 'LONG' ? lv.entry[1] : lv.entry[0];
+  const rr1 = rr(entryRef, lv.sl, lv.tp1);
+  const rr2 = rr(entryRef, lv.sl, lv.tp2);
+
+  const warnings: string[] = [];
+  if (conviction === 'C') {
+    warnings.push('Hạng C — bằng chứng hai phía gần cân nhau. Đây là thiên hướng, không phải kèo để vào tiền lớn.');
+  }
+  if (rr1 != null && rr1 < 1) warnings.push(`RR TP1 = ${rr1.toFixed(2)} < 1 — lỗ kỳ vọng nếu vào full size.`);
+  const slPct = (Math.abs(entryRef - lv.sl) / last) * 100;
+  if (slPct > 3) warnings.push(`SL cách entry ${slPct.toFixed(2)}% — isolated đòn bẩy cao là cháy.`);
+  if (!lv.tp1InVA) warnings.push('TP1 nằm ngoài VA — đã kéo về mép value gần nhất.');
+  if (lv.crossings >= 3) warnings.push(`Đoạn TP1→TP2 xuyên ${lv.crossings} HVN — phần cuối chạy như runner.`);
+  if (inp.deriv.oi.squeezeWarning) warnings.push('OI/vol perp cao bất thường — rủi ro squeeze hai chiều.');
+  if (structure.state === 'uptrend' && side === 'SHORT') {
+    warnings.push('Ngược cấu trúc HH+HL — short ở đây là counter-trend, chốt TP1 bắt buộc.');
+  }
+  if (structure.state === 'downtrend' && side === 'LONG') {
+    warnings.push('Ngược cấu trúc LH+LL — long ở đây là counter-trend, chốt TP1 bắt buộc.');
+  }
+
+  const size: SizeHint = conviction === 'A' && warnings.length === 0 ? 'Normal' : 'Small';
+
+  const trigger = side === 'LONG'
+    ? `${TRIG[tf]} đóng trên ${P(Math.max(vp.va70.low, lv.entry[1]))} sau khi giữ ${P(lv.entry[0])}`
+    : `${TRIG[tf]} đóng dưới ${P(Math.min(vp.va70.high, lv.entry[0]))} sau khi test ${P(lv.entry[1])}`;
+
+  const invalidation = structure.breakLevel != null
+    ? `đóng nến ${TRIG[tf]} ${side === 'LONG' ? 'dưới' : 'trên'} ${P(lv.sl)} thì hủy; cấu trúc gãy hẳn khi đóng ${structure.state === 'uptrend' ? 'dưới' : 'trên'} ${P(structure.breakLevel)}`
+    : `đóng nến ${TRIG[tf]} ${side === 'LONG' ? 'dưới' : 'trên'} ${P(lv.sl)} thì hủy`;
+
+  const call: DirectionalCall = {
+    symbol, tf, side, conviction, net,
+    longScore, shortScore,
+    entry: lv.entry, sl: lv.sl, tp1: lv.tp1, tp2: lv.tp2,
+    rr1, rr2, runner: lv.runner, size, trigger, invalidation,
+    evidence: ev,
+    structureNote: structure.note,
+    flowNote: flow.note,
+    fundingText: flow.funding.text,
+    buyPctPerp: flow.perpTaker?.buyPct ?? null,
+    buyPctSpot: flow.spotTaker?.buyPct ?? null,
+    warnings,
+    planText: '',
+  };
+  call.planText = buildDirectPlan(call);
+  return call;
+}
+
+export function buildDirectPlan(c: DirectionalCall): string {
+  const P = (x: number | null) => (x == null ? 'N/A' : String(x));
+  const L: string[] = [];
+  L.push(`[${c.symbol}] [${c.tf}] [${c.side}] hạng ${c.conviction} · long ${c.longScore} / short ${c.shortScore}`);
+  L.push(`Entry: ${c.entry[0]} – ${c.entry[1]}`);
+  L.push(`Trigger đóng: ${c.trigger}`);
+  L.push(`SL: ${c.sl}`);
+  L.push(`TP1: ${c.tp1} gỡ 50%${c.rr1 != null ? ` · RR ${c.rr1.toFixed(2)}` : ''}`);
+  L.push(`TP2: ${c.tp2} gỡ 30%${c.rr2 != null ? ` · RR ${c.rr2.toFixed(2)}` : ''}`);
+  L.push(`Runner: ${c.runner ?? 'không mở'}`);
+  L.push(`Hủy: ${c.invalidation}`);
+  L.push(`Size: ${c.size} · rủi ro 0.5–1% tài khoản`);
+  L.push(`Cấu trúc: ${c.structureNote}`);
+  L.push(`Dòng tiền: ${c.flowNote}`);
+  L.push(`Funding: ${c.fundingText}`);
+  L.push('Bằng chứng:');
+  for (const e of c.evidence) {
+    const sign = e.points > 0 ? '+' : '';
+    L.push(`  ${sign}${e.points} ${e.label}: ${e.detail}`);
+  }
+  if (c.warnings.length) {
+    L.push('Cảnh báo:');
+    for (const w of c.warnings) L.push(`  ! ${w}`);
+  }
+  L.push('Cấm: market giữa VA, TP xuyên nhiều HVN, add sau lỗ.');
+  return L.join('\n');
+}

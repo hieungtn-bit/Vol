@@ -95,6 +95,9 @@ export default function Page() {
           <p className="text-2xs text-muted">
             Price Action + Volume Profile + OI + Funding. Mỗi khung 15m / 1h / 4h / 1D quyết định độc lập.
           </p>
+          <a href="live/" className="text-2xs text-sky-300 underline hover:brightness-125">
+            → Bản điện luôn ra hướng (Long/Short, không WAIT) + tỷ lệ Buy/Sell
+          </a>
         </div>
         <div className="mono text-xs text-muted">{clock ?? '—'}</div>
       </header>

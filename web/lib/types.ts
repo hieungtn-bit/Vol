@@ -262,6 +262,10 @@ export interface SymbolScan {
   tfs: Record<TF, Recommendation>;
   derivatives: Derivatives;
   spotTakerDelta: DeltaInfo;
+  /** Bản điện luôn-ra-hướng. Kiểu cụ thể: DirectionalCall / MarketStructure / FlowInfo. */
+  direction: Record<TF, unknown>;
+  structure: Record<TF, unknown>;
+  flow: unknown;
   composite: {
     sessionPoc: number | null;
     h24Poc: number | null;

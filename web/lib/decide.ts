@@ -168,7 +168,7 @@ function longGate(inp: DecideInput, stage: Stage): Gate {
 // 3. Đặt số: Entry / SL / TP1 / TP2
 // ------------------------------------------------------------
 
-interface Levels {
+export interface Levels {
   entry: [number, number];
   sl: number;
   tp1: number;
@@ -208,7 +208,7 @@ function stepAbove(levels: number[], from: number, gap: number): number | null {
   return c.length ? Math.min(...c) : null;
 }
 
-function buildShortLevels(inp: DecideInput): Levels {
+export function buildShortLevels(inp: DecideInput): Levels {
   const { vp, pa, candles, last } = inp;
   const buffer = Math.max(inp.pa.atr * 0.3, vp.binSize);
   const gap = Math.max(inp.pa.atr * 0.5, vp.binSize * 3);
@@ -267,7 +267,7 @@ function buildShortLevels(inp: DecideInput): Levels {
   return { entry, sl, tp1, tp2, runner, tp1InVA, crossings };
 }
 
-function buildLongLevels(inp: DecideInput): Levels {
+export function buildLongLevels(inp: DecideInput): Levels {
   const { vp, pa, candles, last } = inp;
   const buffer = Math.max(inp.pa.atr * 0.3, vp.binSize);
   const gap = Math.max(inp.pa.atr * 0.5, vp.binSize * 3);
@@ -314,7 +314,7 @@ function buildLongLevels(inp: DecideInput): Levels {
   return { entry, sl, tp1, tp2, runner, tp1InVA, crossings };
 }
 
-function rr(entry: number, sl: number, tp: number): number | null {
+export function rr(entry: number, sl: number, tp: number): number | null {
   const risk = Math.abs(entry - sl);
   if (risk <= 0) return null;
   return Math.abs(tp - entry) / risk;

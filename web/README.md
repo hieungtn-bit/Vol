@@ -71,6 +71,25 @@ Trường nào `N/A` thì **không bao giờ** xuất hiện trong danh sách l�
 CoinGlass chỉ được dùng nếu bạn tự dán key vào `COINGLASS_API_KEY` — không có key thì
 OI vẫn lấy từ Binance/OKX public. Không scrape.
 
+## Hai màn hình
+
+| Đường dẫn | Cách kết luận |
+|---|---|
+| `/` | Kỷ luật: score < 7 → **WAIT**. Dùng khi muốn hệ thống nói thẳng "không có kèo". |
+| `/live` | Bản điện: **luôn ra LONG hoặc SHORT, không bao giờ WAIT**, kèm hạng tin cậy A/B/C, tỷ lệ Buy/Sell tách chợ, và funding "ai trả ai". Tự làm mới 60s. |
+
+Hai màn hình dùng **chung một bộ dữ liệu và chung các module phân tích** — chỉ khác ở bước
+kết luận cuối. Luật chấm điểm của bản điện nằm ở mục 9 của `logic.md`.
+
+## Chạy liên tục
+
+- `/live` tự làm mới **60 giây** một lần khi đang mở — đây là phần "theo dõi liên tục" thật sự.
+- `GET /api/cron/scan` quét rồi lưu snapshot, trả về tóm tắt gọn để đọc thẳng trong log.
+  Đặt `CRON_SECRET` thì endpoint đòi header `Authorization: Bearer <secret>`.
+- `vercel.json` có khai báo cron, **nhưng gói Hobby của Vercel chỉ bắn 1 lần/ngày** — đó
+  không phải "liên tục". Muốn liên tục phía server thì trỏ một scheduler bên ngoài
+  (GitHub Actions, cron-job.org, uptime monitor…) vào chính URL đó với chu kỳ mong muốn.
+
 ## UI
 
 - **Hàng filter**: min volume 24h, số symbol, thêm symbol thủ công, **Auto 60s**, đồng hồ ICT.

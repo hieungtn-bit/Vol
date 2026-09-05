@@ -269,4 +269,42 @@ export async function fetchOkx(symbol: string): Promise<OkxSnapshot> {
   });
 }
 
+/**
+ * Ai đang ĐỨNG ở phía nào (khác với ai đang ĐÁNH — đó là taker ratio).
+ *  - globalLongShortAccountRatio: đếm theo TÀI KHOẢN, nên nghiêng về bán lẻ.
+ *  - topLongShortPositionRatio: theo GIÁ TRỊ vị thế của nhóm tài khoản lớn.
+ * Hai số này hay ngược nhau, và chỗ ngược nhau mới là chỗ đáng đọc.
+ */
+export interface PerpPositioning {
+  retailLongPct: number | null;
+  topLongPct: number | null;
+}
+
+export async function fetchPerpPositioning(
+  symbol: string,
+  period = '15m',
+): Promise<PerpPositioning> {
+  if (venueState.perpAlive === false) return { retailLongPct: null, topLongPct: null };
+  return cached(`pos:${symbol}:${period}`, DEFAULT_TTL, async () => {
+    const pick = async (path: string, key: string): Promise<number | null> => {
+      try {
+        const r = await getJSON<any[]>(`${FAPI}${path}?symbol=${symbol}&period=${period}&limit=1`);
+        const v = r?.[r.length - 1]?.[key];
+        return v != null ? +v : null;
+      } catch {
+        return null;
+      }
+    };
+    // longAccount/longPosition đã là tỷ lệ 0–1
+    const [retail, top] = await Promise.all([
+      pick('/futures/data/globalLongShortAccountRatio', 'longAccount'),
+      pick('/futures/data/topLongShortPositionRatio', 'longPosition'),
+    ]);
+    return {
+      retailLongPct: retail != null ? retail * 100 : null,
+      topLongPct: top != null ? top * 100 : null,
+    };
+  });
+}
+
 export const SOURCES = { SPOT, SPOT_FALLBACK, FAPI, OKX };

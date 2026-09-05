@@ -1,10 +1,13 @@
 import { ictSessionStart } from './format';
 import { analyzePriceAction, atr } from './priceAction';
 import { buildDelta, buildDerivatives } from './derivatives';
-import { decideBias, type HTFContext } from './decide';
+import { decideBias, type HTFContext, type DecideInput } from './decide';
+import { decideDirection, type DirectionalCall } from './direct';
+import { analyzeStructure, type MarketStructure } from './structure';
+import { buildFlow, type FlowInfo } from './flow';
 import {
-  fetchBinancePerp, fetchKlines, fetchOkx, fetchPerpTakerRatio, fetchTicker,
-  SOURCES, TF_MS, venueState,
+  fetchBinancePerp, fetchKlines, fetchOkx, fetchPerpPositioning, fetchPerpTakerRatio,
+  fetchTicker, SOURCES, TF_MS, venueState,
 } from './sources';
 import { computeVolumeProfile } from './volumeProfile';
 import type {
@@ -61,7 +64,18 @@ export function buildComposite(k15: Candle[], last: number, atr15: number): Comp
   return { session, h24, d3, dualRead };
 }
 
-export async function scanSymbol(symbol: string): Promise<SymbolScan> {
+/**
+ * SymbolScan với ba trường bản-điện đã được ép kiểu thật.
+ * types.ts để `unknown` vì nó không thể import direct.ts (direct.ts import ngược lại
+ * types.ts qua decide.ts — vòng tròn). Chỗ khai báo kiểu đúng là ở đây.
+ */
+export interface SymbolScanLive extends Omit<SymbolScan, 'direction' | 'structure' | 'flow'> {
+  direction: Record<TF, DirectionalCall | null>;
+  structure: Record<TF, MarketStructure | null>;
+  flow: FlowInfo | null;
+}
+
+export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const errors: string[] = [];
 
   const [k15, k1h, k4h, k1d, ticker] = await Promise.all([
@@ -89,7 +103,10 @@ export async function scanSymbol(symbol: string): Promise<SymbolScan> {
       oiUsd: null, oiHistUsd: null, perpVol24hUsd: null,
     })),
   ]);
-  const perpTaker = await fetchPerpTakerRatio(symbol).catch(() => null);
+  const [perpTaker, positioning] = await Promise.all([
+    fetchPerpTakerRatio(symbol).catch(() => null),
+    fetchPerpPositioning(symbol).catch(() => ({ retailLongPct: null, topLongPct: null })),
+  ]);
 
   const deriv = buildDerivatives(
     perp, okx, chg1h, ticker?.priceChangePercent ?? null, okx.perpVol24hUsd, perpTaker,
@@ -102,19 +119,24 @@ export async function scanSymbol(symbol: string): Promise<SymbolScan> {
 
   // Tính từ TF LỚN xuống nhỏ để mỗi TF có context cha, nhưng bias vẫn tính độc lập.
   const tfs = {} as Record<TF, Recommendation>;
+  const direction = {} as Record<TF, DirectionalCall | null>;
+  const structure = {} as Record<TF, MarketStructure | null>;
   const ordered: TF[] = ['1d', '4h', '1h', '15m'];
+  let flow: FlowInfo | null = null;
 
   for (const tf of ordered) {
     const candles = byTf[tf];
     const closed = candles.filter((c) => c.closed);
     if (closed.length < 30) {
       tfs[tf] = emptyRec(symbol, tf, last, `thiếu dữ liệu ${tf} (${closed.length} nến đóng)`);
+      direction[tf] = null; structure[tf] = null;
       continue;
     }
     const a = atr(closed);
     const vp = computeVolumeProfile(closed, { mode: 'close', atr: a });
     if (!vp) {
       tfs[tf] = emptyRec(symbol, tf, last, `không dựng được volume profile ${tf}`);
+      direction[tf] = null; structure[tf] = null;
       continue;
     }
     const pa = analyzePriceAction(candles);
@@ -134,11 +156,18 @@ export async function scanSymbol(symbol: string): Promise<SymbolScan> {
         }
       : null;
 
-    tfs[tf] = decideBias({
+    const decideInput: DecideInput = {
       symbol, tf, candles, vp, pa, delta, deriv, htf,
       hasClosedBar: hasClosedBar(candles, tf),
       last: closed[closed.length - 1].c,
-    });
+    };
+    tfs[tf] = decideBias(decideInput);
+
+    // Bản điện luôn-ra-hướng dùng CHUNG dữ liệu, chỉ khác cách kết luận.
+    const st = analyzeStructure(candles);
+    structure[tf] = st;
+    if (!flow) flow = buildFlow(perpTaker, k15, positioning, deriv.funding);
+    direction[tf] = decideDirection(decideInput, st, flow);
   }
 
   const pa15 = analyzePriceAction(k15);
@@ -153,6 +182,9 @@ export async function scanSymbol(symbol: string): Promise<SymbolScan> {
     tfs,
     derivatives: deriv,
     spotTakerDelta: spotDelta,
+    direction,
+    structure,
+    flow,
     composite: {
       sessionPoc: composite.session?.poc ?? null,
       h24Poc: composite.h24?.poc ?? null,

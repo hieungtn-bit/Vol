@@ -84,3 +84,57 @@ Entry rơi vào lõi VA · RR TP1 < 1 · SL > 3% giá (isolated đòn bẩy cao 
 
 ---
 **Không phải lời khuyên đầu tư.**
+
+---
+
+## 9. Bản điện luôn-ra-hướng (`/live`)
+
+Bảng ở `/` giữ nguyên kỷ luật cũ: score < 7 thì WAIT. Bản điện ở `/live` trả lời một
+câu hỏi khác — **"nếu buộc phải chọn thì chọn bên nào"** — nên **không bao giờ có WAIT**.
+
+Bỏ WAIT không phải là giả vờ lúc nào cũng có kèo đẹp. Nó được bù lại bằng **hạng tin cậy**:
+
+| Hạng | Điều kiện | Nghĩa |
+|---|---|---|
+| **A** | \|net\| ≥ 30 | bằng chứng lệch hẳn về một phía |
+| **B** | 15 ≤ \|net\| < 30 | lệch vừa |
+| **C** | \|net\| < 15 | hai phía gần cân nhau — chỉ là thiên hướng, không phải lệnh để vào tiền |
+
+`net` ∈ [−100, +100]; `longScore = 50 + net/2`, `shortScore = 100 − longScore`.
+Hướng = bên có điểm cao hơn. Size chỉ được `Normal` khi hạng A **và** không có cảnh báo nào.
+
+### Bảy vế chấm điểm
+
+| Vế | Trọng số | Cách đọc |
+|---|---|---|
+| Cấu trúc HH/HL/LH/LL | 25 | đỉnh sau vs đỉnh trước, đáy sau vs đáy trước; 3 swing gần nhất, cái mới nặng hơn |
+| Vị trí trong Value Area | 20 | ở VAL → ủng hộ long, ở VAH → ủng hộ short, giữa VA → gần trung tính |
+| Taker Buy/Sell | 20 | perp 0.65 + spot 0.35; ×1.15 khi hai chợ đồng thuận |
+| Price Action | 18 | hướng nến đóng + accept/grab + pin/engulf, **nhân** hệ số volume |
+| Open Interest | 12 | long mới +1 · short cover +0.6 · short mới −1 · long cover −0.6 |
+| Funding | 8 | mức thường: theo chiều đám đông · mức extreme: **đảo dấu** (đám đông quá lệch là nhiên liệu cho cú ép ngược) |
+| Volume | — | **không có điểm riêng**. Nó là hệ số nhân cho PA: ≥1.5× median → ×1.4, <0.6× → ×0.5. Nếu volume cũng cộng điểm theo hướng cây cuối thì cùng một cây nến bị tính hai lần. |
+
+### Cấu trúc HH/HL/LH/LL
+
+Swing = fractal 3-trái/3-phải, đòi cực trị **chặt**. Hệ quả cần biết: trong một xu hướng
+trơn tuột không có nhịp hồi thì **không có swing nào hoàn chỉnh** — đó là hành vi đúng,
+không phải lỗi.
+
+- HH + HL → `uptrend` · LH + LL → `downtrend`
+- HH + LL → `broadening` (biên nới hai phía) · LH + HL → `contracting` (nén, sắp chọn hướng)
+- Mức bẻ gãy: đang tăng thì là HL gần nhất, đang giảm thì là LH gần nhất.
+
+### Ai đang trả ai
+
+Funding dương = **LONG trả SHORT** (đám đông đứng long và đang nuôi vị thế). Âm thì ngược lại.
+Luôn quy thêm ra %/năm (`rate × 3 × 365`) để thấy giá thật của việc gồng.
+
+Kèm hai số "ai đang ĐỨNG ở đâu" (khác với "ai đang ĐÁNH"):
+`globalLongShortAccountRatio` đếm theo tài khoản nên nghiêng về bán lẻ, `topLongShortPositionRatio`
+theo giá trị vị thế của nhóm lớn. **Chỗ hai số này ngược nhau mới là chỗ đáng đọc.**
+
+### Buy/Sell tách chợ
+
+Taker perp và taker spot **luôn hiển thị tách rời**, không gộp thành một con số. Chỉ khi cả
+hai cùng nghiêng một phía mới ghi "đồng thuận" và mới được nhân hệ số tin cậy.
