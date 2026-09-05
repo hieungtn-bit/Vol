@@ -103,41 +103,56 @@ Bỏ WAIT không phải là giả vờ lúc nào cũng có kèo đẹp. Nó đư
 
 ### Tín hiệu vàng
 
-Nằm **trên** hạng A. Phải đạt **đủ năm** điều kiện, thiếu một là trượt:
+Nằm **trên** hạng A. Hai điều kiện, **cả hai đều hiệu chuẩn bằng backtest**:
 
-1. **Không vế nào ngược hướng** — mọi bằng chứng có \|điểm\| ≥ 1 đều chỉ cùng một phía.
-2. **Ít nhất 4 vế thực sự có điểm** — ba vế đồng thuận trong khi bốn vế còn lại N/A thì
-   không phải đồng thuận, chỉ là thiếu dữ liệu.
-3. \|net\| ≥ **40** (cao hơn hẳn ngưỡng 30 của hạng A).
-4. **RR TP2 ≥ 2** và **R kỳ vọng ≥ 1**, kèm sàn **RR TP1 ≥ 0.5**.
-5. **Không còn cảnh báo nào.**
+1. **Không vế nào ngược hướng** — mọi bằng chứng có |điểm| ≥ 1 đều chỉ cùng một phía.
+2. **|net| ≥ 40**, và ít nhất **3 vế** thực sự có điểm.
 
-**Vì sao không đo RR TP1.** TP1 theo thiết kế là bậc *gần nhất* (mép VA / POC), nên
-RR TP1 < 1 là chuyện bình thường — đó là chốt non 50% cho nhẹ vị thế, không phải kèo
-tồi. Dữ liệu thật xác nhận: RR TP1 gần như luôn dưới 1. Lấy nó làm ngưỡng là tự đá vào
-thiết kế của chính mình và biến hạng vàng thành code chết.
+Bản đầu còn đòi RR TP2 ≥ 2, R kỳ vọng ≥ 1 và không cảnh báo nào. Trên 1831 tín hiệu
+thật, bộ đó bắn **đúng 0 lần** — code chết. Đo lại thì hai điều kiện ấy còn **chọn ngược**:
 
-Thứ đáng đo là R của **cả kế hoạch**: `R kỳ vọng = 0.5×RR1 + 0.3×RR2` (bỏ qua runner
-cho thận trọng). Cảnh báo cũng bám vào con số này, không bám RR TP1.
+| Nhóm | avgR | PF |
+|---|---|---|
+| R kỳ vọng ≥ 1.5 | **−0.03** | 0.95 |
+| R kỳ vọng 0.5–1 | +0.24 | 1.81 |
+| 0 cảnh báo | +0.14 | 1.26 |
+| ≥2 cảnh báo | **+0.21** | 1.80 |
 
-Nó **phải hiếm**; nếu bật thường xuyên thì nó chỉ là một cái nhãn A khác. Khi chưa đạt,
-hệ in ra `goldenBlockers` — thiếu đúng cái gì, chứ không chỉ nói "chưa đủ". Bảng có bộ
-lọc **★ Chỉ tín hiệu vàng** và bộ đếm trên đầu.
+Mục tiêu càng xa thì càng ít khi chạm tới, mà SL thì vẫn ở đó. Nên cả hai bị bỏ khỏi
+điều kiện; cảnh báo vẫn in ra để người đọc tự cân, chỉ là không dùng để chặn nữa.
 
-`net` ∈ [−100, +100]; `longScore = 50 + net/2`, `shortScore = 100 − longScore`.
-Hướng = bên có điểm cao hơn. Size chỉ được `Normal` khi hạng A **và** không có cảnh báo nào.
+Ngưỡng "≥3 vế có điểm" cũng là số đo được, không phải số đẹp: đặt 4 thì khi phái sinh
+N/A nó hoá ra đòi *toàn bộ* vế khả dụng phải lên tiếng, và kết quả xấu đi rõ
+(n=104 avgR 0.36 → n=61 avgR 0.23).
 
 ### Bảy vế chấm điểm
 
 | Vế | Trọng số | Cách đọc |
 |---|---|---|
 | Cấu trúc HH/HL/LH/LL | 25 | đỉnh sau vs đỉnh trước, đáy sau vs đáy trước; 3 swing gần nhất, cái mới nặng hơn |
-| Vị trí trong Value Area | 20 | ở VAL → ủng hộ long, ở VAH → ủng hộ short, giữa VA → gần trung tính. **Chặn biên ±1**: giá ngoài VA cho tỷ lệ vị trí > 1, không chặn thì một mình vế này ra −180 điểm và nuốt hết các vế còn lại |
+| Vị trí trong Value Area | 20 | **fade CÓ ĐIỀU KIỆN** — xem dưới. Chặn biên ±1 |
 | Taker Buy/Sell | 20 | perp 0.65 + spot 0.35; ×1.15 khi hai chợ đồng thuận |
 | Price Action | 18 | hướng nến đóng + accept/grab + pin/engulf, **nhân** hệ số volume |
 | Open Interest | 12 | long mới +1 · short cover +0.6 · short mới −1 · long cover −0.6 |
 | Funding | 8 | mức thường: theo chiều đám đông · mức extreme: **đảo dấu** (đám đông quá lệch là nhiên liệu cho cú ép ngược) |
 | Volume | — | **không có điểm riêng**. Nó là hệ số nhân cho PA: ≥1.5× median → ×1.4, <0.6× → ×0.5. Nếu volume cũng cộng điểm theo hướng cây cuối thì cùng một cây nến bị tính hai lần. |
+
+### Vế Value Area: fade có điều kiện
+
+Bản đầu mã hoá "chạm VAH thì fade xuống" vô điều kiện. Backtest nói vế đó có edge
+**âm −0.24** — nó chỉ ngược. Lý thuyết market profile vốn đã nói khác: giá được
+**chấp nhận** ngoài value nghĩa là value đang dịch chuyển, phải đi theo; chỉ khi bị
+**từ chối** mới là fade.
+
+| Tình huống | Điểm | Đọc |
+|---|---|---|
+| Hai nến liền đóng trên VAH | `+20` | value dịch lên, đi theo |
+| Hai nến liền đóng dưới VAL | `−20` | value dịch xuống, đi theo |
+| Lần đầu đóng ngoài VAH/VAL | `∓10` | chưa được chấp nhận, nghiêng về hồi lại |
+| Trong value | `±10 × vị trí` | nghiêng nhẹ về mép gần |
+
+Chấp nhận đo bằng **chính VA** (hai nến đóng liên tiếp cùng phía ngoài), không mượn
+`accept`/`grab` của PA — vế PA đã chấm cái đó rồi, mượn lại là chấm hai lần.
 
 ### Cấu trúc HH/HL/LH/LL
 
@@ -174,3 +189,59 @@ thực chứ không phải hệ bỏ sót.
 
 Taker perp và taker spot **luôn hiển thị tách rời**, không gộp thành một con số. Chỉ khi cả
 hai cùng nghiêng một phía mới ghi "đồng thuận" và mới được nhân hệ số tin cậy.
+
+---
+
+## 10. Backtest
+
+`npm run backtest -- --symbols BTCUSDT,ETHUSDT --tf 1h --bars 3000`
+
+### Ba nguyên tắc
+
+1. **Không nhìn trộm tương lai.** Tín hiệu ở nến `i` chỉ thấy nến `0..i`, và cửa sổ
+   profile bằng đúng cửa sổ live. Có test sửa hẳn giá của toàn bộ nến sau `i` rồi
+   khẳng định tín hiệu tại `i` không đổi một byte.
+2. **Cùng một code quyết định.** `prepareTF()` dùng chung cho live và backtest. Nếu
+   backtest tự dựng đầu vào riêng thì nó kiểm chứng một hệ khác với hệ đang chạy, và
+   mọi con số nó in ra đều vô nghĩa.
+3. **Nghi ngờ thì chọn phía xấu.** Trong một nến chạm cả SL lẫn TP, dữ liệu nến không
+   nói được cái nào trước — luôn tính SL trước. Entry khớp ở **mép xấu hơn** của vùng.
+
+### Cách tính R
+
+Đúng kế hoạch đang in ra: 50% ở TP1, 30% ở TP2, 20% runner cũng đóng tại TP2 cho khỏi
+đoán. **SL không dời về hoà vốn** sau TP1 — đúng như luật đã ghi. Chạm SL trước TP1
+là `−1R`; chạm TP1 rồi quay lại SL là `0.5×R1 − 0.5`.
+
+### Giới hạn phải nhớ
+
+- **Mù phái sinh.** `fapi.binance.com` chặn IP nhiều vùng, nên OI / funding / taker perp
+  đều `N/A` trong backtest chạy từ đó. Ba vế ấy **chưa từng được kiểm chứng**. Chạy lại
+  ở nơi vào được `fapi` mới đo được chúng.
+- **Một chế độ thị trường.** Toàn bộ số liệu dưới đây nằm trong ~4 tháng của một giai
+  đoạn. Không suy ra được là nó đúng ở chu kỳ khác.
+- **Không phí, không trượt giá.** Thêm phí vào thì mọi avgR tụt xuống.
+
+### Kết quả (4 symbol: BTC, ETH, ENA, SOL · ~3000 nến mỗi khung)
+
+| Khung | n | win | avgR | PF | DD |
+|---|---|---|---|---|---|
+| 15m | 853 | 60.0% | 0.13 | 1.43 | 8.8R |
+| 1h | 1239 | 56.6% | 0.19 | 1.57 | 10.8R |
+| 4h | 1596 | 51.6% | 0.20 | 1.50 | 11.5R |
+
+Hạng tin cậy, avgR theo từng khung:
+
+| Hạng | 15m | 1h | 4h |
+|---|---|---|---|
+| ★ vàng | **0.28** | **0.35** | **0.42** |
+| A | 0.09 | 0.30 | 0.28 |
+| B | 0.22 | 0.22 | 0.25 |
+| C | 0.07 | 0.12 | 0.10 |
+
+★ vàng đứng nhất và C đứng bét ở **cả ba** khung. Ở 1h và 4h thứ bậc đơn điệu hoàn
+toàn; ở 15m thì A tụt dưới B — mẫu A nhỏ (n=100) nên chưa kết luận được, nhưng phải
+ghi lại chứ không lờ đi.
+
+Hiệu chuẩn làm trên **1h**. 4h và 15m là khung chưa dùng để chỉnh gì, và thứ bậc vẫn
+giữ — đó là bằng chứng chống uốn dữ liệu mạnh hơn việc chia đôi theo thời gian.

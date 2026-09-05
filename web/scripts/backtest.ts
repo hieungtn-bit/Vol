@@ -8,7 +8,7 @@
  * OI / funding / taker perp đều N/A. Nó kiểm chứng phần Price Action + Volume
  * Profile + cấu trúc HH/HL + taker SPOT, tức đúng những vế luôn có dữ liệu lịch sử.
  */
-import { DEFAULT_BT, evidenceEdge, runBacktest, stats, type Trade } from '../lib/backtest';
+import { DEFAULT_BT, calibrate, evidenceEdge, goldDiagnostics, runBacktest, stats, type Trade } from '../lib/backtest';
 import { fetchKlinesHistory } from '../lib/sources';
 import type { Conviction } from '../lib/direct';
 import type { TF } from '../lib/types';
@@ -46,6 +46,11 @@ async function main() {
     for (const symbol of symbols) {
       const candles = await fetchKlinesHistory(symbol, tf, bars);
       if (candles.length < 200) { console.log(`  ${symbol} ${tf}: chỉ ${candles.length} nến, bỏ qua`); continue; }
+      if (arg('diag') !== undefined) {
+        const g = goldDiagnostics(symbol, tf, candles);
+        console.log(`  ${pad(symbol + ' ' + tf, 22)} ${g.signals} tín hiệu · ${g.golden} đạt vàng (${num((g.golden / Math.max(1, g.signals)) * 100, 2)}%)`);
+        for (const b of g.blockers) console.log(`  ${pad('', 22)} chặn bởi "${pad(b.reason, 22)}" ${pad(b.n, 6)} (${num(b.pct, 1)}%)`);
+      }
       const t = runBacktest(symbol, tf, candles, { ...DEFAULT_BT, minConviction });
       const from = new Date(candles[0].t).toISOString().slice(0, 10);
       const to = new Date(candles[candles.length - 1].t).toISOString().slice(0, 10);
@@ -83,6 +88,13 @@ async function main() {
   for (const t of all) byExit.set(t.exitReason, [...(byExit.get(t.exitReason) ?? []), t]);
   for (const [k, v] of [...byExit].sort((a, b) => b[1].length - a[1].length)) {
     console.log(`  ${pad(k, 22)} n=${pad(v.length, 5)} (${num((v.length / all.length) * 100, 1)}%) avgR=${num(v.reduce((s, t) => s + t.r, 0) / v.length)}`);
+  }
+
+  console.log('\n── HIỆU CHUẨN NGƯỠNG BẰNG DỮ LIỆU ──');
+  let lastDim = '';
+  for (const c of calibrate(all)) {
+    if (c.dim !== lastDim) { console.log(`  [${c.dim}]`); lastDim = c.dim; }
+    console.log(`    ${pad(c.bucket, 22)} n=${pad(c.n, 6)} avgR=${pad(num(c.avgR), 7)} PF=${num(c.pf)}`);
   }
 
   console.log('\n── EDGE THẬT CỦA TỪNG VẾ CHẤM ĐIỂM ──');

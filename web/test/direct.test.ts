@@ -331,19 +331,14 @@ describe('hạng tín hiệu vàng', () => {
     expect(c.goldenBlockers.length).toBeGreaterThan(0);
   });
 
-  it('vàng đo R của CẢ KẾ HOẠCH, không đo RR TP1', () => {
+  it('RR KHÔNG còn là điều kiện chặn hạng vàng', () => {
     const c = callWith(trend(true), [{ buy: 90, sell: 10 }, { buy: 88, sell: 12 }], 'new-longs');
-    // TP1 theo thiết kế là bậc gần nhất nên RR1 < 1 là bình thường, không phải lỗi.
-    // Ngưỡng thật nằm ở RR TP2 và R kỳ vọng của kế hoạch chốt 50/30.
-    if (!c.golden) {
-      const why = c.goldenBlockers.join(' ');
-      const rrBlocked = /RR TP2|R kỳ vọng/.test(why);
-      const otherBlocked = /ngược hướng|độ lệch|cảnh báo|vế có điểm/.test(why);
-      expect(rrBlocked || otherBlocked).toBe(true);
-    } else {
-      expect(c.rr2!).toBeGreaterThanOrEqual(2);
-      expect(c.rrBlended!).toBeGreaterThanOrEqual(1);
-    }
+    // Backtest: nhóm "R kỳ vọng ≥ 1.5" cho avgR âm, nhóm "0 cảnh báo" thua nhóm
+    // "≥2 cảnh báo". Cả hai đã bị bỏ khỏi điều kiện, nên không được xuất hiện nữa.
+    const why = c.goldenBlockers.join(' ');
+    expect(why).not.toContain('RR TP');
+    expect(why).not.toContain('R kỳ vọng');
+    expect(why).not.toContain('cảnh báo');
   });
 
   it('R kỳ vọng = 0.5×RR1 + 0.3×RR2, và cảnh báo bám vào nó chứ không bám RR1', () => {
@@ -357,14 +352,15 @@ describe('hạng tín hiệu vàng', () => {
     if (c.rrBlended != null && c.rrBlended < 1) expect(warn).toContain('R kỳ vọng');
   });
 
-  it('đã vàng thì không còn cảnh báo nào và size là Normal', () => {
+  it('đã vàng thì mọi vế có điểm đều cùng hướng và độ lệch ≥ 40', () => {
     for (const specs of [trend(true), trend(false)]) {
       for (const rows of [[{ buy: 90, sell: 10 }], [{ buy: 10, sell: 90 }], null]) {
         const c = callWith(specs, rows);
         if (c.golden) {
-          expect(c.warnings).toEqual([]);
-          expect(c.size).toBe('Normal');
           expect(Math.abs(c.net)).toBeGreaterThanOrEqual(40);
+          const contrib = c.evidence.filter((e) => Math.abs(e.points) >= 1);
+          expect(contrib.length).toBeGreaterThanOrEqual(4);
+          expect(contrib.every((e) => (c.side === 'LONG' ? e.points > 0 : e.points < 0))).toBe(true);
         }
       }
     }

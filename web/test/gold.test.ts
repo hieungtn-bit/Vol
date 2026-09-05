@@ -93,10 +93,11 @@ describe('hạng vàng phải ĐẠT ĐƯỢC, không phải code chết', () =>
     expect(c.golden).toBe(true);
     expect(c.conviction).toBe('GOLD');
     expect(Math.abs(c.net)).toBeGreaterThanOrEqual(40);
-    expect(c.rr2!).toBeGreaterThanOrEqual(2);
-    expect(c.rrBlended!).toBeGreaterThanOrEqual(1);
-    expect(c.warnings).toEqual([]);
-    expect(c.size).toBe('Normal');
+    // Định nghĩa hạng vàng KHÔNG còn ràng buộc RR hay "không cảnh báo" — backtest
+    // cho thấy hai điều kiện đó chọn ngược. Chỉ còn độ lệch và tính nhất trí.
+    const contributing = c.evidence.filter((e) => Math.abs(e.points) >= 1);
+    expect(contributing.length).toBeGreaterThanOrEqual(4);
+    expect(contributing.every((e) => (c.side === 'LONG' ? e.points > 0 : e.points < 0))).toBe(true);
     expect(c.planText).toContain('★ TÍN HIỆU VÀNG');
   });
 

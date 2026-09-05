@@ -64,6 +64,11 @@ export interface Trade {
   r: number;
   /** Bằng chứng lúc phát tín hiệu — để đo vế nào thật sự có edge. */
   evidence: { label: string; points: number }[];
+  /** Để hiệu chuẩn ngưỡng hạng vàng bằng dữ liệu thay vì bằng cảm tính. */
+  warningCount: number;
+  rrBlended: number | null;
+  unanimous: boolean;
+
 }
 
 export interface BTStats {
@@ -192,6 +197,9 @@ export function simulate(
       entryIdx, entry, sl: call.sl, tp1: call.tp1, tp2: call.tp2,
       exitIdx, exitReason, hitTP1, hitTP2, r,
       evidence: call.evidence.map((e) => ({ label: e.label, points: e.points })),
+      warningCount: call.warnings.length,
+      rrBlended: call.rrBlended,
+      unanimous: !call.goldenBlockers.some((b) => b.includes('ngược hướng')),
     };
   }
 }
@@ -282,4 +290,79 @@ export function evidenceEdge(trades: Trade[]): {
       edge: avg(agree) - avg(against),
     };
   }).sort((a, b) => b.edge - a.edge);
+}
+
+/**
+ * Vì sao hạng vàng không bao giờ bắn trên dữ liệu thật.
+ *
+ * Đếm trên MỌI tín hiệu (không chỉ những cái thành lệnh) xem điều kiện nào chặn
+ * nhiều nhất. Một hạng không bao giờ đạt thì dù có test chứng minh nó đạt được
+ * trên fixture, ngoài đời nó vẫn là code chết.
+ */
+export function goldDiagnostics(
+  symbol: string,
+  tf: TF,
+  candles: Candle[],
+): { signals: number; golden: number; blockers: { reason: string; n: number; pct: number }[] } {
+  const window = BT_WINDOW[tf];
+  const tally = new Map<string, number>();
+  let signals = 0;
+  let golden = 0;
+
+  for (let i = window; i < candles.length; i++) {
+    const call = signalAt(symbol, tf, candles, i, window);
+    if (!call) continue;
+    signals++;
+    if (call.golden) { golden++; continue; }
+    for (const b of call.goldenBlockers) {
+      // gộp theo LOẠI điều kiện, bỏ phần số cụ thể
+      const kind = b.split(' ').slice(0, 2).join(' ').replace(/[0-9.]+/g, '').trim()
+        || b.slice(0, 20);
+      tally.set(kind, (tally.get(kind) ?? 0) + 1);
+    }
+  }
+
+  const blockers = [...tally].map(([reason, n]) => ({
+    reason, n, pct: signals ? (n / signals) * 100 : 0,
+  })).sort((a, b) => b.n - a.n);
+  return { signals, golden, blockers };
+}
+
+/**
+ * Hiệu chuẩn ngưỡng bằng dữ liệu: chia lệnh theo từng tiêu chí rồi xem avgR nhảy
+ * bậc ở đâu. Đây là cách đặt ngưỡng hạng vàng dựa trên kết quả thay vì cảm tính.
+ */
+export function calibrate(trades: Trade[]): { dim: string; bucket: string; n: number; avgR: number; pf: number }[] {
+  const out: { dim: string; bucket: string; n: number; avgR: number; pf: number }[] = [];
+  const put = (dim: string, bucket: string, ts: Trade[]) => {
+    if (ts.length === 0) return;
+    const s = stats(ts);
+    out.push({ dim, bucket, n: ts.length, avgR: s.avgR, pf: s.profitFactor });
+  };
+
+  for (const [lo, hi] of [[0, 10], [10, 20], [20, 30], [30, 40], [40, 200]]) {
+    put('|net|', `${lo}–${hi}`, trades.filter((t) => Math.abs(t.net) >= lo && Math.abs(t.net) < hi));
+  }
+  for (const n of [0, 1, 2]) {
+    put('số cảnh báo', n === 2 ? '≥2' : String(n),
+      trades.filter((t) => (n === 2 ? t.warningCount >= 2 : t.warningCount === n)));
+  }
+  put('nhất trí', 'không vế nào ngược', trades.filter((t) => t.unanimous));
+  put('nhất trí', 'có vế ngược', trades.filter((t) => !t.unanimous));
+  for (const [lo, hi] of [[-99, 0.5], [0.5, 1], [1, 1.5], [1.5, 99]]) {
+    put('R kỳ vọng', `${lo}–${hi}`,
+      trades.filter((t) => t.rrBlended != null && t.rrBlended >= lo && t.rrBlended < hi));
+  }
+
+  // Ứng viên cho định nghĩa hạng vàng mới, đối chiếu với định nghĩa cũ.
+  const net30 = (t: Trade) => Math.abs(t.net) >= 30;
+  const net40 = (t: Trade) => Math.abs(t.net) >= 40;
+  put('ứng viên vàng', 'net≥30', trades.filter(net30));
+  put('ứng viên vàng', 'net≥30 + nhất trí', trades.filter((t) => net30(t) && t.unanimous));
+  put('ứng viên vàng', 'net≥40 + nhất trí', trades.filter((t) => net40(t) && t.unanimous));
+  put('ứng viên vàng', 'net≥30 + nhất trí + Rkv<1.5',
+    trades.filter((t) => net30(t) && t.unanimous && t.rrBlended != null && t.rrBlended < 1.5));
+  put('ứng viên vàng', 'CŨ: +Rkv≥1 +0 c.báo',
+    trades.filter((t) => net40(t) && t.unanimous && (t.rrBlended ?? 0) >= 1 && t.warningCount === 0));
+  return out;
 }

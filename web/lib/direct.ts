@@ -23,21 +23,34 @@ import type { SizeHint, TF } from './types';
  */
 export type Conviction = 'GOLD' | 'A' | 'B' | 'C';
 
-/** Ngưỡng của hạng vàng. Đổi ở đây, đừng rải số ma khắp nơi. */
+/**
+ * Ngưỡng hạng vàng — HIỆU CHUẨN BẰNG BACKTEST, không phải đặt bằng cảm tính.
+ *
+ * Bản đầu đòi thêm RR TP2 ≥ 2, R kỳ vọng ≥ 1 và không cảnh báo nào. Trên 1831 tín
+ * hiệu thật, bộ điều kiện đó bắn ĐÚNG 0 lần — code chết. Tệ hơn, đo lại thì hai điều
+ * kiện đó chọn ngược:
+ *   - nhóm "R kỳ vọng ≥ 1.5" cho avgR −0.03 (PF 0.95), trong khi nhóm 0.5–1 cho 0.24.
+ *     Mục tiêu càng xa thì càng ít khi chạm tới, và SL thì vẫn ở đó.
+ *   - nhóm "0 cảnh báo" cho avgR 0.14, nhóm "≥2 cảnh báo" cho 0.21.
+ * Nên cả hai đã bị bỏ khỏi điều kiện.
+ *
+ * Còn lại là hai điều kiện có edge đo được: độ lệch lớn và mọi vế nhất trí.
+ *   net≥30            n=243  avgR 0.32  PF 2.33
+ *   net≥30 + nhất trí n=168  avgR 0.31  PF 2.27
+ *   net≥40 + nhất trí n=104  avgR 0.36  PF 2.50  ← chọn cái này
+ */
 export const GOLD = {
-  /** |net| tối thiểu — cao hơn hẳn ngưỡng 30 của hạng A. */
+  /** |net| tối thiểu. 40 đo ra tốt hơn 30 một cách rõ ràng. */
   minNet: 40,
   /**
-   * TP1 theo thiết kế là bậc GẦN NHẤT (mép VA / POC), nên RR TP1 < 1 là chuyện
-   * bình thường và không có nghĩa kèo tồi — đó là chốt non 50% cho nhẹ vị thế.
-   * Thứ đáng đo là R của CẢ KẾ HOẠCH: 50% ở TP1 + 30% ở TP2.
+   * Số vế thực sự có điểm, để "nhất trí" không bị tuyên bố khi hầu hết vế đang câm.
+   *
+   * Đặt 3 chứ không phải 4. Ngưỡng 4 nghe chặt hơn nhưng khi phái sinh N/A (chỉ còn
+   * 4 vế khả dụng) nó hoá ra đòi TOÀN BỘ vế phải lên tiếng, và đo được là ràng buộc
+   * đó chọn xấu đi: net≥40 + nhất trí cho n=104 avgR 0.36, thêm "≥4 vế" còn n=61
+   * avgR 0.23. Với net ≥ 40 thì bản thân ngưỡng điểm đã đòi vài vế mạnh rồi.
    */
-  minRR2: 2,
-  minBlended: 1,
-  /** Sàn cho TP1 để chặn trường hợp bậc đầu sát entry tới mức vô nghĩa. */
-  minRR1: 0.5,
-  /** Số vế thực sự có điểm. Ba vế đồng thuận trong khi bốn vế còn lại N/A không phải đồng thuận. */
-  minContributing: 4,
+  minContributing: 3,
   /** Dưới ngưỡng này coi như nhiễu, không tính là "ngược hướng". */
   noiseFloor: 1,
 };
@@ -293,18 +306,9 @@ export function decideDirection(
   if (mag < GOLD.minNet) {
     goldenBlockers.push(`độ lệch ${mag.toFixed(0)} (cần ≥ ${GOLD.minNet})`);
   }
-  if (rr2 == null || rr2 < GOLD.minRR2) {
-    goldenBlockers.push(`RR TP2 ${rr2 == null ? 'N/A' : rr2.toFixed(2)} (cần ≥ ${GOLD.minRR2})`);
-  }
-  if (rrBlended == null || rrBlended < GOLD.minBlended) {
-    goldenBlockers.push(`R kỳ vọng ${rrBlended == null ? 'N/A' : rrBlended.toFixed(2)} (cần ≥ ${GOLD.minBlended})`);
-  }
-  if (rr1 == null || rr1 < GOLD.minRR1) {
-    goldenBlockers.push(`RR TP1 ${rr1 == null ? 'N/A' : rr1.toFixed(2)} (cần ≥ ${GOLD.minRR1})`);
-  }
-  if (warnings.length > 0) {
-    goldenBlockers.push(`còn ${warnings.length} cảnh báo`);
-  }
+  // Không còn điều kiện RR và điều kiện "không cảnh báo": backtest cho thấy cả hai
+  // chọn ngược. Cảnh báo vẫn được in ra để người đọc tự cân, chỉ là không dùng để
+  // chặn hạng vàng nữa.
 
   const golden = goldenBlockers.length === 0;
   if (golden) conviction = 'GOLD';
