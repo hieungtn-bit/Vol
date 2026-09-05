@@ -141,17 +141,23 @@ Tự tắt trên serverless (đĩa ephemeral, không giữ được lịch sử)
 
 ### Deploy
 
-Project `market-scan` link tới `hieungtn-bit/Vol`, **Root Directory = `web`**,
-**Production Branch = `claude/market-scan-multi-tf-wt14mq`**. Push là deploy thẳng
-lên production, `scan.maix8.study` theo ngay.
+Project `market-scan` link tới `hieungtn-bit/Vol`, **Root Directory = `web`**, region `sin1`.
 
-Trước đây production từng là một app Next mỏng chỉ làm proxy sang branch alias, vì
-Production Branch còn trỏ nhánh mặc định của repo (nhánh VP-Desk, không chứa app) nên
-mọi push chỉ tạo preview. Lớp đó đã bỏ. Ghi lại hai cái bẫy đã vấp khi dựng nó, phòng
-khi sau này lại cần proxy giữa hai deployment:
+**Production hiện vẫn là một deployment proxy mỏng.** Kiểm chứng ngày 05/09: push từ
+`claude/market-scan-multi-tf-wt14mq` vẫn tạo deployment `target: null` (preview), và
+alias của nó chỉ có branch alias chứ không có `scan.maix8.study`. Nghĩa là Production
+Branch của project vẫn chưa trỏ nhánh này.
 
-- `trailingSlash` hai bên phải khớp. Lệch nhau thì một bên gỡ dấu `/` còn bên kia thêm
-  lại → vòng lặp 308.
-- Dùng `:path(.*)`, **không** dùng `:path*`. `:path*` khớp theo segment nên dừng trước
-  dấu `/` cuối: `/strict/` bị chuyển thành `/strict`, upstream 308 trả về `/strict/`,
-  Location tương đối nên quay lại chính proxy → lặp vô tận.
+Lớp proxy: một app Next chỉ có `next.config.mjs`, rewrite `/:path(.*)` sang branch
+alias — mà branch alias luôn bám commit mới nhất, nên domain vẫn tự theo code mới.
+Hai chi tiết bắt buộc của nó, thiếu là vòng lặp 308:
+
+- `trailingSlash: true` khớp upstream. Lệch nhau thì một bên gỡ dấu `/`, bên kia thêm lại.
+- `:path(.*)` chứ **không** `:path*`. `:path*` khớp theo segment nên dừng trước dấu `/`
+  cuối: `/strict/` thành `/strict`, upstream 308 trả `/strict/`, quay lại chính proxy.
+
+**Cách bỏ lớp proxy:** Vercel → project **`market-scan`** (không phải `writetoearn`) →
+Settings → **Git** → Production Branch → `claude/market-scan-multi-tf-wt14mq` → Save.
+Dấu hiệu đã ăn: push kế tiếp cho deployment `target: "production"`, và
+`curl -sI https://scan.maix8.study/` trả `x-vercel-id` chỉ còn **một** chặng `iad1`
+thay vì ba.
