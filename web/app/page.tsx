@@ -16,6 +16,9 @@ export default function LivePage() {
   const [extra, setExtra] = useState('');
   const [auto, setAuto] = useState(true);          // bản điện thì mặc định phải tự chạy
   const [goldOnly, setGoldOnly] = useState(false);
+  // Mặc định BẬT: backtest đo được là bỏ các kèo trượt cửa giữ lại 22% số lệnh
+  // nhưng nâng avgR 0.05 → 0.18 và hạ sụt giảm tối đa từ 105.9R xuống 8.7R.
+  const [tradeableOnly, setTradeableOnly] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [degraded, setDegraded] = useState<string[]>([]);
@@ -69,29 +72,36 @@ export default function LivePage() {
 
   // Đếm nhanh hai phe để nhìn phát biết thị trường đang nghiêng đâu
   const tally = useMemo(() => {
-    let long = 0, short = 0, gold = 0;
+    let long = 0, short = 0, gold = 0, ok = 0;
     for (const r of rows) for (const tf of TFS) {
       const c = r.direction?.[tf];
       if (!c) continue;
       if (c.side === 'LONG') long++; else short++;
       if (c.golden) gold++;
+      if (c.tradeable) ok++;
     }
-    return { long, short, gold, total: long + short };
+    return { long, short, gold, ok, total: long + short };
   }, [rows]);
 
-  const shown = useMemo(
-    () => (goldOnly ? rows.filter((r) => TFS.some((tf) => r.direction?.[tf]?.golden)) : rows),
-    [rows, goldOnly],
-  );
+  const shown = useMemo(() => {
+    let out = rows;
+    if (tradeableOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.tradeable));
+    if (goldOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.golden));
+    return out;
+  }, [rows, goldOnly, tradeableOnly]);
 
   return (
     <main className="mx-auto max-w-[1400px] p-2 sm:p-4">
       <div className="mb-3 rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-2xs leading-snug text-amber-200">
         <b>Không phải lời khuyên đầu tư. Chốt TP1. Không 10x gỡ lỗ.</b>{' '}
-        Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên hạng tin cậy mới là thứ phải đọc:
-        <b className="text-amber-300"> ★ vàng</b> = mọi vế bằng chứng cùng một hướng, RR đủ, không cảnh báo ·
-        <b> A</b> = lệch hẳn · <b>B</b> = lệch vừa · <b>C</b> = hai phía gần cân nhau,
-        chỉ là thiên hướng chứ không phải lệnh để vào tiền. Rủi ro 0.5–1% tài khoản mỗi lệnh.
+        Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên <b>cửa chất lượng</b> mới là thứ phải đọc.
+        <b className="text-emerald-300"> Qua cửa</b> = mọi vế cùng hướng + hạng ≥ B + TP2 không quá xa;
+        backtest 5.521 lệnh cho thấy lọc bằng đúng ba điều này giữ 22% số kèo mà nâng
+        avgR 0.05 → 0.18 và hạ sụt giảm tối đa 105.9R → 8.7R. Kèo <b>trượt cửa vẫn có hướng</b>,
+        nhưng là thiên hướng để theo dõi, không phải lệnh để vào tiền.
+        <b className="text-amber-300"> ★ vàng</b> = mọi vế đồng thuận và độ lệch ≥ 40 ·
+        <b> A</b> = lệch hẳn · <b>B</b> = lệch vừa · <b>C</b> = hai phía gần cân nhau.
+        Rủi ro 0.5–1% tài khoản mỗi lệnh.
       </div>
 
       <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -108,6 +118,10 @@ export default function LivePage() {
               <span className="text-emerald-400">{tally.long} LONG</span>
               {' / '}
               <span className="text-red-400">{tally.short} SHORT</span>
+              {' · '}
+              <span className={tally.ok > 0 ? 'text-emerald-300' : 'text-muted'}>
+                {tally.ok} qua cửa
+              </span>
               {' · '}
               <span className={tally.gold > 0 ? 'text-amber-300' : 'text-muted'}>
                 ★ {tally.gold} vàng
@@ -135,6 +149,10 @@ export default function LivePage() {
         <label className="flex items-center gap-1.5 text-2xs text-muted">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
           Tự chạy 60s
+        </label>
+        <label className="flex items-center gap-1.5 text-2xs text-emerald-300">
+          <input type="checkbox" checked={tradeableOnly} onChange={(e) => setTradeableOnly(e.target.checked)} />
+          Chỉ kèo qua cửa
         </label>
         <label className="flex items-center gap-1.5 text-2xs text-amber-300">
           <input type="checkbox" checked={goldOnly} onChange={(e) => setGoldOnly(e.target.checked)} />
@@ -176,6 +194,7 @@ export default function LivePage() {
               <tr><td colSpan={7} className="px-3 py-6 text-center text-2xs text-muted">
                 {busy ? 'Đang quét…'
                   : goldOnly ? 'Không có tín hiệu vàng nào lúc này — và đó là kết quả bình thường, nó vốn phải hiếm.'
+                  : tradeableOnly ? 'Không kèo nào qua cửa lúc này. Bỏ tick "Chỉ kèo qua cửa" để xem thiên hướng của mọi mã — nhưng đó là để theo dõi, không phải để vào tiền.'
                   : 'Chưa có dữ liệu.'}
               </td></tr>
             )}

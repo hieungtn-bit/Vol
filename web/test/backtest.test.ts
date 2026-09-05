@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BT_WINDOW, DEFAULT_BT, blindDerivatives, runBacktest, signalAt, simulate, stats } from '@/lib/backtest';
+import type { BTOptions } from '@/lib/backtest';
 import type { Candle } from '@/lib/types';
 import type { DirectionalCall } from '@/lib/direct';
 
@@ -60,9 +61,14 @@ describe('backtest không được nhìn trộm tương lai', () => {
 });
 
 describe('mô phỏng lệnh', () => {
+  // Các test dưới đây kiểm tra CÁCH CỘNG R (thứ tự chạm, chia phần chốt), nên
+  // chạy với phí = 0. Phí có test riêng ở khối sau.
+  const FREE: BTOptions = { ...DEFAULT_BT, feeRate: 0, slipRate: 0 };
+
   const base = (over: Partial<DirectionalCall> = {}): DirectionalCall => ({
     symbol: 'T', tf: '1h', side: 'LONG', conviction: 'A', golden: false, goldenBlockers: [],
     net: 50, longScore: 75, shortScore: 25,
+    unanimous: true, contestedBy: [], tradeable: true, gateBlockers: [],
     entry: [99, 100], sl: 98, tp1: 102, tp2: 106,
     rr1: 1, rr2: 3, rrBlended: 1.4, runner: null, size: 'Normal',
     trigger: '', invalidation: '', evidence: [], structureNote: '', flowNote: '',
@@ -75,26 +81,26 @@ describe('mô phỏng lệnh', () => {
 
   it('không chạm vùng entry thì KHÔNG tính là một lệnh', () => {
     const cs = [bar(105, 106, 104, 105, 0), ...Array.from({ length: 20 }, (_, i) => bar(105, 106, 104, 105, i + 1))];
-    expect(simulate(cs, 0, base(), DEFAULT_BT)).toBeNull();
+    expect(simulate(cs, 0, base(), FREE)).toBeNull();
   });
 
   it('chạm SL trước → đúng -1R', () => {
     const cs = [bar(101, 101, 101, 101, 0), bar(100, 100, 97, 97, 1), bar(97, 97, 97, 97, 2)];
-    const t = simulate(cs, 0, base(), DEFAULT_BT)!;
+    const t = simulate(cs, 0, base(), FREE)!;
     expect(t.exitReason).toBe('sl');
     expect(t.r).toBe(-1);
   });
 
   it('cùng một nến chạm cả SL lẫn TP → tính SL trước (nghi ngờ chọn phía xấu)', () => {
     const cs = [bar(101, 101, 101, 101, 0), bar(100, 103, 97, 100, 1), bar(100, 100, 100, 100, 2)];
-    const t = simulate(cs, 0, base(), DEFAULT_BT)!;
+    const t = simulate(cs, 0, base(), FREE)!;
     expect(t.exitReason).toBe('sl');
     expect(t.r).toBe(-1);
   });
 
   it('chạm TP1 rồi TP2 → R = 0.5×R1 + 0.5×R2', () => {
     const cs = [bar(101, 101, 101, 101, 0), bar(100, 100, 99.5, 100, 1), bar(100, 103, 100, 102, 2), bar(102, 107, 102, 106, 3)];
-    const t = simulate(cs, 0, base(), DEFAULT_BT)!;
+    const t = simulate(cs, 0, base(), FREE)!;
     expect(t.hitTP1).toBe(true);
     expect(t.hitTP2).toBe(true);
     expect(t.exitReason).toBe('tp2');
@@ -104,7 +110,7 @@ describe('mô phỏng lệnh', () => {
 
   it('chạm TP1 rồi quay lại SL → lời một nửa, lỗ một nửa', () => {
     const cs = [bar(101, 101, 101, 101, 0), bar(100, 100, 99.5, 100, 1), bar(100, 103, 100, 102, 2), bar(102, 102, 97, 97, 3)];
-    const t = simulate(cs, 0, base(), DEFAULT_BT)!;
+    const t = simulate(cs, 0, base(), FREE)!;
     expect(t.exitReason).toBe('tp1-then-sl');
     expect(t.r).toBeCloseTo(0.5 * 1 + 0.5 * -1, 6);
   });
@@ -112,7 +118,7 @@ describe('mô phỏng lệnh', () => {
   it('short đối xứng: khớp ở mép dưới vùng entry', () => {
     const s = base({ side: 'SHORT', entry: [100, 101], sl: 102, tp1: 98, tp2: 94 });
     const cs = [bar(99, 99, 99, 99, 0), bar(99, 100.5, 99, 100, 1), bar(100, 100, 97, 97.5, 2), bar(97, 97, 93, 93.5, 3)];
-    const t = simulate(cs, 0, s, DEFAULT_BT)!;
+    const t = simulate(cs, 0, s, FREE)!;
     expect(t.entry).toBe(100);
     expect(t.hitTP2).toBe(true);
     expect(t.r).toBeGreaterThan(0);
@@ -122,6 +128,61 @@ describe('mô phỏng lệnh', () => {
     const s = stats([]);
     expect(s.trades).toBe(0);
     expect(s.totalR).toBe(0);
+  });
+});
+
+describe('phí và trượt giá', () => {
+  const base = (over: Partial<DirectionalCall> = {}): DirectionalCall => ({
+    symbol: 'T', tf: '1h', side: 'LONG', conviction: 'A', golden: false, goldenBlockers: [],
+    net: 50, longScore: 75, shortScore: 25,
+    unanimous: true, contestedBy: [], tradeable: true, gateBlockers: [],
+    entry: [99, 100], sl: 98, tp1: 102, tp2: 106,
+    rr1: 1, rr2: 3, rrBlended: 1.4, runner: null, size: 'Normal',
+    trigger: '', invalidation: '', evidence: [], structureNote: '', flowNote: '',
+    fundingText: '', buyPctPerp: null, buyPctSpot: null, warnings: [], planText: '',
+    ...over,
+  });
+  const bar = (o: number, h: number, l: number, c: number, i = 0): Candle =>
+    ({ t: i * 3_600_000, o, h, l, c, v: 100, q: 100 * c, takerBuyBase: 50, closed: true });
+
+  // entry 100, sl 98 → risk 2. Phí hai chiều 0.05% × 100 × 2 = 0.1 giá = 0.05R.
+  const slSeries = [bar(101, 101, 101, 101, 0), bar(100, 100, 97, 97, 1), bar(97, 97, 97, 97, 2)];
+  const tp2Series = [bar(101, 101, 101, 101, 0), bar(100, 100, 99.5, 100, 1), bar(100, 103, 100, 102, 2), bar(102, 107, 102, 106, 3)];
+
+  it('R ròng = R gộp trừ đúng chi phí đã ghi', () => {
+    for (const cs of [slSeries, tp2Series]) {
+      const t = simulate(cs, 0, base(), DEFAULT_BT)!;
+      expect(t.costR).toBeGreaterThan(0);
+      expect(t.r).toBeCloseTo(t.rGross - t.costR, 10);
+      expect(t.r).toBeLessThan(t.rGross);
+    }
+  });
+
+  it('phí hai chiều quy ra R đúng theo tỉ lệ entry/risk', () => {
+    const t = simulate(tp2Series, 0, base(), DEFAULT_BT)!;
+    // thoát bằng TP nên không cộng trượt giá
+    expect(t.costR).toBeCloseTo((0.0005 * 2 * 100) / 2, 10);
+  });
+
+  it('thoát bằng stop bị tính thêm trượt giá, thoát bằng TP thì không', () => {
+    const sl = simulate(slSeries, 0, base(), DEFAULT_BT)!;
+    const tp = simulate(tp2Series, 0, base(), DEFAULT_BT)!;
+    expect(sl.exitReason).toBe('sl');
+    expect(tp.exitReason).toBe('tp2');
+    expect(sl.costR - tp.costR).toBeCloseTo((0.0002 * 100) / 2, 10);
+  });
+
+  it('stop càng hẹp thì phí tính theo R càng nặng', () => {
+    const wide = simulate(slSeries, 0, base(), DEFAULT_BT)!;
+    const tightCs = [bar(101, 101, 101, 101, 0), bar(100, 100, 99, 99, 1), bar(99, 99, 99, 99, 2)];
+    const tight = simulate(tightCs, 0, base({ sl: 99.5, tp1: 101, tp2: 103 }), DEFAULT_BT)!;
+    expect(tight.costR).toBeGreaterThan(wide.costR);
+  });
+
+  it('phí = 0 thì R ròng bằng R gộp', () => {
+    const t = simulate(slSeries, 0, base(), { ...DEFAULT_BT, feeRate: 0, slipRate: 0 })!;
+    expect(t.costR).toBe(0);
+    expect(t.r).toBe(t.rGross);
   });
 });
 

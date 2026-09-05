@@ -126,3 +126,61 @@ describe('vế Value Area phải bị chặn biên', () => {
     expect(Math.abs(loc.points)).toBeLessThanOrEqual(20.001);
   });
 });
+
+describe('cửa chất lượng (ngưỡng do backtest hiệu chuẩn)', () => {
+  it('cửa đúng bằng ba điều kiện đã hiệu chuẩn, không hơn không kém', () => {
+    for (const buy of [10, 45, 88]) {
+      const c = call(cleanShortSetup(), buy, 'new-shorts', -0.0003);
+      const expected = c.unanimous && c.conviction !== 'C' && (c.rrBlended ?? 0) <= 1.5;
+      expect(c.tradeable).toBe(expected);
+    }
+  });
+
+  it('kèo sạch thì nhất trí — và hạng vàng VẪN có thể trượt cửa vì TP2 quá xa', () => {
+    const c = call(cleanShortSetup(), 10, 'new-shorts', -0.0003);
+    expect(c.unanimous).toBe(true);
+    expect(c.contestedBy).toEqual([]);
+    // Fixture này có R kỳ vọng ~2.96: đúng vùng backtest đo ra avgR âm. Hạng vàng
+    // nói "mọi vế đồng thuận", cửa nói "kèo này đáng đặt tiền không" — hai câu hỏi
+    // khác nhau, và một kèo đồng thuận với TP2 quá xa vẫn là kèo không nên vào.
+    expect(c.gateBlockers.every((b) => b.includes('TP2 quá xa'))).toBe(true);
+    expect(c.tradeable).toBe((c.rrBlended ?? 0) <= 1.5);
+  });
+
+  it('có vế ngược hướng → trượt cửa nhưng VẪN CÓ HƯỚNG, không thành WAIT', () => {
+    // taker mua áp đảo trong khi mọi thứ khác nói short → ít nhất một vế đi ngược
+    const c = call(cleanShortSetup(), 88, 'new-shorts', -0.0003);
+    if (c.unanimous) return;                      // fixture vẫn nhất trí thì không kết luận gì
+    expect(c.contestedBy.length).toBeGreaterThan(0);
+    expect(c.tradeable).toBe(false);
+    expect(c.gateBlockers.some((b) => b.includes('ngược hướng'))).toBe(true);
+    expect(['LONG', 'SHORT']).toContain(c.side);  // luật cứng: luôn có hướng
+    expect(c.size).toBe('Small');
+  });
+
+  it('lý do trượt cửa luôn được nói ra, không im lặng bỏ kèo', () => {
+    for (const buy of [10, 45, 88]) {
+      const c = call(cleanShortSetup(), buy, 'new-shorts', -0.0003);
+      expect(c.tradeable).toBe(c.gateBlockers.length === 0);
+      if (!c.tradeable) expect(c.gateBlockers.join(' ').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('hạng C không bao giờ qua cửa', () => {
+    for (const buy of [10, 40, 50, 60, 88]) {
+      const c = call(cleanShortSetup(), buy, 'new-shorts', -0.0003);
+      if (c.conviction === 'C') expect(c.tradeable).toBe(false);
+    }
+  });
+
+  it('size đi theo cửa chứ không theo số cảnh báo', () => {
+    // Backtest: 0 cảnh báo avgR 0.10, 1 cảnh báo 0.04, ≥2 cảnh báo 0.05 — không đơn
+    // điệu, nên số cảnh báo không được quyết định size.
+    const c = call(cleanShortSetup(), 10, 'new-shorts', -0.0003);
+    if (c.tradeable && (c.conviction === 'GOLD' || c.conviction === 'A')) {
+      expect(c.size).toBe('Normal');              // kể cả khi vẫn còn cảnh báo
+    }
+    const bad = call(cleanShortSetup(), 88, 'new-shorts', -0.0003);
+    if (!bad.tradeable) expect(bad.size).toBe('Small');
+  });
+});

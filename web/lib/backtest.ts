@@ -1,5 +1,5 @@
 import { prepareTF } from './analyze';
-import { decideDirection, type Conviction, type DirectionalCall } from './direct';
+import { decideDirection, type Conviction, type DirectionalCall, type Weights } from './direct';
 import { buildFlow } from './flow';
 import type { Candle, Derivatives, TF } from './types';
 
@@ -21,6 +21,14 @@ import type { Candle, Derivatives, TF } from './types';
 export const BT_WINDOW: Record<TF, number> = { '15m': 192, '1h': 168, '4h': 126, '1d': 90 };
 
 export interface BTOptions {
+  /**
+   * Phí mỗi chiều, tính theo notional (0.0005 = 0.05%, mức taker perp Binance).
+   * Bỏ qua phí là tự thổi phồng kết quả: với stop rộng 1% giá thì một vòng
+   * vào-ra đã ăn mất khoảng 0.1R, tức nửa cái edge đang đo được.
+   */
+  feeRate: number;
+  /** Trượt giá thêm khi thoát bằng stop — lệnh stop ăn giá thị trường, không phải giá mình muốn. */
+  slipRate: number;
   /** Số nến chờ giá chạm vùng entry. Quá hạn thì bỏ kèo, không tính là lệnh. */
   entryWindow: number;
   /** Tối đa giữ lệnh bao nhiêu nến trước khi đóng theo giá thị trường. */
@@ -29,18 +37,36 @@ export interface BTOptions {
   minConviction: Conviction;
   /** Không mở lệnh mới khi đang có lệnh chạy — giống người thật. */
   onePositionAtATime: boolean;
+  /**
+   * Sau khi chạm TP1 thì dời stop của phần còn lại về giá vào lệnh.
+   * Chỉ có hiệu lực TỪ NẾN SAU nến chạm TP1 — trong cùng một nến ta không biết
+   * thứ tự nên vẫn tính stop gốc, tức là luôn chọn phía xấu cho mình.
+   */
+  breakevenAfterTP1: boolean;
+  /** Bỏ tín hiệu có |net| dưới ngưỡng này. null = không lọc. */
+  minNet: number | null;
+  /** Bỏ tín hiệu có R kỳ vọng trên ngưỡng này (TP2 quá xa). null = không lọc. */
+  maxRRBlended: number | null;
+  /** Bộ trọng số chấm điểm. null = dùng bộ đang chạy thật. */
+  weights: Weights | null;
 }
 
 export const DEFAULT_BT: BTOptions = {
+  feeRate: 0.0005,
+  slipRate: 0.0002,
   entryWindow: 12,
   maxHold: 60,
   minConviction: 'C',
   onePositionAtATime: true,
+  breakevenAfterTP1: false,
+  minNet: null,
+  maxRRBlended: null,
+  weights: null,
 };
 
 const RANK: Record<Conviction, number> = { C: 0, B: 1, A: 2, GOLD: 3 };
 
-export type ExitReason = 'tp2' | 'tp1-then-sl' | 'tp1-then-timeout' | 'sl' | 'timeout';
+export type ExitReason = 'tp2' | 'tp1-then-sl' | 'tp1-then-be' | 'tp1-then-timeout' | 'sl' | 'timeout';
 
 export interface Trade {
   symbol: string;
@@ -60,14 +86,20 @@ export interface Trade {
   exitReason: ExitReason;
   hitTP1: boolean;
   hitTP2: boolean;
-  /** R thực hiện của cả kế hoạch: 50% ở TP1, 30% ở TP2, 20% đóng khi hết hạn giữ. */
+  /** R thực hiện SAU phí và trượt giá. Đây mới là con số đáng nhìn. */
   r: number;
+  /** R trước khi trừ phí — giữ lại để thấy phí ăn mất bao nhiêu. */
+  rGross: number;
+  /** Chi phí quy ra R. */
+  costR: number;
   /** Bằng chứng lúc phát tín hiệu — để đo vế nào thật sự có edge. */
   evidence: { label: string; points: number }[];
   /** Để hiệu chuẩn ngưỡng hạng vàng bằng dữ liệu thay vì bằng cảm tính. */
   warningCount: number;
   rrBlended: number | null;
   unanimous: boolean;
+  /** Tín hiệu có qua cửa chất lượng không. */
+  tradeable: boolean;
 
 }
 
@@ -115,13 +147,14 @@ export function signalAt(
   candles: Candle[],
   i: number,
   window = BT_WINDOW[tf],
+  weights: Weights | null = null,
 ): DirectionalCall | null {
   const slice = sliceAsOf(candles, i, window);
   const deriv = blindDerivatives();
   const prepared = prepareTF({ symbol, tf, candles: slice, deriv, htf: null, hasClosedBar: true });
   if (!prepared) return null;
   const flow = buildFlow(null, slice, { retailLongPct: null, topLongPct: null }, deriv.funding);
-  return decideDirection(prepared.input, prepared.structure, flow);
+  return decideDirection(prepared.input, prepared.structure, flow, weights ?? undefined);
 }
 
 /**
@@ -142,6 +175,12 @@ export function simulate(
   const risk = Math.abs(entry - call.sl);
   if (!(risk > 0)) return null;
 
+  // Chi phí quy ra R. Vào một lần, ra một lần (gộp các lần chốt), cộng trượt giá
+  // nếu thoát bằng stop. Stop càng hẹp thì phí càng nặng tính theo R — đó là lý do
+  // một hệ nhìn có edge trên giấy vẫn có thể lỗ khi chạy thật.
+  const feeR = (opt.feeRate * 2 * entry) / risk;
+  const slipR = (opt.slipRate * entry) / risk;
+
   // 1. Chờ khớp
   let entryIdx = -1;
   for (let j = from + 1; j <= Math.min(from + opt.entryWindow, candles.length - 1); j++) {
@@ -159,27 +198,41 @@ export function simulate(
 
   const R = (price: number) => (long ? price - entry : entry - price) / risk;
 
+  let tp1Idx = -1;
+
   for (let j = entryIdx; j <= Math.min(entryIdx + opt.maxHold, candles.length - 1); j++) {
     const b = candles[j];
     const slHit = long ? b.l <= call.sl : b.h >= call.sl;
     const tp1Hit = long ? b.h >= call.tp1 : b.l <= call.tp1;
     const tp2Hit = long ? b.h >= call.tp2 : b.l <= call.tp2;
 
+    // Stop đã dời về hoà vốn? Chỉ tính từ nến SAU nến chạm TP1.
+    const beArmed = opt.breakevenAfterTP1 && hitTP1 && tp1Idx >= 0 && j > tp1Idx;
+    const beHit = beArmed && (long ? b.l <= entry : b.h >= entry);
+
+    // Stop đã dời về hoà vốn thì stop gốc không còn hiệu lực: muốn xuống tới nó
+    // giá phải đi qua giá vào lệnh trước, nên hai trường hợp đều là thoát hoà vốn.
+    if (beArmed && (beHit || slHit)) {
+      exitIdx = j;
+      r = 0.5 * R(call.tp1) + 0.5 * 0;
+      exitReason = 'tp1-then-be';
+      return mk(slipR);
+    }
     // Trong cùng một nến, dữ liệu nến không nói được thứ tự — luôn tính SL trước.
     if (slHit) {
       exitIdx = j;
       if (hitTP1) { r = 0.5 * R(call.tp1) + 0.5 * -1; exitReason = 'tp1-then-sl'; }
       else { r = -1; exitReason = 'sl'; }
-      return mk();
+      return mk(slipR);
     }
-    if (!hitTP1 && tp1Hit) hitTP1 = true;
+    if (!hitTP1 && tp1Hit) { hitTP1 = true; tp1Idx = j; }
     if (hitTP1 && !hitTP2 && tp2Hit) {
       hitTP2 = true;
       exitIdx = j;
       // 50% ở TP1, 30% ở TP2, 20% runner cũng đóng luôn tại TP2 cho khỏi đoán.
       r = 0.5 * R(call.tp1) + 0.5 * R(call.tp2);
       exitReason = 'tp2';
-      return mk();
+      return mk(0);
     }
   }
 
@@ -187,19 +240,22 @@ export function simulate(
   const close = candles[exitIdx].c;
   r = hitTP1 ? 0.5 * R(call.tp1) + 0.5 * R(close) : R(close);
   exitReason = hitTP1 ? 'tp1-then-timeout' : 'timeout';
-  return mk();
+  return mk(0);
 
-  function mk(): Trade {
+  function mk(extraSlip: number): Trade {
+    const costR = feeR + extraSlip;
     return {
       symbol: call.symbol, tf: call.tf, side: call.side,
       conviction: call.conviction, golden: call.golden, net: call.net,
       signalIdx: from, signalTime: candles[from].t,
       entryIdx, entry, sl: call.sl, tp1: call.tp1, tp2: call.tp2,
-      exitIdx, exitReason, hitTP1, hitTP2, r,
+      exitIdx, exitReason, hitTP1, hitTP2,
+      r: r - costR, rGross: r, costR,
       evidence: call.evidence.map((e) => ({ label: e.label, points: e.points })),
       warningCount: call.warnings.length,
       rrBlended: call.rrBlended,
-      unanimous: !call.goldenBlockers.some((b) => b.includes('ngược hướng')),
+      unanimous: call.unanimous,
+      tradeable: call.tradeable,
     };
   }
 }
@@ -216,9 +272,11 @@ export function runBacktest(
 
   for (let i = window; i < candles.length - 2; i++) {
     if (opt.onePositionAtATime && i <= busyUntil) continue;
-    const call = signalAt(symbol, tf, candles, i, window);
+    const call = signalAt(symbol, tf, candles, i, window, opt.weights);
     if (!call) continue;
     if (RANK[call.conviction] < RANK[opt.minConviction]) continue;
+    if (opt.minNet !== null && Math.abs(call.net) < opt.minNet) continue;
+    if (opt.maxRRBlended !== null && call.rrBlended !== null && call.rrBlended > opt.maxRRBlended) continue;
 
     const t = simulate(candles, i, call, opt);
     if (!t) continue;

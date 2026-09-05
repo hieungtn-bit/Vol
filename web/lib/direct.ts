@@ -55,6 +55,15 @@ export const GOLD = {
   noiseFloor: 1,
 };
 
+/**
+ * Cửa chất lượng — ngưỡng do backtest hiệu chuẩn, không phải chọn tay.
+ * Xem mục 11 của ALGORITHM.md.
+ */
+export const GATE = {
+  /** Trên mức này thì TP2 xa quá, backtest đo ra avgR âm. */
+  maxRRBlended: 1.5,
+};
+
 export interface Evidence {
   label: string;
   /** Bằng chứng này nghiêng về đâu. */
@@ -73,6 +82,17 @@ export interface DirectionalCall {
   golden: boolean;
   /** Nếu chưa đạt hạng vàng thì còn thiếu đúng những gì. Rỗng nghĩa là đã đạt. */
   goldenBlockers: string[];
+  /** Không vế chấm điểm nào (trên mức nhiễu) chống lại hướng đã chọn. */
+  unanimous: boolean;
+  /** Tên các vế đang chống lại hướng đã chọn. Rỗng khi nhất trí. */
+  contestedBy: string[];
+  /**
+   * Qua CỬA CHẤT LƯỢNG đo được bằng backtest. Vẫn luôn có hướng — cửa này chỉ
+   * nói "đáng đặt tiền" hay "chỉ theo dõi", không bao giờ biến thành WAIT.
+   */
+  tradeable: boolean;
+  /** Nếu chưa qua cửa thì vì đúng những gì. Rỗng nghĩa là đã qua. */
+  gateBlockers: string[];
   /** -100 (short rõ) .. +100 (long rõ). */
   net: number;
   longScore: number;
@@ -99,7 +119,20 @@ export interface DirectionalCall {
   planText: string;
 }
 
-const W = {
+/**
+ * Trọng số các vế chấm điểm. Tổng luôn giữ ở 103 để ngưỡng hạng (net ≥ 30 = A,
+ * ≥ 15 = B) còn so sánh được giữa các bộ trọng số khác nhau.
+ */
+export interface Weights {
+  structure: number;
+  valueLocation: number;
+  takerFlow: number;
+  priceAction: number;
+  openInterest: number;
+  funding: number;
+}
+
+export const W: Weights = {
   structure: 25,
   valueLocation: 20,
   takerFlow: 20,
@@ -114,8 +147,10 @@ export function decideDirection(
   inp: DecideInput,
   structure: MarketStructure,
   flow: FlowInfo,
+  weights: Weights = W,
 ): DirectionalCall {
   const { vp, pa, last, tf, symbol } = inp;
+  const W = weights;   // che biến module để phần thân bên dưới không phải sửa
   const P = (x: number | null) => fmtPrice(x, vp.binSize);
   const ev: Evidence[] = [];
 
@@ -278,6 +313,12 @@ export function decideDirection(
   if (slPct > 3) warnings.push(`SL cách entry ${slPct.toFixed(2)}% — isolated đòn bẩy cao là cháy.`);
   if (!lv.tp1InVA) warnings.push('TP1 nằm ngoài VA — đã kéo về mép value gần nhất.');
   if (lv.crossings >= 3) warnings.push(`Đoạn TP1→TP2 xuyên ${lv.crossings} HVN — phần cuối chạy như runner.`);
+  if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
+    warnings.push(
+      `R kỳ vọng ${rrBlended.toFixed(2)} — TP2 xa tới mức backtest đo ra vùng LỖ (avgR âm). ` +
+      'Chốt sạch ở TP1 hoặc bỏ kèo.',
+    );
+  }
   if (inp.deriv.oi.squeezeWarning) warnings.push('OI/vol perp cao bất thường — rủi ro squeeze hai chiều.');
   if (structure.state === 'uptrend' && side === 'SHORT') {
     warnings.push('Ngược cấu trúc HH+HL — short ở đây là counter-trend, chốt TP1 bắt buộc.');
@@ -313,9 +354,28 @@ export function decideDirection(
   const golden = goldenBlockers.length === 0;
   if (golden) conviction = 'GOLD';
 
-  const size: SizeHint = (conviction === 'GOLD' || conviction === 'A') && warnings.length === 0
-    ? 'Normal'
-    : 'Small';
+  // ---- CỬA CHẤT LƯỢNG ----
+  // Ba điều kiện dưới đây không phải ý kiến, chúng là thứ backtest đo được. Trên
+  // 5521 lệnh (BTC/ETH/SOL/BNB/XRP/ENA · 15m+1h+4h), lọc bằng đúng ba điều kiện
+  // này giữ lại 22% số lệnh nhưng nâng avgR 0.05 → 0.18, PF 1.13 → 1.61, và hạ
+  // sụt giảm tối đa từ 105.9R xuống 8.7R. Nửa mẫu ngoài: 0.01 → 0.11.
+  // Nó đúng trên CẢ BA khung (15m từ âm 0.05 thành dương 0.07), cả sáu mã, và
+  // cả hai chiều — nên đây không phải uốn tham số theo một mã hay một khung.
+  const unanimous = against.length === 0;
+  const contestedBy = against.map((e) => e.label);
+
+  const gateBlockers: string[] = [];
+  if (!unanimous) gateBlockers.push(`${against.length} vế ngược hướng: ${contestedBy.join(', ')}`);
+  if (conviction === 'C') gateBlockers.push(`độ lệch ${mag.toFixed(0)} — dưới hạng B (cần ≥ 15)`);
+  if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
+    gateBlockers.push(`R kỳ vọng ${rrBlended.toFixed(2)} > ${GATE.maxRRBlended} — TP2 quá xa`);
+  }
+  const tradeable = gateBlockers.length === 0;
+
+  // Size đi theo CỬA, không theo số cảnh báo. Backtest cho thấy số cảnh báo gần
+  // như không phân loại được gì (0 cảnh báo avgR 0.10, 1 cảnh báo 0.04, ≥2 là
+  // 0.05 — không đơn điệu), còn cửa thì phân loại rất rõ.
+  const size: SizeHint = !tradeable ? 'Small' : conviction === 'GOLD' || conviction === 'A' ? 'Normal' : 'Small';
 
   const trigger = side === 'LONG'
     ? `${TRIG[tf]} đóng trên ${P(Math.max(vp.va70.low, lv.entry[1]))} sau khi giữ ${P(lv.entry[0])}`
@@ -327,6 +387,7 @@ export function decideDirection(
 
   const call: DirectionalCall = {
     symbol, tf, side, conviction, golden, goldenBlockers, net,
+    unanimous, contestedBy, tradeable, gateBlockers,
     longScore, shortScore,
     entry: lv.entry, sl: lv.sl, tp1: lv.tp1, tp2: lv.tp2,
     rr1, rr2, rrBlended, runner: lv.runner, size, trigger, invalidation,

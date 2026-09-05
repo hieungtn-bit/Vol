@@ -66,11 +66,12 @@ function SideBadge({ c, onClick }: { c: DirectionalCall | null; onClick?: () => 
   return (
     <button
       onClick={onClick}
-      className={`w-full rounded border px-1 py-1 leading-tight ${SIDE_CLS[c.side]} ${c.golden ? GOLD_RING : ''} hover:brightness-125`}
+      className={`w-full rounded border px-1 py-1 leading-tight ${SIDE_CLS[c.side]} ${c.golden ? GOLD_RING : ''} ${c.tradeable ? '' : 'opacity-45'} hover:brightness-125`}
       title={
-        c.golden
+        (c.golden
           ? `TÍN HIỆU VÀNG · ${c.side} · mọi vế bằng chứng cùng hướng · long ${c.longScore}/short ${c.shortScore}`
-          : `${c.side} · hạng ${c.conviction} · long ${c.longScore}/short ${c.shortScore}\nChưa vàng vì: ${c.goldenBlockers.join(' · ')}`
+          : `${c.side} · hạng ${c.conviction} · long ${c.longScore}/short ${c.shortScore}\nChưa vàng vì: ${c.goldenBlockers.join(' · ')}`)
+        + (c.tradeable ? '\nQUA CỬA — đáng đặt tiền.' : `\nTRƯỢT CỬA (chỉ theo dõi) vì: ${c.gateBlockers.join(' · ')}`)
       }
     >
       <div className="flex items-center justify-center gap-1">
@@ -78,6 +79,7 @@ function SideBadge({ c, onClick }: { c: DirectionalCall | null; onClick?: () => 
         <span className={`rounded px-1 text-[9px] font-bold ${CONV_CLS[c.conviction]}`}>
           {CONV_LABEL[c.conviction]}
         </span>
+        {!c.tradeable && <span className="text-[9px] text-slate-400" title="trượt cửa chất lượng">◦</span>}
       </div>
       <div className="mono text-[10px] opacity-80">{c.longScore}/{c.shortScore}</div>
     </button>
@@ -127,6 +129,9 @@ function Detail({ c }: { c: DirectionalCall }) {
         <span className={`rounded px-1 text-[10px] font-bold ${CONV_CLS[c.conviction]}`}>
           {c.golden ? '★ TÍN HIỆU VÀNG' : `hạng ${c.conviction}`}
         </span>
+        <span className={`rounded px-1 text-[10px] font-bold ${c.tradeable ? 'bg-emerald-400/20 text-emerald-300' : 'bg-slate-500/20 text-slate-400'}`}>
+          {c.tradeable ? 'QUA CỬA' : 'CHỈ THEO DÕI'}
+        </span>
         <span className="text-2xs text-muted">long {c.longScore} · short {c.shortScore}</span>
         <span className="text-2xs text-muted">size {c.size}</span>
       </div>
@@ -160,11 +165,24 @@ function Detail({ c }: { c: DirectionalCall }) {
         </ul>
       </div>
 
+      {c.tradeable ? (
+        <p className="mt-1.5 rounded border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-1 text-2xs text-emerald-200">
+          <b>Qua cửa chất lượng</b> — mọi vế cùng hướng, hạng {c.conviction}, R kỳ vọng{' '}
+          {c.rrBlended?.toFixed(2) ?? 'N/A'} ≤ 1.5. Backtest 5.521 lệnh: nhóm qua cửa có
+          avgR 0.18 / PF 1.61, nhóm chung là 0.05 / 1.13.
+        </p>
+      ) : (
+        <p className="mt-1.5 rounded border border-slate-500/40 bg-slate-500/10 px-1.5 py-1 text-2xs text-slate-300">
+          <b>Trượt cửa — chỉ theo dõi, không vào tiền:</b> {c.gateBlockers.join(' · ')}.
+          Hướng vẫn là {c.side}, nhưng backtest đo nhóm này không có lợi thế.
+        </p>
+      )}
+
       {c.golden ? (
         <p className="mt-1.5 rounded border border-amber-300/50 bg-amber-300/10 px-1.5 py-1 text-2xs text-amber-200">
           ★ <b>Tín hiệu vàng</b> — mọi vế bằng chứng có điểm đều cùng chỉ về {c.side}, độ lệch{' '}
           {Math.abs(c.net).toFixed(0)}, RR TP2 {c.rr2?.toFixed(2)}, R kỳ vọng{' '}
-          {c.rrBlended?.toFixed(2)}, không cảnh báo nào.
+          {c.rrBlended?.toFixed(2)}.
         </p>
       ) : (
         <p className="mt-1.5 text-2xs leading-snug text-slate-500">

@@ -95,7 +95,8 @@ Entry rơi vào lõi VA · RR TP1 < 1 · SL > 3% giá (isolated đòn bẩy cao 
 Bảng ở `/` giữ nguyên kỷ luật cũ: score < 7 thì WAIT. Bản điện ở `/live` trả lời một
 câu hỏi khác — **"nếu buộc phải chọn thì chọn bên nào"** — nên **không bao giờ có WAIT**.
 
-Bỏ WAIT không phải là giả vờ lúc nào cũng có kèo đẹp. Nó được bù lại bằng **hạng tin cậy**:
+Bỏ WAIT không phải là giả vờ lúc nào cũng có kèo đẹp. Nó được bù lại bằng **cửa chất
+lượng** và **hạng tin cậy**:
 
 | Hạng | Điều kiện | Nghĩa |
 |---|---|---|
@@ -104,12 +105,33 @@ Bỏ WAIT không phải là giả vờ lúc nào cũng có kèo đẹp. Nó đư
 | **B** | 15 ≤ \|net\| < 30 | lệch vừa |
 | **C** | \|net\| < 15 | hai phía gần cân nhau — chỉ là thiên hướng, không phải lệnh để vào tiền |
 
+### Cửa chất lượng (`tradeable`) — thứ phải đọc trước tiên
+
+Hạng nói bằng chứng lệch bao nhiêu. Cửa nói **kèo này có đáng đặt tiền không**. Ba điều
+kiện, tất cả do backtest hiệu chuẩn: **nhất trí** + **hạng ≥ B** + **R kỳ vọng ≤ 1.5**.
+
+Trên 5521 lệnh (6 mã × 15m/1h/4h, đã trừ phí), lọc bằng đúng ba điều kiện này:
+
+| | n | avgR | PF | sụt giảm tối đa | ngoài mẫu avgR |
+|---|---|---|---|---|---|
+| không lọc | 5521 | 0.05 | 1.13 | 105.9R | 0.01 |
+| **qua cửa** | 1200 (22%) | **0.18** | **1.61** | **8.7R** | **0.11** |
+
+Kèo trượt cửa **vẫn ra hướng** — luật "không có WAIT" không đổi. Nó chỉ bị đánh dấu
+*chỉ theo dõi*, ghi rõ trượt vì điều kiện nào, và size bị ép về Small. Bản điện mặc
+định lọc theo cửa; bỏ tick là xem được hết.
+
 ### Tín hiệu vàng
 
 Nằm **trên** hạng A. Hai điều kiện, **cả hai đều hiệu chuẩn bằng backtest**:
 
 1. **Không vế nào ngược hướng** — mọi bằng chứng có |điểm| ≥ 1 đều chỉ cùng một phía.
 2. **|net| ≥ 40**, và ít nhất **3 vế** thực sự có điểm.
+
+Lưu ý: **hạng vàng vẫn có thể trượt cửa chất lượng** — khi TP2 xa quá (R kỳ vọng > 1.5).
+Hai thứ trả lời hai câu khác nhau: vàng nói *bằng chứng đồng thuận đến đâu*, cửa nói
+*kèo này có đáng đặt tiền không*. Một kèo đồng thuận tuyệt đối nhưng mục tiêu đặt quá
+xa vẫn là kèo không nên vào, và backtest đo đúng như vậy.
 
 Bản đầu còn đòi RR TP2 ≥ 2, R kỳ vọng ≥ 1 và không cảnh báo nào. Trên 1831 tín hiệu
 thật, bộ đó bắn **đúng 0 lần** — code chết. Đo lại thì hai điều kiện ấy còn **chọn ngược**:
@@ -227,24 +249,26 @@ là `−1R`; chạm TP1 rồi quay lại SL là `0.5×R1 − 0.5`.
 
 ### Kết quả (4 symbol: BTC, ETH, ENA, SOL · ~3000 nến mỗi khung)
 
+Số dưới đây **đã trừ phí** (0.05% mỗi chiều + 0.02% trượt giá khi dính stop). Phí ăn
+0.130R mỗi lệnh — 238.8R trên 328.7R lời gộp, tức gần ba phần tư.
+
 | Khung | n | win | avgR | PF | DD |
 |---|---|---|---|---|---|
-| 15m | 853 | 60.0% | 0.13 | 1.43 | 8.8R |
-| 1h | 1239 | 56.6% | 0.19 | 1.57 | 10.8R |
-| 4h | 1596 | 51.6% | 0.20 | 1.50 | 11.5R |
+| 15m | 1258 | 57.7% | **−0.05** | 0.86 | 105.9R |
+| 1h | 1840 | 55.7% | 0.05 | 1.12 | 20.5R |
+| 4h | 2423 | 50.1% | 0.11 | 1.25 | 28.6R |
 
-Hạng tin cậy, avgR theo từng khung:
+Không lọc gì thì hệ sau phí **gần như không có lợi thế** (ngoài mẫu avgR 0.01, PF 1.02).
+Lợi thế nằm ở khâu **chọn kèo**, không ở khâu chấm điểm — xem cửa chất lượng ở mục 9.
+Áp cửa vào, avgR theo khung thành 15m 0.07 · 1h 0.17 · 4h 0.24, và cả sáu mã đều dương
+(0.12 → 0.24), LONG 0.18 · SHORT 0.18.
 
-| Hạng | 15m | 1h | 4h |
-|---|---|---|---|
-| ★ vàng | **0.28** | **0.35** | **0.42** |
-| A | 0.09 | 0.30 | 0.28 |
-| B | 0.22 | 0.22 | 0.25 |
-| C | 0.07 | 0.12 | 0.10 |
+Hai cải tiến nghe rất hợp lý mà đo ra là **xấu**, nên đã bỏ:
 
-★ vàng đứng nhất và C đứng bét ở **cả ba** khung. Ở 1h và 4h thứ bậc đơn điệu hoàn
-toàn; ở 15m thì A tụt dưới B — mẫu A nhỏ (n=100) nên chưa kết luận được, nhưng phải
-ghi lại chứ không lờ đi.
+- **Dời SL về hoà vốn sau TP1.** Riêng 1h thì có vẻ đúng; chạy đủ ba khung thì ngoài
+  mẫu 0.01 → −0.01. Nó cắt đuôi thắng nhiều hơn phần nó cứu.
+- **Hạ trọng số vế Value Area** (bảng edge cho vế này −0.04). Đo: sụt giảm tối đa
+  105.9R → 172.9R. Vế VA không chọn hướng, nó chọn **vị trí vào lệnh** — bỏ nó thì hệ
+  vào giữa value nhiều hơn, đúng thứ luật cứng số 2 cấm.
 
-Hiệu chuẩn làm trên **1h**. 4h và 15m là khung chưa dùng để chỉnh gì, và thứ bậc vẫn
-giữ — đó là bằng chứng chống uốn dữ liệu mạnh hơn việc chia đôi theo thời gian.
+Chi tiết đầy đủ ở [`ALGORITHM.md`](./ALGORITHM.md) mục 10.

@@ -210,6 +210,26 @@ vế này ra −180 điểm, một mình nuốt hết các vế còn lại.
 đòi RR cao và không cảnh báo nào; bộ đó bắn **đúng 0 lần** trên 1831 tín hiệu thật, và
 đo lại thì cả hai điều kiện ấy **chọn ngược** (xem mục 10).
 
+### Cửa chất lượng — `tradeable`
+
+Hạng tin cậy trả lời "bằng chứng lệch bao nhiêu". Cửa chất lượng trả lời câu khác:
+**"kèo này có đáng đặt tiền không"**. Ba điều kiện, tất cả do backtest hiệu chuẩn:
+
+| Điều kiện | Vì sao |
+|---|---|
+| **Nhất trí** — không vế nào (trên mức nhiễu) ngược hướng | nhóm nhất trí avgR **0.16**, nhóm bị chống 0.01 |
+| **Hạng ≥ B** (`\|net\| ≥ 15`) | hạng C avgR **−0.04**, và gánh gần hết phần sụt giảm |
+| **R kỳ vọng ≤ 1.5** | nhóm > 1.5 avgR **−0.01**, nhóm 0.5–1 là +0.09 |
+
+Kèo trượt cửa **vẫn ra hướng** — luật cứng "không có WAIT" không đổi. Nó chỉ bị hạ
+xuống *thiên hướng để theo dõi*, ghi rõ trượt vì điều kiện nào, và `size` bị ép về
+`Small`. Bản điện mặc định lọc theo cửa này, bỏ tick là xem được hết.
+
+**Size đi theo cửa, không theo số cảnh báo.** Bản trước lấy "không cảnh báo nào" làm
+điều kiện của size Normal. Đo lại: 0 cảnh báo avgR 0.10, 1 cảnh báo 0.04, ≥2 cảnh báo
+0.05 — không đơn điệu, tức số cảnh báo gần như không phân loại được gì. Cảnh báo vẫn
+in ra đủ để người đọc tự cân, chỉ là không còn quyết định size.
+
 ---
 
 ## 9. Đặt lệnh
@@ -254,43 +274,82 @@ theo thiết kế là bậc *gần nhất* nên RR TP1 < 1 là bình thường.
 đoán. **SL không dời về hoà vốn** sau TP1, đúng như luật. Chạm SL trước TP1 = `−1R`;
 chạm TP1 rồi quay lại SL = `0.5×R1 − 0.5`.
 
-### Kết quả — 4 symbol (BTC, ETH, ENA, SOL), ~3000 nến mỗi khung
+**Có tính phí.** 0.05% mỗi chiều theo notional, cộng 0.02% trượt giá khi thoát bằng
+stop. Quy ra R thì phí phụ thuộc độ rộng stop: stop càng hẹp phí càng nặng. Trên mẫu
+dưới đây phí ăn **0.130R mỗi lệnh** — tức 238.8R trên tổng 328.7R lời gộp. Bỏ qua phí
+là tự thổi phồng kết quả lên gần bốn lần.
+
+### Kết quả — 6 symbol (BTC, ETH, SOL, BNB, XRP, ENA), 3000 nến mỗi khung, **sau phí**
 
 | Khung | n | win | avgR | PF | DD |
 |---|---|---|---|---|---|
-| 15m | 853 | 60.0% | 0.13 | 1.43 | 8.8R |
-| 1h | 1239 | 56.6% | 0.19 | 1.57 | 10.8R |
-| 4h | 1596 | 51.6% | 0.20 | 1.50 | 11.5R |
+| 15m | 1258 | 57.7% | **−0.05** | 0.86 | 105.9R |
+| 1h | 1840 | 55.7% | 0.05 | 1.12 | 20.5R |
+| 4h | 2423 | 50.1% | 0.11 | 1.25 | 28.6R |
+| **tất cả** | **5521** | 54.3% | **0.05** | 1.13 | 105.9R |
 
-avgR theo hạng:
+Nửa mẫu ngoài (nửa sau theo thời gian, chưa dùng để chỉnh gì): avgR **0.01**, PF 1.02.
+Nói thẳng: **hệ gốc sau phí gần như không có lợi thế.**
 
-| Hạng | 15m | 1h | 4h |
+### Cửa chất lượng — thứ thật sự tạo ra lợi thế
+
+Lọc cùng bộ 5521 lệnh bằng ba điều kiện của mục 8:
+
+| Luật chọn | n | % | avgR | PF | DD | ngoài mẫu avgR / PF |
+|---|---|---|---|---|---|---|
+| tất cả (gốc) | 5521 | 100% | 0.05 | 1.13 | 105.9R | 0.01 / 1.02 |
+| nhất trí | 1491 | 27% | 0.16 | 1.49 | 13.4R | 0.08 / 1.27 |
+| hạng ≥ B | 2862 | 52% | 0.13 | 1.36 | 35.9R | 0.08 / 1.24 |
+| **nhất trí + ≥B + Rkv ≤ 1.5** | **1200** | **22%** | **0.18** | **1.61** | **8.7R** | **0.11 / 1.42** |
+
+Giữ 22% số kèo, avgR gấp 3.6 lần, sụt giảm tối đa nhỏ hơn **12 lần**.
+
+Luật này không sống nhờ một mã hay một khung — điều kiện để tin nó:
+
+| | avgR | | avgR |
 |---|---|---|---|
-| ★ vàng | **0.28** | **0.35** | **0.42** |
-| A | 0.09 | 0.30 | 0.28 |
-| B | 0.22 | 0.22 | 0.25 |
-| C | 0.07 | 0.12 | 0.10 |
+| 15m | 0.07 | BTC | 0.12 |
+| 1h | 0.17 | ETH | 0.21 |
+| 4h | 0.24 | SOL | 0.19 |
+| LONG | 0.18 | BNB | 0.16 |
+| SHORT | 0.18 | XRP | 0.17 |
+| | | ENA | 0.24 |
 
-★ vàng nhất và C bét ở **cả ba** khung. Hiệu chuẩn chỉ làm trên 1h; 4h và 15m là khung
-chưa dùng để chỉnh gì mà thứ bậc vẫn giữ. Ở 15m thì A tụt dưới B — mẫu A nhỏ nên chưa
-kết luận được, nhưng ghi lại chứ không lờ đi.
+Cả ba khung, cả sáu mã, cả hai chiều đều dương. 15m từ **−0.05 thành +0.07** — khung
+tệ nhất được cứu bằng đúng luật chọn kèo, không phải bằng tham số riêng cho 15m.
 
-### Ba lần backtest lật ngược thiết kế
+### Năm lần backtest lật ngược thiết kế
 
 1. **Hạng tin cậy từng chạy ngược.** Baseline: C 0.09 > B 0.07 > A 0.02 — càng "chắc"
    càng tệ.
 2. **Vế Value Area từng có edge âm −0.24.** Fade vô điều kiện là sai; đã đổi thành fade
    có điều kiện (mục 8).
-3. **Điều kiện hạng vàng từng chọn ngược.** Nhóm "R kỳ vọng ≥ 1.5" cho avgR **−0.03**
-   trong khi nhóm 0.5–1 cho +0.24; nhóm "0 cảnh báo" thua nhóm "≥2 cảnh báo"
-   (0.14 vs 0.21). Mục tiêu càng xa càng ít khi chạm tới, mà SL thì vẫn ở đó.
+3. **Điều kiện hạng vàng từng chọn ngược.** Nhóm "R kỳ vọng ≥ 1.5" cho avgR âm trong
+   khi nhóm 0.5–1 dương; nhóm "0 cảnh báo" thua nhóm "≥2 cảnh báo". Mục tiêu càng xa
+   càng ít khi chạm tới, mà SL thì vẫn ở đó.
+4. **Dời SL về hoà vốn sau TP1: nghe hợp lý, đo ra là xấu.** Nhóm `tp1-then-sl` chiếm
+   15–16% số lệnh với avgR âm, nên dời stop về hoà vốn có vẻ hiển nhiên đúng. Trên
+   riêng 1h nó có vẻ đúng thật (ngoài mẫu 0.01 → 0.02). Chạy đủ ba khung thì ngược
+   lại: ngoài mẫu **0.01 → −0.01**, và với lọc ≥B thì **0.04 → 0.01**. Nó cắt phần
+   đuôi thắng nhiều hơn phần nó cứu. **Không nhận.** Bài học: một cải tiến chỉ đo trên
+   một khung thì chưa phải một cải tiến.
+5. **Bỏ bớt trọng số vế Value Area: cũng đo ra là xấu.** Bảng edge nói vế VA có edge
+   **−0.04**, nên hạ trọng số 20 → 10 (thậm chí → 0) trông như việc phải làm. Đo:
+   avgR 0.05 → 0.04 → 0.02, ngoài mẫu 0.01 → −0.01 → −0.02, sụt giảm tối đa
+   105.9R → 125.5R → **172.9R**. **Giữ nguyên trọng số.** Lý do: `evidenceEdge` đo
+   *độ đồng thuận về hướng*, còn vế VA không làm nhiệm vụ chọn hướng — nó quyết định
+   **vị trí vào lệnh**. Bỏ nó đi thì hệ vào giữa value nhiều hơn, và đó đúng là điều
+   luật cứng số 2 cấm. **Edge âm trong bảng đó không phải lý do đủ để bỏ một vế.**
 
 ### Ba giới hạn phải nhớ trước khi tin những con số trên
 
 - **Mù phái sinh.** `fapi` chặn IP nhiều vùng, nên OI / funding / taker perp là `N/A`
-  trong backtest chạy từ đó. **Ba vế ấy chưa từng được kiểm chứng.**
-- **Một chế độ thị trường**, khoảng 4 tháng. Không suy ra được chu kỳ khác.
-- **Chưa tính phí và trượt giá.** Thêm vào thì mọi avgR tụt xuống.
+  trong backtest chạy từ đó. **Ba vế ấy chưa từng được kiểm chứng** — bảng edge ghi
+  `n=0` cho cả ba, và đó là sự thật chứ không phải chúng vô dụng.
+- **Một chế độ thị trường.** 4h phủ ~500 ngày, 1h ~4 tháng, 15m ~1 tháng. Không suy ra
+  được chu kỳ khác.
+- **0.130R phí mỗi lệnh là giả định.** Đúng với taker Binance perp và stop rộng cỡ
+  mẫu này. Vào bằng maker, hoặc stop rộng hơn, thì con số khác.
 
 ---
 
@@ -335,6 +394,9 @@ Chỗ **duy nhất** liệt kê con số. Sửa ở mã nguồn thì sửa cả 
 | Kỷ luật: ra lệnh | score ≥ 7 / 10 |
 | Hạng A / B / C | \|net\| ≥ 30 / ≥ 15 / < 15 |
 | Hạng vàng | \|net\| ≥ 40 + nhất trí + ≥ 3 vế có điểm |
+| **Cửa chất lượng** (`tradeable`) | **nhất trí + hạng ≥ B + R kỳ vọng ≤ 1.5** |
+| Ngưỡng "TP2 quá xa" (`GATE.maxRRBlended`) | 1.5 |
+| Size Normal | qua cửa **và** hạng ≥ A (không còn phụ thuộc số cảnh báo) |
 | RR TP1 bị trừ điểm | < 1.2 |
 | Cảnh báo SL rộng | > 3% giá |
 
@@ -346,6 +408,8 @@ Chỗ **duy nhất** liệt kê con số. Sửa ở mã nguồn thì sửa cả 
 | Tỷ lệ chốt | 50% TP1 · 30% TP2 · 20% runner |
 | R kỳ vọng | 0.5×RR1 + 0.3×RR2 |
 | Backtest: chờ khớp / giữ tối đa | 12 / 60 nến |
+| Backtest: phí mỗi chiều / trượt giá khi dính stop | 0.05% / 0.02% notional |
+| Backtest: dời SL về hoà vốn sau TP1 | **tắt** — đo ra là xấu (mục 10) |
 
 ---
 
