@@ -16,7 +16,14 @@ const config: Config = {
         warn: '#f59e0b',
       },
       fontSize: {
-        '2xs': ['0.66rem', '0.9rem'],
+        // 0.66rem ≈ 10.5px là dưới ngưỡng đọc thoải mái trên điện thoại, và
+        // dấu tiếng Việt còn cần thêm chiều cao dòng. Nâng lên 11px/16px.
+        '2xs': ['0.6875rem', '1rem'],
+      },
+      minHeight: { tap: '44px' },
+      screens: {
+        // Điểm gãy riêng cho "đủ rộng để bảng dense có nghĩa".
+        board: '900px',
       },
     },
   },

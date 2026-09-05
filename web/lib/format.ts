@@ -14,6 +14,21 @@ export function fmtPrice(x: number | null | undefined, binSize = 0.001): string 
   return x.toFixed(decimalsFor(binSize));
 }
 
+/**
+ * Số chữ số thập phân hợp lý theo ĐỘ LỚN của giá, khi không biết bin size.
+ *
+ * UI trước gọi fmtPrice(price, 0.0001) cho mọi mã, nên BTC hiện ra
+ * "79631.86000" — năm số lẻ trên một tài sản 79 nghìn đô. Ba chữ số cuối là
+ * nhiễu thị giác thuần tuý, và trên màn hình điện thoại chúng đẩy cả cột giá
+ * rộng ra vô ích.
+ */
+export function fmtTick(x: number | null | undefined): string {
+  if (x == null || !isFinite(x)) return 'N/A';
+  const a = Math.abs(x);
+  const d = a >= 1000 ? 2 : a >= 100 ? 3 : a >= 1 ? 4 : a >= 0.01 ? 5 : 6;
+  return x.toFixed(d);
+}
+
 export function fmtPct(x: number | null | undefined, digits = 2): string {
   if (x == null || !isFinite(x)) return 'N/A';
   return `${x >= 0 ? '+' : ''}${x.toFixed(digits)}%`;

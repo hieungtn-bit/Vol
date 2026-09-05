@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BoardRow, type LiveRow } from '@/components/LiveBoard';
+import { BoardRow, SymbolCard, type LiveRow } from '@/components/LiveBoard';
 import { apiPath } from '@/config/site';
 import { ALWAYS_INCLUDE } from '@/config/universe';
 import { ictString } from '@/lib/format';
@@ -10,9 +10,35 @@ import type { TF } from '@/lib/types';
 const TFS: TF[] = ['15m', '1h', '4h', '1d'];
 const REFRESH_MS = 60_000;
 
+/** Nút lọc dạng pill — cao 44px, bấm bằng ngón cái được, và tự nói trạng thái. */
+function Pill({
+  on, onClick, children, tone = 'sky',
+}: {
+  on: boolean; onClick: () => void; children: React.ReactNode; tone?: 'sky' | 'emerald' | 'amber';
+}) {
+  const active = {
+    sky: 'border-sky-400/60 bg-sky-400/15 text-sky-200',
+    emerald: 'border-emerald-400/60 bg-emerald-400/15 text-emerald-200',
+    amber: 'border-amber-300/60 bg-amber-300/15 text-amber-200',
+  }[tone];
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onClick}
+      className={`tap-sm shrink-0 rounded-full border px-3 text-2xs font-semibold transition active:brightness-125 ${
+        on ? active : 'border-line bg-panel2 text-muted'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function LivePage() {
   const [rows, setRows] = useState<LiveRow[]>([]);
-  const [symbols, setSymbols] = useState<string[]>(ALWAYS_INCLUDE);
+  const [symbols] = useState<string[]>(ALWAYS_INCLUDE);
   const [extra, setExtra] = useState('');
   const [auto, setAuto] = useState(true);          // bản điện thì mặc định phải tự chạy
   const [goldOnly, setGoldOnly] = useState(false);
@@ -90,126 +116,198 @@ export default function LivePage() {
     return out;
   }, [rows, goldOnly, tradeableOnly]);
 
-  return (
-    <main className="mx-auto max-w-[1400px] p-2 sm:p-4">
-      <div className="mb-3 rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-2xs leading-snug text-amber-200">
-        <b>Không phải lời khuyên đầu tư. Chốt TP1. Không 10x gỡ lỗ.</b>{' '}
-        Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên <b>cửa chất lượng</b> mới là thứ phải đọc.
-        <b className="text-emerald-300"> Qua cửa</b> = mọi vế cùng hướng + hạng ≥ B + TP2 không quá xa
-        + <b>stop đủ rộng để phí không ăn quá 10% của 1R</b>. Backtest 5.661 lệnh: lọc bằng
-        đúng bốn điều này giữ 7% số kèo mà nâng avgR 0.05 → 0.31, PF 1.11 → 2.16,
-        sụt giảm tối đa 116.9R → 6.3R (ngoài mẫu 0.39 / PF 2.86). Đổi lại, kèo qua cửa
-        rất hiếm. Kèo <b>trượt cửa vẫn có hướng</b>, nhưng là thiên hướng để theo dõi,
-        không phải lệnh để vào tiền.
-        <b className="text-amber-300"> ★ vàng</b> = mọi vế đồng thuận và độ lệch ≥ 40 ·
-        <b> A</b> = lệch hẳn · <b>B</b> = lệch vừa · <b>C</b> = hai phía gần cân nhau.
-        Rủi ro 0.5–1% tài khoản mỗi lệnh.
-      </div>
+  const longShare = tally.total > 0 ? (tally.long / tally.total) * 100 : 50;
 
-      <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold">Bản điện · Long/Short liên tục</h1>
-          <p className="text-2xs text-muted">
-            HH/HL/LH/LL · Value Area · Price Action · Volume · Open Interest · Funding (ai trả ai) · Taker Buy/Sell
-          </p>
-        </div>
-        <div className="text-right">
-          <div className="mono text-xs text-muted">{clock ?? '—'}</div>
+  const emptyText = busy
+    ? 'Đang quét…'
+    : goldOnly
+      ? 'Không có tín hiệu vàng nào lúc này — và đó là kết quả bình thường, nó vốn phải hiếm.'
+      : tradeableOnly
+        ? 'Không kèo nào qua cửa lúc này. Tắt "Qua cửa" để xem thiên hướng của mọi mã — nhưng đó là để theo dõi, không phải để vào tiền.'
+        : 'Chưa có dữ liệu.';
+
+  return (
+    <div className="min-h-screen">
+      {/*
+        Thanh trên DÍNH. Trên điện thoại người ta cuộn liên tục, và hai thứ phải
+        luôn nhìn thấy là: thị trường đang nghiêng bên nào, và dữ liệu còn mới
+        không. Nếu phải cuộn ngược lên đầu mới biết thì coi như không có.
+      */}
+      <header className="safe-t sticky top-0 z-20 border-b border-line bg-bg/95 backdrop-blur">
+        <div className="safe-x mx-auto max-w-[1400px] py-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-sm font-semibold leading-tight">Bản điện · Long/Short</h1>
+              <p className="mono text-[10px] leading-tight text-muted">{clock ?? '—'}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={busy}
+              className="tap-sm shrink-0 rounded-full border border-sky-500/50 bg-sky-500/15 px-3.5 text-2xs font-semibold text-sky-200 active:brightness-125 disabled:opacity-50"
+            >
+              {busy ? 'Đang quét…' : 'Quét lại'}
+            </button>
+          </div>
+
+          {/* Tỷ lệ hai phe: một thanh nhìn phát hiểu, số nằm ngay trên nó. */}
           {tally.total > 0 && (
-            <div className="mono text-2xs">
-              <span className="text-emerald-400">{tally.long} LONG</span>
-              {' / '}
-              <span className="text-red-400">{tally.short} SHORT</span>
-              {' · '}
-              <span className={tally.ok > 0 ? 'text-emerald-300' : 'text-muted'}>
-                {tally.ok} qua cửa
-              </span>
-              {' · '}
-              <span className={tally.gold > 0 ? 'text-amber-300' : 'text-muted'}>
-                ★ {tally.gold} vàng
-              </span>
+            <div className="mt-2">
+              <div
+                className="relative h-5 overflow-hidden rounded-md bg-red-500/25"
+                role="img"
+                aria-label={`${tally.long} kèo LONG trên ${tally.total}, ${tally.short} kèo SHORT`}
+              >
+                <div className="h-full bg-emerald-500/40" style={{ width: `${longShare}%` }} />
+                <div className="absolute inset-0 flex items-center justify-between px-2">
+                  <span className="mono text-[10px] font-semibold text-emerald-200">{tally.long} LONG</span>
+                  <span className="mono text-[10px] font-semibold text-red-200">SHORT {tally.short}</span>
+                </div>
+              </div>
+              <div className="mt-1 flex items-center gap-2 text-[10px] text-muted">
+                <span className={tally.ok > 0 ? 'font-semibold text-emerald-300' : ''}>
+                  {tally.ok} qua cửa
+                </span>
+                <span aria-hidden>·</span>
+                <span className={tally.gold > 0 ? 'font-semibold text-amber-300' : ''}>
+                  ★ {tally.gold} vàng
+                </span>
+                <span className="ml-auto flex items-center gap-1.5">
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${busy ? 'bg-amber-400' : auto ? 'bg-emerald-400' : 'bg-slate-500'}`}
+                    aria-hidden
+                  />
+                  {auto ? `${left}s` : 'tự chạy tắt'}
+                </span>
+              </div>
             </div>
           )}
         </div>
       </header>
 
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-panel p-2">
-        <label className="text-2xs text-muted">
-          Thêm symbol (phẩy)
+      <main className="safe-x safe-b mx-auto max-w-[1400px] pt-3">
+        {/* Bộ lọc: pill cuộn ngang được, không bao giờ làm vỡ hàng trên máy hẹp. */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Pill tone="emerald" on={tradeableOnly} onClick={() => setTradeableOnly((v) => !v)}>
+            {tradeableOnly ? '✓ ' : ''}Qua cửa
+          </Pill>
+          <Pill tone="amber" on={goldOnly} onClick={() => setGoldOnly((v) => !v)}>
+            ★ Vàng
+          </Pill>
+          <Pill tone="sky" on={auto} onClick={() => setAuto((v) => !v)}>
+            Tự chạy 60s
+          </Pill>
           <input
-            value={extra} placeholder="SOLUSDT,LINKUSDT"
+            value={extra}
+            placeholder="+ symbol, phẩy"
+            inputMode="text"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
             onChange={(e) => setExtra(e.target.value)}
-            className="mono mt-0.5 block w-52 rounded border border-line bg-panel2 px-2 py-1 text-xs text-white"
+            className="tap-sm mono min-w-0 flex-1 basis-40 rounded-full border border-line bg-panel2 px-3 text-2xs text-white placeholder:text-muted/70 board:max-w-48"
           />
-        </label>
-        <button
-          onClick={() => void load()} disabled={busy}
-          className="rounded border border-sky-600/50 bg-sky-600/20 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:brightness-125 disabled:opacity-50"
-        >
-          {busy ? 'Đang quét…' : 'Quét lại ngay'}
-        </button>
-        <label className="flex items-center gap-1.5 text-2xs text-muted">
-          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-          Tự chạy 60s
-        </label>
-        <label className="flex items-center gap-1.5 text-2xs text-emerald-300">
-          <input type="checkbox" checked={tradeableOnly} onChange={(e) => setTradeableOnly(e.target.checked)} />
-          Chỉ kèo qua cửa
-        </label>
-        <label className="flex items-center gap-1.5 text-2xs text-amber-300">
-          <input type="checkbox" checked={goldOnly} onChange={(e) => setGoldOnly(e.target.checked)} />
-          ★ Chỉ tín hiệu vàng
-        </label>
-        {auto && (
-          <span className="mono text-2xs text-muted">
-            làm mới sau {left}s
-            <span className={`ml-1.5 inline-block h-1.5 w-1.5 rounded-full ${busy ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-          </span>
+        </div>
+
+        {err && (
+          <div className="mb-3 rounded-lg border border-red-600/40 bg-red-600/10 px-3 py-2 text-2xs leading-snug text-red-300">
+            ⚠ {err}
+          </div>
         )}
-        <div className="ml-auto text-2xs text-muted">
-          {updated ? `Cập nhật ${updated}` : '—'} · <a className="underline hover:text-sky-300" href="strict/">bảng kỷ luật (có WAIT)</a>
+
+        {degraded.length > 0 && (
+          <details className="mb-3 rounded-lg border border-slate-600/40 bg-slate-600/10">
+            <summary className="tap-sm flex items-center justify-between px-3 text-2xs text-slate-300">
+              <span><b>{degraded.length} nguồn dữ liệu thiếu</b> — ghi rõ, không bịa</span>
+              <span aria-hidden className="text-sm">›</span>
+            </summary>
+            <ul className="space-y-1 border-t border-slate-600/40 px-3 py-2 text-2xs leading-snug text-slate-400">
+              {degraded.slice(0, 6).map((d, i) => <li key={i}>– {d}</li>)}
+            </ul>
+          </details>
+        )}
+
+        {/* ---------- Mobile: danh sách thẻ ---------- */}
+        <div className="space-y-3 board:hidden">
+          {shown.length === 0 ? (
+            <p className="rounded-xl border border-line bg-panel px-4 py-8 text-center text-2xs leading-relaxed text-muted">
+              {emptyText}
+            </p>
+          ) : (
+            shown.map((r) => <SymbolCard key={r.symbol} r={r} />)
+          )}
         </div>
-      </div>
 
-      {err && <div className="mb-3 rounded border border-red-600/40 bg-red-600/10 px-3 py-2 text-2xs text-red-300">⚠ {err}</div>}
-
-      {degraded.length > 0 && (
-        <div className="mb-3 rounded border border-slate-600/40 bg-slate-600/10 px-3 py-2 text-2xs text-slate-300">
-          <b>Dữ liệu thiếu (ghi rõ, không bịa):</b>
-          <ul className="mt-1 space-y-0.5">{degraded.slice(0, 5).map((d, i) => <li key={i}>– {d}</li>)}</ul>
+        {/* ---------- Desktop: bảng dense ---------- */}
+        <div className="hidden board:block">
+          <div className="scroll-x rounded-xl border border-line bg-panel">
+            <table className="tbl w-full text-xs">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th className="text-right">24h%</th>
+                  <th className="text-right">Vol</th>
+                  <th>Buy / Sell · ai trả ai</th>
+                  {TFS.map((tf) => <th key={tf} className="text-center">{tf}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {shown.length === 0 && (
+                  <tr><td colSpan={7} className="px-3 py-8 text-center text-2xs text-muted">{emptyText}</td></tr>
+                )}
+                {shown.map((r) => <BoardRow key={r.symbol} r={r} />)}
+              </tbody>
+            </table>
+          </div>
         </div>
-      )}
 
-      <div className="scroll-x rounded-lg border border-line bg-panel">
-        <table className="tbl w-full text-xs">
-          <thead>
-            <tr>
-              <th>Symbol</th>
-              <th className="text-right">24h%</th>
-              <th className="text-right">Vol</th>
-              <th>Buy / Sell · ai trả ai</th>
-              {TFS.map((tf) => <th key={tf} className="text-center">{tf}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {shown.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-6 text-center text-2xs text-muted">
-                {busy ? 'Đang quét…'
-                  : goldOnly ? 'Không có tín hiệu vàng nào lúc này — và đó là kết quả bình thường, nó vốn phải hiếm.'
-                  : tradeableOnly ? 'Không kèo nào qua cửa lúc này. Bỏ tick "Chỉ kèo qua cửa" để xem thiên hướng của mọi mã — nhưng đó là để theo dõi, không phải để vào tiền.'
-                  : 'Chưa có dữ liệu.'}
-              </td></tr>
-            )}
-            {shown.map((r) => <BoardRow key={r.symbol} r={r} />)}
-          </tbody>
-        </table>
-      </div>
+        {/*
+          Phần giải thích dài xuống CUỐI và gấp lại.
+          Bản trước đặt nguyên một khối chữ dài ở đầu trang; trên điện thoại nó
+          đẩy toàn bộ dữ liệu — thứ người ta mở trang để xem — xuống dưới màn hình.
+          Nội dung vẫn còn nguyên, chỉ là không chặn đường nữa.
+        */}
+        <details className="mt-4 rounded-xl border border-amber-600/40 bg-amber-600/10">
+          <summary className="tap flex items-center justify-between gap-2 px-3 text-2xs font-semibold leading-snug text-amber-200">
+            <span>Không phải lời khuyên đầu tư · Chốt TP1 · Không 10x gỡ lỗ</span>
+            <span aria-hidden className="text-base leading-none">›</span>
+          </summary>
+          <div className="space-y-2 border-t border-amber-600/30 px-3 py-2.5 text-2xs leading-relaxed text-amber-100/90">
+            <p>
+              Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên <b>cửa chất lượng</b> mới là
+              thứ phải đọc, không phải hướng.
+            </p>
+            <p>
+              <b className="text-emerald-300">Qua cửa</b> = mọi vế bằng chứng cùng hướng + hạng ≥ B
+              + TP2 không quá xa + stop đủ rộng để phí không ăn quá 10% của 1R.
+              Backtest 5.661 lệnh: lọc bằng đúng bốn điều này giữ <b>7%</b> số kèo mà nâng avgR
+              0.05 → <b>0.31</b>, PF 1.11 → <b>2.16</b>, sụt giảm tối đa 116.9R → <b>6.3R</b>
+              {' '}(ngoài mẫu 0.39 / PF 2.86). Đổi lại, kèo qua cửa rất hiếm.
+            </p>
+            <p>
+              Kèo <b>trượt cửa vẫn có hướng</b>, nhưng là thiên hướng để theo dõi, không phải lệnh
+              để vào tiền — mỗi kèo đều ghi rõ nó trượt vì điều kiện nào.
+            </p>
+            <p>
+              Hạng: <b className="text-amber-300">★ vàng</b> = mọi vế đồng thuận và độ lệch ≥ 40 ·
+              <b> A</b> lệch hẳn · <b>B</b> lệch vừa · <b>C</b> hai phía gần cân nhau.
+              Rủi ro <b>0.5–1% tài khoản</b> mỗi lệnh.
+            </p>
+            <p className="text-amber-100/70">
+              Bấm một ô khung giờ để mở Entry / SL / TP / bằng chứng. Taker perp và taker spot là
+              hai chợ khác nhau nên luôn hiển thị tách rời — chỉ khi cả hai cùng nghiêng một phía
+              mới ghi &ldquo;đồng thuận&rdquo;.
+            </p>
+          </div>
+        </details>
 
-      <p className="mt-2 text-2xs leading-snug text-muted">
-        Bấm vào badge của một khung để mở Entry / SL / TP / bằng chứng chấm điểm của khung đó.
-        Taker perp và taker spot là hai chợ khác nhau nên luôn hiển thị tách rời — chỉ khi cả hai
-        cùng nghiêng một phía mới ghi &ldquo;đồng thuận&rdquo;.
-      </p>
-    </main>
+        <p className="mt-3 text-center text-[10px] text-muted">
+          {updated ? `Cập nhật ${updated}` : '—'} ·{' '}
+          <a className="underline underline-offset-2 hover:text-sky-300" href="strict/">
+            bảng kỷ luật (có WAIT)
+          </a>
+        </p>
+      </main>
+    </div>
   );
 }

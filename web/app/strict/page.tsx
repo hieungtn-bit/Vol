@@ -81,17 +81,25 @@ export default function Page() {
   const active = open ? rows.find((r) => r.symbol === open) ?? null : null;
 
   return (
-    <main className="mx-auto max-w-[1400px] p-2 sm:p-4">
-      {/* Banner cảnh báo — luôn hiện, không đóng được */}
-      <div className="mb-3 rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-2xs leading-snug text-amber-200">
-        <b>Không phải lời khuyên đầu tư. Chốt TP1. Không 10x gỡ lỗ.</b>{' '}
-        WAIT là khuyến nghị hợp lệ và thường đúng hơn ép Long/Short. Rủi ro gợi ý 0.5–1% tài khoản mỗi lệnh.
-        Isolated đòn bẩy cao + SL rộng = cháy, hệ sẽ cảnh báo đỏ khi gặp.
-      </div>
+    <main className="safe-x safe-b mx-auto max-w-[1400px] pt-3">
+      {/*
+        Cảnh báo: dòng đầu luôn hiện, phần giải thích gấp lại. Trên điện thoại một
+        khối chữ năm dòng ở đầu trang đẩy hết dữ liệu xuống dưới màn hình.
+      */}
+      <details className="mb-3 rounded-lg border border-amber-600/40 bg-amber-600/10">
+        <summary className="tap flex items-center justify-between gap-2 px-3 text-2xs font-semibold leading-snug text-amber-200">
+          <span>Không phải lời khuyên đầu tư · Chốt TP1 · Không 10x gỡ lỗ</span>
+          <span aria-hidden className="text-base leading-none">›</span>
+        </summary>
+        <p className="border-t border-amber-600/30 px-3 py-2.5 text-2xs leading-relaxed text-amber-100/90">
+          WAIT là khuyến nghị hợp lệ và thường đúng hơn ép Long/Short. Rủi ro gợi ý 0.5–1%
+          tài khoản mỗi lệnh. Isolated đòn bẩy cao + SL rộng = cháy, hệ sẽ cảnh báo đỏ khi gặp.
+        </p>
+      </details>
 
       <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold">Market Scan · Multi-TF</h1>
+          <h1 className="text-base font-semibold sm:text-lg">Market Scan · Multi-TF</h1>
           <p className="text-2xs text-muted">
             Price Action + Volume Profile + OI + Funding. Mỗi khung 15m / 1h / 4h / 1D quyết định độc lập.
           </p>
@@ -109,7 +117,7 @@ export default function Page() {
           <input
             type="number" value={minVol} step={1_000_000} min={0}
             onChange={(e) => setMinVol(Number(e.target.value))}
-            className="mono mt-0.5 block w-36 rounded border border-line bg-panel2 px-2 py-1 text-xs text-white"
+            className="tap-sm mono mt-0.5 block w-36 rounded-lg border border-line bg-panel2 px-2 text-xs text-white"
           />
         </label>
         <label className="text-2xs text-muted">
@@ -117,7 +125,7 @@ export default function Page() {
           <input
             type="number" value={limit} min={1} max={40}
             onChange={(e) => setLimit(Math.max(1, Math.min(40, Number(e.target.value))))}
-            className="mono mt-0.5 block w-20 rounded border border-line bg-panel2 px-2 py-1 text-xs text-white"
+            className="tap-sm mono mt-0.5 block w-20 rounded-lg border border-line bg-panel2 px-2 text-xs text-white"
           />
         </label>
         <label className="text-2xs text-muted">
@@ -125,19 +133,25 @@ export default function Page() {
           <input
             value={extra} placeholder="SOLUSDT,LINKUSDT"
             onChange={(e) => setExtra(e.target.value)}
-            className="mono mt-0.5 block w-48 rounded border border-line bg-panel2 px-2 py-1 text-xs text-white"
+            className="tap-sm mono mt-0.5 block w-48 max-w-full rounded-lg border border-line bg-panel2 px-2 text-xs text-white"
           />
         </label>
         <button
           onClick={() => void scan()} disabled={busy}
-          className="rounded border border-sky-600/50 bg-sky-600/20 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:brightness-125 disabled:opacity-50"
+          className="tap-sm rounded-full border border-sky-600/50 bg-sky-600/20 px-4 text-xs font-semibold text-sky-200 active:brightness-125 hover:brightness-125 disabled:opacity-50"
         >
           {busy ? 'Đang quét…' : 'Quét ngay'}
         </button>
-        <label className="flex items-center gap-1.5 text-2xs text-muted">
-          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+        {/* Checkbox mặc định của trình duyệt cao 13px — bấm bằng ngón tay là trượt. */}
+        <button
+          type="button" role="switch" aria-checked={auto}
+          onClick={() => setAuto((v) => !v)}
+          className={`tap-sm rounded-full border px-4 text-2xs font-semibold transition active:brightness-125 ${
+            auto ? 'border-sky-400/60 bg-sky-400/15 text-sky-200' : 'border-line bg-panel2 text-muted'
+          }`}
+        >
           Auto 60s
-        </label>
+        </button>
         <div className="ml-auto text-2xs text-muted">
           {snap ? `Cập nhật ${snap.ictTime} · ${snap.symbols.length} symbol` : `${targets.length} symbol sẵn sàng`}
         </div>
