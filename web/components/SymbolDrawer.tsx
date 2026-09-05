@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BiasBadge, Field, SizePill, STAGE_VI, VPMini, Warn } from './ui';
-import { fmtPct, fmtPrice, fmtUsd } from '@/lib/format';
+import { fmtPct, fmtPrice, fmtTick, fmtUsd } from '@/lib/format';
 import type { Recommendation, SymbolScan, TF } from '@/lib/types';
 
 const TFS: TF[] = ['15m', '1h', '4h', '1d'];
@@ -22,7 +22,7 @@ function CopyBtn({ text }: { text: string }) {
         setDone(true);
         setTimeout(() => setDone(false), 1500);
       }}
-      className="rounded border border-line bg-panel2 px-2 py-1 text-2xs hover:brightness-125"
+      className="tap-sm rounded-full border border-line bg-panel2 px-3.5 text-2xs font-semibold active:brightness-125 hover:brightness-125"
     >
       {done ? '✓ đã copy' : 'Copy plan'}
     </button>
@@ -72,7 +72,7 @@ function TFCard({ r }: { r: Recommendation }) {
           <span className="mono text-sm font-semibold">{r.tf}</span>
           <span className="text-2xs text-muted">{STAGE_VI[r.stage]}</span>
         </div>
-        <div className="w-16"><BiasBadge r={r} /></div>
+        <div className="w-20"><BiasBadge r={r} /></div>
       </div>
 
       <VPMini r={r} />
@@ -111,9 +111,12 @@ function TFCard({ r }: { r: Recommendation }) {
         </ul>
       </div>
 
-      <details className="mt-2">
-        <summary className="cursor-pointer text-2xs text-muted">Bảng điểm hợp lưu ({r.confluence.score.toFixed(1)}/10)</summary>
-        <ul className="mt-1 space-y-0.5">
+      <details className="mt-2 rounded-lg border border-line bg-panel2/60">
+        <summary className="tap-sm flex items-center justify-between px-2.5 text-2xs text-muted">
+          Bảng điểm hợp lưu ({r.confluence.score.toFixed(1)}/10)
+          <span aria-hidden className="text-sm leading-none">›</span>
+        </summary>
+        <ul className="space-y-1 border-t border-line px-2.5 py-2">
           {r.confluence.lines.map((l, i) => (
             <li key={i} className="flex justify-between gap-2 text-2xs">
               <span className="text-slate-400">{l.label}</span>
@@ -139,25 +142,51 @@ export default function SymbolDrawer({ scan, onClose }: { scan: SymbolScan; onCl
   const bs = scan.tfs['15m'].vp.binSize;
   const d = scan.derivatives;
   const allPlans = TFS.map((tf) => scan.tfs[tf].planText).join('\n\n');
+  const panel = useRef<HTMLElement>(null);
+
+  // Escape để đóng, và KHOÁ cuộn nền. Không khoá thì trên iOS ngón tay vuốt trong
+  // ngăn xong là trang phía sau cuộn theo, người dùng mất chỗ đang đọc.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    panel.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-40 flex" role="dialog" aria-modal="true">
-      <div className="flex-1 bg-black/60" onClick={onClose} />
-      <aside className="h-full w-full max-w-3xl overflow-y-auto border-l border-line bg-bg p-3 sm:p-4">
-        <div className="sticky top-0 -mx-3 mb-3 flex items-center justify-between gap-2 border-b border-line bg-bg px-3 py-2 sm:-mx-4 sm:px-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="mono text-lg font-semibold">{scan.symbol}</h2>
-              <span className="mono text-sm">{fmtPrice(scan.price, bs)}</span>
+    <div className="fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-label={`Chi tiết ${scan.symbol}`}>
+      <div className="flex-1 bg-black/60" onClick={onClose} aria-hidden />
+      <aside
+        ref={panel}
+        tabIndex={-1}
+        className="safe-b h-full w-full max-w-3xl overflow-y-auto overscroll-contain border-l border-line bg-bg p-3 outline-none sm:p-4"
+      >
+        <div className="safe-t sticky top-0 z-10 -mx-3 mb-3 flex items-start justify-between gap-2 border-b border-line bg-bg/95 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h2 className="mono text-base font-semibold sm:text-lg">{scan.symbol}</h2>
+              <span className="mono text-sm">{fmtTick(scan.price)}</span>
               <span className={`mono text-xs ${scan.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {fmtPct(scan.change24h)}
               </span>
             </div>
             <div className="text-2xs text-muted">Vol 24h {fmtUsd(scan.quoteVolume24h)} · Range pos {scan.rangePos.toFixed(0)}%</div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <CopyBtn text={allPlans} />
-            <button onClick={onClose} className="rounded border border-line bg-panel2 px-2 py-1 text-2xs hover:brightness-125">Đóng</button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Đóng chi tiết"
+              className="tap-sm rounded-full border border-line bg-panel2 px-3.5 text-2xs font-semibold active:brightness-125 hover:brightness-125"
+            >
+              Đóng
+            </button>
           </div>
         </div>
 

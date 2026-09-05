@@ -301,12 +301,15 @@ export default function LivePage() {
           </div>
         </details>
 
-        <p className="mt-3 text-center text-[10px] text-muted">
-          {updated ? `Cập nhật ${updated}` : '—'} ·{' '}
-          <a className="underline underline-offset-2 hover:text-sky-300" href="strict/">
-            bảng kỷ luật (có WAIT)
+        <div className="mt-3 flex flex-col items-center gap-2">
+          <a
+            href="strict/"
+            className="tap-sm inline-flex items-center rounded-full border border-line bg-panel2 px-4 text-2xs font-semibold text-sky-300 active:brightness-125 hover:brightness-125"
+          >
+            Bảng kỷ luật (có WAIT) →
           </a>
-        </p>
+          <p className="text-[10px] text-muted">{updated ? `Cập nhật ${updated}` : '—'}</p>
+        </div>
       </main>
     </div>
   );
