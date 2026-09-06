@@ -156,6 +156,8 @@ export interface TFReadInput {
   spotPerpAgree: boolean;
   fundingPoints: number;
   oi: OIInfo;
+  /** Hạ sàn điểm — chỉ dùng để chẩn đoán trong backtest. */
+  scoreFloor?: number;
 }
 
 export function readTF(i: TFReadInput): TFRead | null {
@@ -179,10 +181,10 @@ export function readTF(i: TFReadInput): TFRead | null {
   };
 
   // Quyết định hướng trước, rồi mới xin quyền theo hướng đó (15m phụ thuộc hướng).
-  const probe = verdict(base, { fullSize: true, halfSize: true, blocked: null });
+  const probe = verdict(base, { fullSize: true, halfSize: true, blocked: null }, i.scoreFloor);
   const side = probe.bias === 'dung_ngoai' ? (probe.lines.length ? 'mua' : 'mua') : probe.bias;
   const perm = permission(i.tf, closed, i.last4hClosed, side as 'mua' | 'ban');
-  const v: Verdict = verdict(base, perm);
+  const v: Verdict = verdict(base, perm, i.scoreFloor);
 
   const fail: string[] = [...v.reasons];
   let plan: TFPlan | null = null;
@@ -196,7 +198,7 @@ export function readTF(i: TFReadInput): TFRead | null {
     if (!fail.length) plan = built.plan;
   }
 
-  const pass = plan != null && v.score >= SCORE_FLOOR && fail.length === 0;
+  const pass = plan != null && v.score >= (i.scoreFloor ?? SCORE_FLOOR) && fail.length === 0;
   const rej = edgeRejection(layer, closed);
   const P = (x: number) => toStep(x, layer.step);
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BT_WINDOW, DEFAULT_BT, blindDerivatives, runBacktest, signalAt, simulate, stats } from '@/lib/backtest';
+import { BT_WINDOW, DEFAULT_BT, blindDerivatives, metaOfCall, runBacktest, signalAt, simulate, stats } from '@/lib/backtest';
 import type { BTOptions } from '@/lib/backtest';
 import type { Candle } from '@/lib/types';
 import type { DirectionalCall } from '@/lib/direct';
@@ -81,26 +81,26 @@ describe('mô phỏng lệnh', () => {
 
   it('không chạm vùng entry thì KHÔNG tính là một lệnh', () => {
     const cs = [bar(105, 106, 104, 105, 0), ...Array.from({ length: 20 }, (_, i) => bar(105, 106, 104, 105, i + 1))];
-    expect(simulate(cs, 0, base(), FREE)).toBeNull();
+    expect(simulate(cs, 0, base(), FREE, metaOfCall(base()))).toBeNull();
   });
 
   it('chạm SL trước → đúng -1R', () => {
     const cs = [bar(101, 101, 101, 101, 0), bar(100, 100, 97, 97, 1), bar(97, 97, 97, 97, 2)];
-    const t = simulate(cs, 0, base(), FREE)!;
+    const t = simulate(cs, 0, base(), FREE, metaOfCall(base()))!;
     expect(t.exitReason).toBe('sl');
     expect(t.r).toBe(-1);
   });
 
   it('cùng một nến chạm cả SL lẫn TP → tính SL trước (nghi ngờ chọn phía xấu)', () => {
     const cs = [bar(101, 101, 101, 101, 0), bar(100, 103, 97, 100, 1), bar(100, 100, 100, 100, 2)];
-    const t = simulate(cs, 0, base(), FREE)!;
+    const t = simulate(cs, 0, base(), FREE, metaOfCall(base()))!;
     expect(t.exitReason).toBe('sl');
     expect(t.r).toBe(-1);
   });
 
   it('chạm TP1 rồi TP2 → R = 0.5×R1 + 0.5×R2', () => {
     const cs = [bar(101, 101, 101, 101, 0), bar(100, 100, 99.5, 100, 1), bar(100, 103, 100, 102, 2), bar(102, 107, 102, 106, 3)];
-    const t = simulate(cs, 0, base(), FREE)!;
+    const t = simulate(cs, 0, base(), FREE, metaOfCall(base()))!;
     expect(t.hitTP1).toBe(true);
     expect(t.hitTP2).toBe(true);
     expect(t.exitReason).toBe('tp2');
@@ -110,7 +110,7 @@ describe('mô phỏng lệnh', () => {
 
   it('chạm TP1 rồi quay lại SL → lời một nửa, lỗ một nửa', () => {
     const cs = [bar(101, 101, 101, 101, 0), bar(100, 100, 99.5, 100, 1), bar(100, 103, 100, 102, 2), bar(102, 102, 97, 97, 3)];
-    const t = simulate(cs, 0, base(), FREE)!;
+    const t = simulate(cs, 0, base(), FREE, metaOfCall(base()))!;
     expect(t.exitReason).toBe('tp1-then-sl');
     expect(t.r).toBeCloseTo(0.5 * 1 + 0.5 * -1, 6);
   });
@@ -118,7 +118,7 @@ describe('mô phỏng lệnh', () => {
   it('short đối xứng: khớp ở mép dưới vùng entry', () => {
     const s = base({ side: 'SHORT', entry: [100, 101], sl: 102, tp1: 98, tp2: 94 });
     const cs = [bar(99, 99, 99, 99, 0), bar(99, 100.5, 99, 100, 1), bar(100, 100, 97, 97.5, 2), bar(97, 97, 93, 93.5, 3)];
-    const t = simulate(cs, 0, s, FREE)!;
+    const t = simulate(cs, 0, s, FREE, metaOfCall(s))!;
     expect(t.entry).toBe(100);
     expect(t.hitTP2).toBe(true);
     expect(t.r).toBeGreaterThan(0);
@@ -151,7 +151,7 @@ describe('phí và trượt giá', () => {
 
   it('R ròng = R gộp trừ đúng chi phí đã ghi', () => {
     for (const cs of [slSeries, tp2Series]) {
-      const t = simulate(cs, 0, base(), DEFAULT_BT)!;
+      const t = simulate(cs, 0, base(), DEFAULT_BT, metaOfCall(base()))!;
       expect(t.costR).toBeGreaterThan(0);
       expect(t.r).toBeCloseTo(t.rGross - t.costR, 10);
       expect(t.r).toBeLessThan(t.rGross);
@@ -159,28 +159,28 @@ describe('phí và trượt giá', () => {
   });
 
   it('phí hai chiều quy ra R đúng theo tỉ lệ entry/risk', () => {
-    const t = simulate(tp2Series, 0, base(), DEFAULT_BT)!;
+    const t = simulate(tp2Series, 0, base(), DEFAULT_BT, metaOfCall(base()))!;
     // thoát bằng TP nên không cộng trượt giá
     expect(t.costR).toBeCloseTo((0.0005 * 2 * 100) / 2, 10);
   });
 
   it('thoát bằng stop bị tính thêm trượt giá, thoát bằng TP thì không', () => {
-    const sl = simulate(slSeries, 0, base(), DEFAULT_BT)!;
-    const tp = simulate(tp2Series, 0, base(), DEFAULT_BT)!;
+    const sl = simulate(slSeries, 0, base(), DEFAULT_BT, metaOfCall(base()))!;
+    const tp = simulate(tp2Series, 0, base(), DEFAULT_BT, metaOfCall(base()))!;
     expect(sl.exitReason).toBe('sl');
     expect(tp.exitReason).toBe('tp2');
     expect(sl.costR - tp.costR).toBeCloseTo((0.0002 * 100) / 2, 10);
   });
 
   it('stop càng hẹp thì phí tính theo R càng nặng', () => {
-    const wide = simulate(slSeries, 0, base(), DEFAULT_BT)!;
+    const wide = simulate(slSeries, 0, base(), DEFAULT_BT, metaOfCall(base()))!;
     const tightCs = [bar(101, 101, 101, 101, 0), bar(100, 100, 99, 99, 1), bar(99, 99, 99, 99, 2)];
-    const tight = simulate(tightCs, 0, base({ sl: 99.5, tp1: 101, tp2: 103 }), DEFAULT_BT)!;
+    const tight = simulate(tightCs, 0, base({ sl: 99.5, tp1: 101, tp2: 103 }), DEFAULT_BT, metaOfCall(base({ sl: 99.5, tp1: 101, tp2: 103 })))!;
     expect(tight.costR).toBeGreaterThan(wide.costR);
   });
 
   it('phí = 0 thì R ròng bằng R gộp', () => {
-    const t = simulate(slSeries, 0, base(), { ...DEFAULT_BT, feeRate: 0, slipRate: 0 })!;
+    const t = simulate(slSeries, 0, base(), { ...DEFAULT_BT, feeRate: 0, slipRate: 0 }, metaOfCall(base()))!;
     expect(t.costR).toBe(0);
     expect(t.r).toBe(t.rGross);
   });

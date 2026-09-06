@@ -158,6 +158,11 @@ export interface Verdict {
 export function verdict(
   inp: ConfluenceInput,
   perm: { fullSize: boolean; halfSize: boolean; blocked: string | null },
+  /**
+   * Hạ sàn điểm — CHỈ để chẩn đoán trong backtest, không bao giờ dùng khi chạy
+   * thật. Mặc định là SCORE_FLOOR, và mọi đường chạy thật đều để mặc định.
+   */
+  floor = SCORE_FLOOR,
 ): Verdict {
   const mua = scoreSide(inp, 'mua');
   const ban = scoreSide(inp, 'ban');
@@ -168,8 +173,8 @@ export function verdict(
   if (inp.state.state === 'trong_vung') {
     reasons.push(`Còn trong vùng — lệnh mới không mở. ${inp.state.text}`);
   }
-  if (win.score < SCORE_FLOOR) {
-    reasons.push(`Điểm ${win.score.toFixed(1)} dưới sàn ${SCORE_FLOOR} — chưa đủ để vào tiền.`);
+  if (win.score < floor) {
+    reasons.push(`Điểm ${win.score.toFixed(1)} dưới sàn ${floor} — chưa đủ để vào tiền.`);
   }
   if (perm.blocked) reasons.push(perm.blocked);
 
@@ -177,7 +182,7 @@ export function verdict(
     return { bias: 'dung_ngoai', score: win.score, margin, size: null, golden: false, lines: win.lines, reasons };
   }
 
-  const size: Size = win.score >= HALF_SIZE_MAX && perm.fullSize ? 'kho_du' : 'kho_nua';
+  const size: Size = win.score >= Math.max(HALF_SIZE_MAX, floor + 1.5) && perm.fullSize ? 'kho_du' : 'kho_nua';
   if (size === 'kho_nua' && !perm.halfSize) {
     return {
       bias: 'dung_ngoai', score: win.score, margin, size: null, golden: false, lines: win.lines,
