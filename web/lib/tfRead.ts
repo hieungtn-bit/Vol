@@ -2,6 +2,7 @@ import { SCORE_FLOOR, scoreSide, verdict, type ConfluenceInput, type DataStatus,
 import { barDelta, findDivergence, hourFlow, type DeltaDivergence } from './deltaDiv';
 import { referenceLayer, type Layers, type LayerProfile } from './layers';
 import { isCoarse, toStep, type Layer } from './ruler';
+import { feeInR } from './direct';
 import { STATE_VI, edgeRejection, insidePoc, readState, type StateRead } from './vpState';
 import { median } from './priceAction';
 import type { Candle, Node, OIInfo, ScoreLine, TF } from './types';
@@ -21,7 +22,33 @@ export interface TFPlan {
   tp1: number;
   tp2: number;
   size: 'kho_nua' | 'kho_du';
+  /** R:R tới chốt 1 và chốt 2, TRƯỚC phí. */
+  rr1: number;
+  rr2: number;
+  /**
+   * R kỳ vọng SAU PHÍ của kế hoạch chốt 50/50, tính đúng như hàm mô phỏng:
+   *   0.5×R(chốt1) + 0.5×R(chốt2) − phí quy ra R.
+   * Đây là con số duy nhất đáng đọc: backtest cho thấy nhóm chạm cả hai mốc chỉ
+   * đạt +0.22R trong khi nhóm dính cắt mất −1.12R, tức mục tiêu đang quá gần so
+   * với cắt. Số này phơi bày điều đó ngay trên giao diện.
+   */
+  rrNet: number;
+  /** Phí quy ra R với độ rộng cắt của chính kế hoạch này. */
+  feeR: number;
 }
+
+/**
+ * Trạng thái của một setup theo góc nhìn NGƯỜI THEO DÕI.
+ *
+ * Khác với `data_status` (nói về dữ liệu) và `gate.pass` (nói về đủ điều kiện
+ * hay chưa). Ở đây cần bốn mức để người dùng biết nên nhìn cái nào:
+ *   thieu_du_lieu  — không đánh giá được, đừng đọc gì từ nó.
+ *   dang_theo_doi  — đủ dữ liệu, chưa có sự kiện mép nào đáng chờ.
+ *   cho_xac_nhan   — đã có sự kiện mép, chỉ còn thiếu điều kiện mà một NẾN ĐÓNG
+ *                    tiếp theo có thể giải quyết. Đây là chỗ đáng dán mắt vào.
+ *   du_dieu_kien   — qua cửa, có kế hoạch thật.
+ */
+export type SetupStatus = 'thieu_du_lieu' | 'dang_theo_doi' | 'cho_xac_nhan' | 'du_dieu_kien';
 
 export interface TFRead {
   tf: TF;
@@ -39,7 +66,21 @@ export interface TFRead {
   /** DATA_INSUFFICIENT / NO_SETUP / VALID_SETUP — không được trộn ba thứ này. */
   data_status: DataStatus;
   gate: { pass: boolean; fail_reasons: string[] };
+  /** Kế hoạch THẬT. null khi chưa qua cửa — luật cứng, không đổi. */
   plan: TFPlan | null;
+  /**
+   * Kế hoạch DỰ KIẾN — hình học đã dựng được nhưng chưa qua cửa.
+   *
+   * Có để người theo dõi thấy trước mức giá sẽ vào, cắt, chốt và R:R sau phí,
+   * chứ không phải để giao dịch. Giao diện phải ghi rõ nó là dự kiến; `plan`
+   * vẫn null cho tới khi thật sự đủ điều kiện.
+   */
+  prospect: TFPlan | null;
+  setup_status: SetupStatus;
+  /** Còn thiếu ĐÚNG những điều kiện nào để lên mức tiếp theo. */
+  missing_conditions: string[];
+  /** Điểm còn thiếu bao nhiêu để chạm sàn. 0 khi đã đủ. */
+  score_gap: number;
   /** Câu mô tả trạng thái — sinh từ chính `state`, không từ nhánh nào khác. */
   state_text: string;
   /** Mép cần đóng để xem lại, in cả khi đứng ngoài. */
@@ -100,10 +141,23 @@ function hvnAhead(hvn: Node[], from: number, up: boolean, minGap = 0): Node | nu
   return cands[0] ?? null;
 }
 
-/** Mức giá tới của một cụm theo hướng lệnh: mép gần nếu ở ngoài, mép xa nếu đang ở trong. */
+/**
+ * MỤC TIÊU: mép giá chạm tới trước. Ở ngoài cụm thì là mép gần; đang ở trong cụm
+ * thì là mép bên kia.
+ */
 function nodeTarget(n: Node, from: number, up: boolean): number {
   if (from >= n.low && from <= n.high) return up ? n.high : n.low;
   return up ? n.low : n.high;
+}
+
+/**
+ * CẮT: luôn là mép XA của cụm chặn — cắt phải nằm BÊN KIA cụm vừa từ chối, không
+ * phải ở mép gần của nó. Dùng nhầm mép gần thì với một cụm nằm hẳn dưới vùng vào
+ * lệnh, cắt rơi lên đúng mép trên của cụm, tức nằm ngay cạnh giá vào — sau khi
+ * làm tròn về bước thì cắt TRÙNG entry, risk = 0, phí = 0 và mọi R:R thành rác.
+ */
+function nodeFarEdge(n: Node, up: boolean): number {
+  return up ? n.high : n.low;
 }
 
 /**
@@ -156,9 +210,14 @@ function buildPlan(
   const guardFrom = up ? entry[0] : entry[1];
   const guardNode = hvnAhead(vp.hvn, guardFrom, !up);
   const slRaw = up
-    ? (guardNode ? nodeTarget(guardNode, guardFrom, false) : entry[0]) - buffer
-    : (guardNode ? nodeTarget(guardNode, guardFrom, true) : entry[1]) + buffer;
-  const sl = P(slRaw);
+    ? (guardNode ? nodeFarEdge(guardNode, false) : entry[0]) - buffer
+    : (guardNode ? nodeFarEdge(guardNode, true) : entry[1]) + buffer;
+  let sl = P(slRaw);
+
+  // Bảo đảm cứng: sau khi làm tròn, cắt phải cách vùng vào lệnh ÍT NHẤT một bước.
+  // Không có ràng buộc này thì làm tròn có thể ép cắt trùng entry và risk = 0.
+  if (up && sl >= entry[0]) sl = P(entry[0] - Math.max(buffer, step));
+  if (!up && sl <= entry[1]) sl = P(entry[1] + Math.max(buffer, step));
 
   const tol = step;
   if (deepInsideBand(sl, layer.poc, 0)) fails.push('Cắt rơi vào giữa điểm kiểm soát.');
@@ -187,8 +246,47 @@ function buildPlan(
     ? `nến ${tf} đóng trên ${P(entry[1])} sau khi giữ ${P(entry[0])}`
     : `nến ${tf} đóng dưới ${P(entry[0])} sau khi test ${P(entry[1])}`;
 
-  if (fails.length) return { plan: null, fails };
-  return { plan: { entry, trigger, sl, tp1, tp2, size }, fails };
+  // Hình học LUÔN được trả về, kể cả khi có lỗi — phía trên quyết định gọi nó là
+  // kế hoạch thật hay chỉ là dự kiến. Trả null ở đây thì người theo dõi không
+  // bao giờ thấy được mức giá của một setup đang hình thành.
+  const entryRef = up ? entry[1] : entry[0];
+  const risk = Math.abs(entryRef - sl);
+
+  /**
+   * Hình học THOÁI HOÁ thì không được trả ra dù chỉ là dự kiến.
+   *
+   * Một kế hoạch dự kiến phải là hình học HỢP LỆ mà chỉ còn thiếu điều kiện cửa.
+   * Trả ra một bộ mức giá có cắt trùng entry hoặc chốt trùng entry là bày cho
+   * người đọc một thứ không giao dịch được, tệ hơn là không bày gì.
+   */
+  const degenerate: string[] = [];
+  if (!(risk > 0)) degenerate.push('Cắt trùng vùng vào lệnh — không tính được R.');
+  if (up) {
+    if (!(sl < entry[0])) degenerate.push('Cắt không nằm dưới vùng vào lệnh.');
+    if (!(tp1 > entry[1])) degenerate.push('Chốt 1 không nằm trên vùng vào lệnh.');
+    if (!(tp2 > tp1)) degenerate.push('Chốt 2 không xa hơn chốt 1.');
+  } else {
+    if (!(sl > entry[1])) degenerate.push('Cắt không nằm trên vùng vào lệnh.');
+    if (!(tp1 < entry[0])) degenerate.push('Chốt 1 không nằm dưới vùng vào lệnh.');
+    if (!(tp2 < tp1)) degenerate.push('Chốt 2 không xa hơn chốt 1.');
+  }
+  if (degenerate.length) return { plan: null, fails: [...fails, ...degenerate] };
+
+  const feeR = feeInR(entryRef, risk) ?? 0;
+  const rr1 = Math.abs(tp1 - entryRef) / risk;
+  const rr2 = Math.abs(tp2 - entryRef) / risk;
+  // Khớp ĐÚNG hàm mô phỏng: 50% ở chốt 1, 50% còn lại ở chốt 2.
+  const rrNet = 0.5 * rr1 + 0.5 * rr2 - feeR;
+
+  const round2 = (x: number) => Math.round(x * 100) / 100;
+  // Phí quy ra R là số nhỏ (cỡ 0.01–0.4). Làm tròn 2 chữ số như các R khác thì
+  // với cắt rộng nó thành 0.00 và người đọc tưởng lệnh không mất phí.
+  const round4 = (x: number) => Math.round(x * 10000) / 10000;
+  const built: TFPlan = {
+    entry, trigger, sl, tp1, tp2, size,
+    rr1: round2(rr1), rr2: round2(rr2), rrNet: round2(rrNet), feeR: round4(feeR),
+  };
+  return { plan: built, fails };
 }
 
 export interface TFReadInput {
@@ -249,20 +347,46 @@ export function readTF(i: TFReadInput): TFRead | null {
   const v: Verdict = verdict(base, perm, i.scoreFloor);
 
   const fail: string[] = [...v.reasons];
-  let plan: TFPlan | null = null;
 
-  if (v.bias !== 'dung_ngoai' && v.size) {
-    // Cửa siết — bốn điều kiện mới của đề bài.
-    if (isCoarse(layer.layer)) fail.push('Mép lệnh đang lấy từ lớp dài, không phải lớp 24 giờ / sau-event.');
-    if (state.state === 'trong_vung' && !base.rejection) {
-      fail.push('Còn trong vùng — lệnh mới không mở.');
-    }
-    const built = buildPlan(layer, state, v.bias, v.size, last, i.tf, base.rejection);
-    fail.push(...built.fails);
-    if (!fail.length) plan = built.plan;
+  // Dựng hình học MỘT LẦN cho mọi trường hợp. Phía dưới mới quyết định nó là kế
+  // hoạch thật hay chỉ là dự kiến để theo dõi.
+  const geomSide: 'mua' | 'ban' = v.bias !== 'dung_ngoai' ? v.bias : side;
+  const built = buildPlan(layer, state, geomSide, v.size ?? 'kho_nua', last, i.tf, base.rejection);
+
+  if (isCoarse(layer.layer)) fail.push('Mép lệnh đang lấy từ lớp dài, không phải lớp 24 giờ / sau-event.');
+  if (state.state === 'trong_vung' && !base.rejection) {
+    fail.push('Còn trong vùng — lệnh mới không mở.');
   }
+  fail.push(...built.fails);
 
-  const pass = plan != null && v.score >= (i.scoreFloor ?? SCORE_FLOOR) && fail.length === 0;
+  const plan: TFPlan | null = null;
+  const floorUsed = i.scoreFloor ?? SCORE_FLOOR;
+  const pass = built.plan != null
+    && v.dataStatus === 'VALID_SETUP'
+    && v.score >= floorUsed
+    && fail.length === 0;
+
+  // Phân loại cho người theo dõi.
+  const scoreGap = Math.max(0, floorUsed - v.score);
+  const geometryOk = built.plan != null && built.fails.length === 0;
+  // "Chờ xác nhận" = đã có sự kiện mép thật (từ chối / chấp nhận / vùng dịch),
+  // hình học dựng được, và thứ còn thiếu là điều một NẾN ĐÓNG có thể giải quyết.
+  const hasEvent = base.rejection != null || state.state !== 'trong_vung';
+  const setupStatus: SetupStatus = v.dataStatus === 'DATA_INSUFFICIENT'
+    ? 'thieu_du_lieu'
+    : pass
+      ? 'du_dieu_kien'
+      : hasEvent && geometryOk && scoreGap <= 2
+        ? 'cho_xac_nhan'
+        : 'dang_theo_doi';
+
+  const missingNow: string[] = [];
+  if (v.dataStatus === 'DATA_INSUFFICIENT') missingNow.push(...v.reasons);
+  else {
+    if (scoreGap > 0) missingNow.push(`thiếu ${scoreGap.toFixed(1)} điểm để chạm sàn ${floorUsed}`);
+    for (const f of fail) if (!f.includes('dưới sàn')) missingNow.push(f);
+    if (!hasEvent) missingNow.push('chưa có sự kiện mép nào (chưa từ chối, chưa chấp nhận ra ngoài)');
+  }
   const P = (x: number) => toStep(x, layer.step);
 
   return {
@@ -282,7 +406,11 @@ export function readTF(i: TFReadInput): TFRead | null {
     score: Number(v.score.toFixed(2)),
     data_status: v.dataStatus,
     gate: { pass, fail_reasons: pass ? [] : [...new Set(fail)] },
-    plan: pass ? plan : null,
+    plan: pass ? built.plan : null,
+    prospect: pass ? null : built.plan,
+    setup_status: setupStatus,
+    missing_conditions: [...new Set(missingNow)],
+    score_gap: Number(scoreGap.toFixed(2)),
     state_text: state.text,
     watch: rej
       ? `Vừa từ chối mép ${rej.side === 'tren' ? 'trên' : 'dưới'} ${P(rej.level)}. `
