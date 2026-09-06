@@ -6,6 +6,36 @@ lệch nhau thì tin file này, và sửa file kia.
 Mọi ngưỡng trong tài liệu đọc thẳng từ mã nguồn tại thời điểm viết. Bảng hằng số ở
 mục 11 là chỗ duy nhất liệt kê con số — các mục trên chỉ giải thích *vì sao*.
 
+> ## ⚠ CẢNH BÁO VỀ MỌI CON SỐ BACKTEST TRONG FILE NÀY (06/09/2026)
+>
+> Mọi bảng avgR / PF / win rate ghi bên dưới đều đo bằng một bộ mô phỏng **có hai
+> lỗi**, và vì thế **đều thổi phồng**:
+>
+> 1. Tính khớp lệnh ở một mức giá mà cây nến chưa hề in ra (nến nhảy qua vùng chờ
+>    vẫn bị ghi là khớp đúng giá entry).
+> 2. Tính chốt lời ngay trên **chính nến vào lệnh**, trong khi không thể biết lệnh
+>    khớp ở phút thứ mấy nên không biết đoạn nào của nến xảy ra sau khi vào.
+>
+> Hai lỗi cộng thêm khoảng **+0.12R mỗi lệnh không có thật** — tức là phần lớn cái
+> "lợi thế" mà những bảng dưới đây báo cáo.
+>
+> **Số đo lại, sau khi sửa cả hai lỗi VÀ gỡ thứ tự chạm trong nến bằng nến 1m**
+> (5329 lệnh, 6 mã × 15m/1h/4h, 3000 nến):
+>
+> | | avgR | PF | ngoài mẫu PF |
+> |---|---:|---:|---:|
+> | không cửa nào | −0.04 | 0.92 | 0.83 |
+> | cửa đầy đủ | **+0.02** | **1.05** | **1.04** |
+>
+> Kiểm định trên chính cờ `tradeable`: kèo **không** qua cửa lỗ chắc chắn
+> (t = −3.64); kèo qua cửa dương nhưng chỉ vừa đủ phân biệt với 0
+> (n=156, t = +2.36, KTC 95% [+0.03, +0.36]). Đọc là **giả thuyết có bằng chứng
+> ủng hộ**, chưa phải lợi thế đã chứng minh.
+>
+> Nguồn đầy đủ, kèm cách chạy lại: [`bench/README.md`](../bench/README.md).
+> Các bảng dưới đây giữ nguyên để đối chiếu lịch sử, **không phải để tin**.
+
+
 ---
 
 ## 1. Hai đường kết luận, một bộ dữ liệu
@@ -219,7 +249,7 @@ Hạng tin cậy trả lời "bằng chứng lệch bao nhiêu". Cửa chất l�
 |---|---|
 | **Nhất trí** — không vế nào (trên mức nhiễu) ngược hướng | nhóm nhất trí avgR **0.17**, nhóm bị chống 0.01 |
 | **Hạng ≥ B** (`\|net\| ≥ 15`) | hạng C avgR âm, và gánh gần hết phần sụt giảm |
-| **R kỳ vọng ≤ 1.5** | nhóm > 1.5 avgR âm, nhóm 0.5–1 là +0.09 |
+| **Kỳ vọng sau phí ≥ 0** (thay cho `R kỳ vọng ≤ 1.5` cũ) | xem mục kỳ vọng bên dưới — ngưỡng cũ đo trên một thang khác thang mà bộ mô phỏng chi trả |
 | **Phí ≤ 10% của 1R** (stop ≳ 1.2% giá) | xem ngay dưới — điều kiện mạnh nhất, và phản trực giác nhất |
 
 Kèo trượt cửa **vẫn ra hướng** — luật cứng "không có WAIT" không đổi. Nó chỉ bị hạ
@@ -293,8 +323,29 @@ không đo từ entry (đoạn trước TP1 là phần đã chốt lời rồi).
 
 **Runner** — chỉ mở sau khi khung lớn **đóng** thủng sàn/vượt trần range của nó.
 
-**R kỳ vọng** `= 0.5×RR1 + 0.3×RR2`. Đây mới là con số đáng đo, không phải RR TP1: TP1
-theo thiết kế là bậc *gần nhất* nên RR TP1 < 1 là bình thường.
+**Tỷ lệ lời/lỗ của kế hoạch** `= 0.5×RR1 + 0.5×RR2` — số R ăn được **nếu** cả hai mốc
+chốt đều chạm. Đây **không phải** kỳ vọng: nó ngầm giả định xác suất thắng 100%.
+
+> Trước đây trường này tên là "R kỳ vọng" và tính bằng `0.5×RR1 + 0.3×RR2`. Sai hai
+> lần: nhãn sai (một tỷ lệ lời/lỗ bị gọi là kỳ vọng), và trọng số sai — hai hệ số
+> cộng lại 0.8, tức phần runner 20% bị bỏ rơi lặng lẽ, trong khi `simulate()` trả
+> `0.5×R(TP1) + 0.5×R(TP2)`. Hệ quả: ngưỡng cửa `maxRRBlended = 1.5` được hiệu chuẩn
+> trên một thang **khác** thang mà backtest thật sự chi trả.
+
+**Kỳ vọng thật** (`lib/expectancy.ts`) nhân với xác suất chạm **đo được**:
+
+```
+E = p1·[ p2·(0.5·rr1 + 0.5·rr2) + (1−p2)·(0.5·rr1 − 0.5) ] + (1−p1)·(−1) − phí
+```
+
+Ba nhánh đó đúng ba nhánh mà `simulate()` trả tiền. `p1` = p(chạm TP1) và `p2` =
+p(chạm TP2 | đã chạm TP1), đo trên 5460 lệnh và chia ô theo **độ xa tính bằng R**,
+không theo hạng — bảng theo độ xa giữ nguyên hình dạng ở cả hai nửa mẫu, bảng theo
+hạng thì không (hạng C: 46.8% → 56.2%).
+
+**Giới hạn đã đo:** quanh 0 mô hình bám sát thực tế, nhưng phía cao lạc quan có hệ
+thống — ô dự báo [0.15, 0.30) thực tế cho −0.21R, tức là ô *tệ nhất*. Nên con số này
+dùng làm **nhãn** và làm **ngưỡng âm/dương**, **không** dùng để xếp hạng kèo.
 
 ---
 

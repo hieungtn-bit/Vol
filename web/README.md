@@ -21,10 +21,65 @@ npm run dev                    # http://localhost:3000
 Mặc định watchlist là `BTCUSDT, ETHUSDT, ENAUSDT`; bấm **Quét ngay** để ra bảng 4 khung.
 
 ```bash
-npm test        # 39 unit test
+npm test        # 187 unit test
 npm run build   # production build
-npm run start
+npm run start   # bản này mới có quét nền — xem ngay dưới
 ```
+
+## Lưu trữ và quét nền
+
+Chạy bằng `npm run start` (hoặc `npm run dev`) thì server tự **quét nền**: nó chạy
+tiếp khi bạn đã đóng tab, và ghi lại vào SQLite.
+
+```bash
+MARKETSCAN_DB=./data/marketscan.db npm run start
+```
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `MARKETSCAN_DB` | `./data/marketscan.db` | file CSDL |
+| `MARKETSCAN_BACKGROUND` | bật | đặt `0` để tắt quét nền |
+
+**Quét theo nến đóng, không theo đồng hồ.** Mỗi lượt chạy khi nến 15m vừa đóng, cộng
+8 giây cho sàn kịp chốt. Quét dày hơn không đẻ ra thông tin mới — mọi đầu vào của
+engine đều lấy từ nến đã đóng — mà chỉ đốt rate limit của sàn.
+
+Bốn thứ được lưu: **nến**, **từng lần quét**, **từng tín hiệu** (kèm nguyên văn lý do
+bị chặn), và **kết quả backtest** (kèm cấu hình, phạm vi thời gian, sha256 của chính
+chuỗi nến đã dùng, và git rev — đủ để chạy lại và đối chiếu).
+
+Xem lại lịch sử:
+
+```
+GET /api/scanner                        trạng thái quét nền + trạng thái lưu trữ
+GET /api/history                        các lần quét gần đây
+GET /api/history?scan=12                mọi tín hiệu của lần quét 12
+GET /api/history?symbol=ENAUSDT&tf=1h   hệ đã đổi ý lúc nào trên cặp đó
+GET /api/history?backtests=1            các lần backtest đã lưu
+```
+
+> **Trên Vercel/serverless thì SQLite và quét nền đều TẮT**, và màn hình nói rõ điều
+> đó. Đĩa ở đó là ephemeral: ghi được, đọc lại được vài phút, rồi mất theo instance —
+> một file CSDL ở đó là ảo tưởng lưu trữ. Muốn lưu thật thì trỏ `MARKETSCAN_DB` vào ổ
+> gắn ngoài. Đây là lý do bản chạy local có nhiều thứ hơn bản trên web.
+
+## Backtest
+
+```bash
+npm run backtest -- --symbols ENAUSDT,SOLUSDT --tf 1h --bars 3000
+npm run backtest -- --tf 15m,1h,4h --intrabar 1m --save "nhãn của tôi"
+```
+
+`--intrabar 1m` tải nến 1 phút từ kho lưu trữ công khai của Binance để **gỡ thứ tự
+chạm trong nến** thay vì đoán thận trọng. Không có nó thì khi giá chạm cả stop lẫn
+mục tiêu trong một nến, mô phỏng luôn tính stop trước — an toàn, nhưng tính thiếu
+khoảng 0.04R mỗi lệnh. File zip được cache ở `.cache/minute/`, lần chạy sau không
+tải lại.
+
+`--save` ghi kết quả vào SQLite kèm đủ thứ để chạy lại.
+
+**Đọc kết quả trước khi tin:** [`../bench/README.md`](../bench/README.md) ghi rõ hệ
+này đo được gì và chưa đo được gì.
 
 ## Cấu trúc
 

@@ -5,6 +5,36 @@
 
 Mọi symbol chạy **cùng một engine**. Không có ngoại lệ hardcode cho bất kỳ mã nào.
 
+> ## ⚠ CẢNH BÁO VỀ MỌI CON SỐ BACKTEST TRONG FILE NÀY (06/09/2026)
+>
+> Mọi bảng avgR / PF / win rate ghi bên dưới đều đo bằng một bộ mô phỏng **có hai
+> lỗi**, và vì thế **đều thổi phồng**:
+>
+> 1. Tính khớp lệnh ở một mức giá mà cây nến chưa hề in ra (nến nhảy qua vùng chờ
+>    vẫn bị ghi là khớp đúng giá entry).
+> 2. Tính chốt lời ngay trên **chính nến vào lệnh**, trong khi không thể biết lệnh
+>    khớp ở phút thứ mấy nên không biết đoạn nào của nến xảy ra sau khi vào.
+>
+> Hai lỗi cộng thêm khoảng **+0.12R mỗi lệnh không có thật** — tức là phần lớn cái
+> "lợi thế" mà những bảng dưới đây báo cáo.
+>
+> **Số đo lại, sau khi sửa cả hai lỗi VÀ gỡ thứ tự chạm trong nến bằng nến 1m**
+> (5329 lệnh, 6 mã × 15m/1h/4h, 3000 nến):
+>
+> | | avgR | PF | ngoài mẫu PF |
+> |---|---:|---:|---:|
+> | không cửa nào | −0.04 | 0.92 | 0.83 |
+> | cửa đầy đủ | **+0.02** | **1.05** | **1.04** |
+>
+> Kiểm định trên chính cờ `tradeable`: kèo **không** qua cửa lỗ chắc chắn
+> (t = −3.64); kèo qua cửa dương nhưng chỉ vừa đủ phân biệt với 0
+> (n=156, t = +2.36, KTC 95% [+0.03, +0.36]). Đọc là **giả thuyết có bằng chứng
+> ủng hộ**, chưa phải lợi thế đã chứng minh.
+>
+> Nguồn đầy đủ, kèm cách chạy lại: [`bench/README.md`](../bench/README.md).
+> Các bảng dưới đây giữ nguyên để đối chiếu lịch sử, **không phải để tin**.
+
+
 ## 0. Nguyên tắc cứng
 
 | Luật | Thi hành ở đâu |
@@ -109,7 +139,11 @@ lượng** và **hạng tin cậy**:
 
 Hạng nói bằng chứng lệch bao nhiêu. Cửa nói **kèo này có đáng đặt tiền không**. Bốn
 điều kiện, tất cả do backtest hiệu chuẩn: **nhất trí** + **hạng ≥ B** +
-**R kỳ vọng ≤ 1.5** + **phí ≤ 10% của 1R** (stop ≳ 1.2% giá).
+**kỳ vọng sau phí ≥ 0** + **phí ≤ 10% của 1R** (stop ≳ 1.2% giá).
+
+Từ 06/09/2026 có thêm điều kiện thứ năm: **khung phải có nến đã đóng của chu kỳ vừa
+xong**. Trước đó engine "luôn ra hướng" không hề kiểm tra điều này, trong khi
+`decideBias()` chặn ở ba chỗ — hướng vẫn hiện, nhưng nó dựng trên nến cũ.
 
 Trên 5661 lệnh (6 mã × 15m/1h/4h, đã trừ phí):
 
@@ -138,7 +172,7 @@ Nằm **trên** hạng A. Hai điều kiện, **cả hai đều hiệu chuẩn b
 1. **Không vế nào ngược hướng** — mọi bằng chứng có |điểm| ≥ 1 đều chỉ cùng một phía.
 2. **|net| ≥ 40**, và ít nhất **3 vế** thực sự có điểm.
 
-Lưu ý: **hạng vàng vẫn có thể trượt cửa chất lượng** — khi TP2 xa quá (R kỳ vọng > 1.5).
+Lưu ý: **hạng vàng vẫn có thể trượt cửa chất lượng** — khi xác suất chạm ở đúng khoảng cách đó không bù nổi phí (kỳ vọng âm).
 Hai thứ trả lời hai câu khác nhau: vàng nói *bằng chứng đồng thuận đến đâu*, cửa nói
 *kèo này có đáng đặt tiền không*. Một kèo đồng thuận tuyệt đối nhưng mục tiêu đặt quá
 xa vẫn là kèo không nên vào, và backtest đo đúng như vậy.
