@@ -1,5 +1,5 @@
 import { ALWAYS_INCLUDE } from '@/config/universe';
-import { db, dbNote, saveCandles, saveScan, type SignalRow } from './db';
+import { db, dbNote, recentScans, saveCandles, saveScan, type SignalRow } from './db';
 import { ictString } from './format';
 import { scanSymbol } from './scan';
 import { TF_MS } from './sources';
@@ -151,4 +151,55 @@ export function persistCandles(symbol: string, byTf: Partial<Record<TF, { t: num
   for (const [tf, cs] of Object.entries(byTf)) {
     if (cs?.length) saveCandles(symbol, tf as TF, cs);
   }
+}
+
+// ------------------------------------------------------------
+// SỨC KHOẺ BỘ QUÉT — đọc từ CSDL, không đọc từ biến trong bộ nhớ.
+//
+// Đây là chỗ đã vấp một lần và đáng ghi lại. Ban đầu /api/scanner trả thẳng
+// `scannerState()`, và log server ghi "quét nền: bật · 4 mã" trong khi API trả
+// `running: false` — sai lặng lẽ, đúng loại sai mà thanh trạng thái sinh ra để
+// bắt. Sửa lần một: đưa state lên globalThis. Vẫn sai. Lý do thật: Next chạy
+// instrumentation.ts và route handler ở TIẾN TRÌNH KHÁC NHAU, nên không có
+// singleton trong bộ nhớ nào bắc cầu được — kể cả globalThis.
+//
+// Thứ duy nhất hai tiến trình cùng nhìn thấy là CSDL. Và đọc từ đó còn đúng hơn
+// về mặt ý nghĩa: nó trả lời "có lượt quét nào thật sự xảy ra gần đây không",
+// chứ không phải "có biến nào đang được đặt là true không". Một bộ hẹn giờ còn
+// sống mà mọi lượt đều ném lỗi thì `running: true` là câu trả lời sai.
+// ------------------------------------------------------------
+
+export interface ScannerHealth {
+  /** Lượt quét gần nhất đã ghi được — sự thật dùng chung giữa các tiến trình. */
+  lastScan: {
+    id: number; ts: number; ictTime: string; trigger: string;
+    durationMs: number; symbols: number; degraded: string[];
+  } | null;
+  /** Quá hạn: lượt gần nhất cách đây hơn hai chu kỳ nến. */
+  stale: boolean;
+  /** Trạng thái trong CHÍNH tiến trình này. Có thể rỗng dù bộ quét vẫn đang chạy ở tiến trình khác. */
+  local: ScannerState;
+  db: string | null;
+}
+
+export function scannerHealth(): ScannerHealth {
+  const note = dbNote();
+  let lastScan: ScannerHealth['lastScan'] = null;
+  if (!note) {
+    const r = recentScans(1)[0];
+    if (r) {
+      lastScan = {
+        id: Number(r.id), ts: Number(r.ts), ictTime: String(r.ict_time),
+        trigger: String(r.trigger), durationMs: Number(r.duration_ms),
+        symbols: Number(r.symbols),
+        degraded: JSON.parse(String(r.degraded) || '[]') as string[],
+      };
+    }
+  }
+  return {
+    lastScan,
+    stale: lastScan == null || Date.now() - lastScan.ts > TF_MS[TICK_TF] * 2,
+    local: scannerState(),
+    db: note,
+  };
 }

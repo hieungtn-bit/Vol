@@ -1,15 +1,20 @@
 import { NextResponse } from 'next/server';
-import { dbNote } from '@/lib/db';
-import { runOnce, scannerState, startScanner } from '@/lib/scanner';
+import { runOnce, scannerHealth, startScanner } from '@/lib/scanner';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 export const maxDuration = 60;
 
-/** Quét nền đang sống hay đang chết, và nếu chết thì vì sao. */
+/**
+ * Quét nền đang sống hay đang chết, và nếu chết thì vì sao.
+ *
+ * Trả lời bằng LƯỢT QUÉT GẦN NHẤT ĐÃ GHI ĐƯỢC, không bằng biến trong bộ nhớ:
+ * Next chạy instrumentation ở tiến trình khác route handler, nên biến ở đây
+ * không nói gì về bộ hẹn giờ ở kia.
+ */
 export async function GET() {
-  return NextResponse.json({ ok: true, scanner: scannerState(), db: dbNote() });
+  return NextResponse.json({ ok: true, ...scannerHealth() });
 }
 
 /**
@@ -25,5 +30,5 @@ export async function POST(req: Request) {
   }
   startScanner();
   const id = await runOnce('thu-cong');
-  return NextResponse.json({ ok: true, scanId: id, scanner: scannerState(), db: dbNote() });
+  return NextResponse.json({ ok: true, scanId: id, ...scannerHealth() });
 }

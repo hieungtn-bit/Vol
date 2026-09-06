@@ -108,6 +108,8 @@ export interface Expectancy {
   weak: boolean;
   /** Rơi vào vùng mà đối chiếu dự báo/thực tế cho thấy mô hình lạc quan quá. */
   optimistic: boolean;
+  /** Thắng quá nửa số lần mà kỳ vọng vẫn âm — phải nói rõ lý do kẻo đọc ngược. */
+  winsButLoses: boolean;
   /** Câu ngắn hiện thẳng lên màn hình. */
   text: string;
 }
@@ -143,11 +145,20 @@ export function expectancy(rr1: number | null, rr2: number | null, feeR: number 
   // ở đó phải nói ra thay vì để người đọc tưởng số càng cao kèo càng ngon.
   const optimistic = net > 0.15;
 
+  // "Thắng 61%" đứng cạnh "−0.54R" đọc như hai câu mâu thuẫn, và người đọc sẽ tin
+  // câu dễ hiểu hơn — tức là tin sai. Đây đúng là kiểu hiểu nhầm mà nhãn "R kỳ
+  // vọng" cũ gây ra. Nên khi thắng nhiều mà vẫn lỗ thì phải nói thẳng lý do: mỗi
+  // lần thắng ăn quá ít so với mỗi lần thua.
+  const winsButLoses = net < 0 && pWin > 0.5;
+
   const text =
     `${net >= 0 ? '+' : ''}${net.toFixed(2)}R kỳ vọng · thắng ${(pWin * 100).toFixed(0)}% ` +
     `(chạm TP1 ${(p1 * 100).toFixed(0)}%, rồi TP2 ${(p2 * 100).toFixed(0)}%)` +
     (weak ? ' · TP2 xa, xác suất là ước lượng chứ chưa đủ mẫu để đo' : '') +
-    (optimistic ? ' · trên +0.15R mô hình đo ra là lạc quan quá — đừng đọc thành kèo ngon hơn' : '');
+    (optimistic ? ' · trên +0.15R mô hình đo ra là lạc quan quá — đừng đọc thành kèo ngon hơn' : '') +
+    (winsButLoses
+      ? ` · thắng nhiều lần nhưng mỗi lần chỉ ăn ${both.toFixed(2)}R còn mỗi lần thua là −1R`
+      : '');
 
-  return { net, gross, feeR: fee, pTP1: p1, pTP2: p2, pWin, weak, optimistic, text };
+  return { net, gross, feeR: fee, pTP1: p1, pTP2: p2, pWin, weak, optimistic, winsButLoses, text };
 }

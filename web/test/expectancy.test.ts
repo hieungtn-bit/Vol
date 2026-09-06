@@ -63,3 +63,27 @@ describe('kỳ vọng có xác suất', () => {
     expect(t).toMatch(/TP1 \d+%/);
   });
 });
+
+describe('thắng nhiều mà vẫn lỗ thì phải nói ra lý do', () => {
+  it('mục tiêu quá sát + phí nặng: thắng >50% nhưng kỳ vọng âm', () => {
+    // Đúng hình dạng gặp thật trên màn hình: TP1 và TP2 đều rất gần, stop 1R.
+    const e = expectancy(0.1, 0.16, 0.28)!;
+    expect(e.pWin).toBeGreaterThan(0.5);
+    expect(e.net).toBeLessThan(0);
+    expect(e.winsButLoses).toBe(true);
+    // "thắng 61%" đứng cạnh "−0.54R" đọc như mâu thuẫn — câu giải thích phải có
+    expect(e.text).toMatch(/mỗi lần thua là −1R/);
+  });
+
+  it('kèo bình thường thì không gắn câu đó vào', () => {
+    const e = expectancy(1, 3, 0.05)!;
+    expect(e.winsButLoses).toBe(false);
+    expect(e.text).not.toMatch(/mỗi lần thua/);
+  });
+
+  it('lỗ mà thắng dưới nửa thì cũng không cần câu đó — không có gì mâu thuẫn', () => {
+    const e = expectancy(2, 5, 0.1)!;
+    if (e.net < 0) expect(e.pWin > 0.5 ? e.winsButLoses : true).toBe(true);
+    expect(e.winsButLoses).toBe(e.net < 0 && e.pWin > 0.5);
+  });
+});

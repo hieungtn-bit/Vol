@@ -251,6 +251,12 @@ export function Detail({ c }: { c: DirectionalCall }) {
             {c.expectancy.net.toFixed(2)}R
           </b>{' '}
           · thắng {(c.expectancy.pWin * 100).toFixed(0)}%
+          {c.expectancy.winsButLoses && c.rr1 != null && c.rr2 != null ? (
+            <span className="mt-0.5 block font-semibold">
+              Thắng quá nửa số lần mà vẫn lỗ: mỗi lần thắng chỉ ăn{' '}
+              {(0.5 * c.rr1 + 0.5 * c.rr2).toFixed(2)}R, còn mỗi lần thua là −1R.
+            </span>
+          ) : null}
           <span className="mt-0.5 block text-muted">
             Chạm TP1 {(c.expectancy.pTP1 * 100).toFixed(0)}%, rồi TP2{' '}
             {(c.expectancy.pTP2 * 100).toFixed(0)}% — tỉ lệ đo trên 5460 lệnh backtest theo

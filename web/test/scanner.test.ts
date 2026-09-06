@@ -83,3 +83,52 @@ describe('quét nền', () => {
     expect(s.nextRunAt).toBeNull();
   });
 });
+
+describe('sức khoẻ đọc từ CSDL, không đọc từ biến trong bộ nhớ', () => {
+  // Next chạy instrumentation.ts và route handler ở TIẾN TRÌNH KHÁC NHAU, nên
+  // không singleton nào trong bộ nhớ bắc cầu được — kể cả globalThis (đã thử,
+  // vẫn sai). Thứ duy nhất hai tiến trình cùng thấy là CSDL.
+
+  it('chưa có lượt nào được ghi → quá hạn, dù bộ hẹn giờ đang chạy', async () => {
+    const { sc } = await fresh();
+    sc.startScanner(['ENAUSDT']);
+    const h = sc.scannerHealth();
+    expect(h.local.running).toBe(true);   // biến trong tiến trình NÀY nói là bật
+    expect(h.lastScan).toBeNull();        // nhưng chưa lượt nào thật sự chạy
+    expect(h.stale).toBe(true);           // nên câu trả lời phải là quá hạn
+  });
+
+  it('lượt vừa ghi xong → không quá hạn, và đọc được dù bộ hẹn giờ ở tiến trình khác', async () => {
+    const { sc, db } = await fresh();
+    // KHÔNG gọi startScanner: giả lập đúng tiến trình chỉ phục vụ route handler.
+    db.saveScan(
+      { ts: Date.now(), ictTime: '18:00', durationMs: 900, trigger: 'nen', degraded: [] },
+      [],
+    );
+    const h = sc.scannerHealth();
+    expect(h.local.running).toBe(false);
+    expect(h.stale).toBe(false);
+    expect(h.lastScan?.trigger).toBe('nen');
+    expect(h.lastScan?.durationMs).toBe(900);
+  });
+
+  it('lượt cuối quá hai chu kỳ nến 15m → quá hạn', async () => {
+    const { sc, db } = await fresh();
+    db.saveScan(
+      { ts: Date.now() - 31 * 60_000, ictTime: 'cũ', durationMs: 900, trigger: 'nen', degraded: [] },
+      [],
+    );
+    expect(sc.scannerHealth().stale).toBe(true);
+  });
+
+  it('không lưu được → nói ra ở trường db, và không giả vờ có lượt quét', async () => {
+    const { sc, db } = await fresh();
+    db.closeDb();
+    process.env.VERCEL = '1';
+    delete process.env.MARKETSCAN_DB;
+    const h = sc.scannerHealth();
+    expect(h.db).toMatch(/ephemeral/);
+    expect(h.lastScan).toBeNull();
+    expect(h.stale).toBe(true);
+  });
+});
