@@ -5,6 +5,7 @@ import { type HTFContext } from './decide';
 import { type DirectionalCall } from './direct';
 import { decideBoth, prepareTF } from './analyze';
 import { type MarketStructure } from './structure';
+import { saveCandles } from './db';
 import { buildFlow, type FlowInfo } from './flow';
 import {
   fetchBinancePerp, fetchKlines, fetchOkx, fetchPerpPositioning, fetchPerpTakerRatio,
@@ -109,6 +110,18 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   // nếu không thì backtest (BT_WINDOW) đang kiểm chứng một hệ khác hệ đang chạy.
   const k15Engine = k15.slice(-LIMIT['15m']);
   const byTf: Record<TF, Candle[]> = { '15m': k15Engine, '1h': k1h, '4h': k4h, '1d': k1d };
+
+  // Tích nến vào CSDL. Không có CSDL (serverless) thì saveCandles là no-op, nên
+  // chỗ này không cần biết đang chạy ở đâu. Nến chưa đóng bị bỏ ngay trong đó.
+  // Lỗi lưu KHÔNG được làm hỏng lượt quét — nhưng cũng không được nuốt im lặng.
+  try {
+    saveCandles(symbol, '15m', k15);   // lưu cả 320 nến, không chỉ cửa sổ engine
+    saveCandles(symbol, '1h', k1h);
+    saveCandles(symbol, '4h', k4h);
+    saveCandles(symbol, '1d', k1d);
+  } catch (e) {
+    errors.push(`lưu nến: ${e instanceof Error ? e.message : String(e)}`);
+  }
   const closed15 = k15Engine.filter((c) => c.closed);
   const last = closed15.length ? closed15[closed15.length - 1].c : (ticker?.lastPrice ?? 0);
 

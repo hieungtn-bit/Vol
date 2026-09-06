@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BoardRow, SymbolCard, type LiveRow } from '@/components/LiveBoard';
+import { SystemBar } from '@/components/SystemBar';
 import { apiPath } from '@/config/site';
 import { ALWAYS_INCLUDE } from '@/config/universe';
 import { ictString } from '@/lib/format';
@@ -42,8 +43,11 @@ export default function LivePage() {
   const [extra, setExtra] = useState('');
   const [auto, setAuto] = useState(true);          // bản điện thì mặc định phải tự chạy
   const [goldOnly, setGoldOnly] = useState(false);
-  // Mặc định BẬT: backtest đo được là bỏ các kèo trượt cửa giữ lại 7% số lệnh
-  // nhưng nâng avgR 0.05 → 0.31 và hạ sụt giảm tối đa từ 116.9R xuống 6.3R.
+  // Mặc định BẬT: cửa chất lượng là bộ lọc duy nhất đo được là có tác dụng — nhưng
+  // đọc kỹ con số. Sau khi sửa hai lỗi mô phỏng và gỡ thứ tự chạm bằng nến 1m, đo
+  // lại trên 5515 lệnh (6 mã × 15m/1h/4h): không cửa PF 0.82, có cửa PF 0.96. Cửa
+  // kéo từ LỖ về HOÀ, không kéo lên lãi. Bật nó là để bớt kèo tệ, không phải để
+  // có kèo tốt. Chi tiết ở bench/.
   const [tradeableOnly, setTradeableOnly] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -118,6 +122,19 @@ export default function LivePage() {
 
   const longShare = tally.total > 0 ? (tally.long / tally.total) * 100 : 50;
 
+  // Khung nào đang đọc trên nến CŨ. Engine "luôn ra hướng" vẫn trả hướng trong
+  // trường hợp đó — đúng như thiết kế — nên nếu màn hình không nói ra thì người
+  // đọc không thể phân biệt một hướng dựng trên nến vừa đóng với một hướng dựng
+  // trên nến từ hôm qua.
+  const staleTfs = useMemo(() => {
+    const out = new Set<string>();
+    for (const r of rows) for (const tf of TFS) {
+      const c = r.direction?.[tf];
+      if (c?.gateBlockers?.some((b) => b.includes('dữ liệu cũ'))) out.add(tf);
+    }
+    return [...out];
+  }, [rows]);
+
   const emptyText = busy
     ? 'Đang quét…'
     : goldOnly
@@ -186,6 +203,8 @@ export default function LivePage() {
       </header>
 
       <main className="safe-x safe-b mx-auto max-w-[1400px] pt-3">
+        <SystemBar staleTfs={staleTfs} />
+
         {/* Bộ lọc: pill cuộn ngang được, không bao giờ làm vỡ hàng trên máy hẹp. */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Pill tone="emerald" on={tradeableOnly} onClick={() => setTradeableOnly((v) => !v)}>

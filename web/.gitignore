@@ -10,3 +10,4 @@ data/snapshots/*.json
 # giữ thư mục, bỏ nội dung
 !data/snapshots/.gitkeep
 .cache/
+data/

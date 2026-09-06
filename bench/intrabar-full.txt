@@ -1,0 +1,85 @@
+Giả định thận trọng vs nến 1m · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến
+
+  tải nến 1m BTCUSDT (2026-08-06 → 2026-09-06) … 44430 nến
+  ── BTCUSDT 15m ──
+  giả định thận trọng        n=175    win=55.4%   avgR=-0.25   tổngR=-44.5    PF=0.45   DD=44.5    gỡ được 0%
+  nến 1m gỡ thứ tự           n=180    win=57.2%   avgR=-0.23   tổngR=-42.0    PF=0.48   DD=42.0    gỡ được 96%
+  tải nến 1m ETHUSDT (2026-08-06 → 2026-09-06) … 44430 nến
+  ── ETHUSDT 15m ──
+  giả định thận trọng        n=190    win=60.0%   avgR=-0.10   tổngR=-18.4    PF=0.77   DD=21.7    gỡ được 0%
+  nến 1m gỡ thứ tự           n=195    win=60.5%   avgR=-0.10   tổngR=-18.7    PF=0.78   DD=22.7    gỡ được 97%
+  tải nến 1m ENAUSDT (2026-08-06 → 2026-09-06) … 44430 nến
+  ── ENAUSDT 15m ──
+  giả định thận trọng        n=256    win=49.6%   avgR=-0.07   tổngR=-18.8    PF=0.85   DD=24.7    gỡ được 0%
+  nến 1m gỡ thứ tự           n=258    win=48.8%   avgR=-0.08   tổngR=-20.6    PF=0.84   DD=25.3    gỡ được 97%
+  tải nến 1m SOLUSDT (2026-08-06 → 2026-09-06) … 44430 nến
+  ── SOLUSDT 15m ──
+  giả định thận trọng        n=222    win=52.7%   avgR=-0.18   tổngR=-39.5    PF=0.62   DD=40.8    gỡ được 0%
+  nến 1m gỡ thứ tự           n=232    win=52.6%   avgR=-0.16   tổngR=-36.2    PF=0.67   DD=37.5    gỡ được 97%
+  tải nến 1m BNBUSDT (2026-08-06 → 2026-09-06) … 44430 nến
+  ── BNBUSDT 15m ──
+  giả định thận trọng        n=196    win=51.5%   avgR=-0.35   tổngR=-69.5    PF=0.32   DD=69.5    gỡ được 0%
+  nến 1m gỡ thứ tự           n=196    win=53.6%   avgR=-0.31   tổngR=-61.7    PF=0.36   DD=61.7    gỡ được 97%
+  tải nến 1m XRPUSDT (2026-08-06 → 2026-09-06) … 44430 nến
+  ── XRPUSDT 15m ──
+  giả định thận trọng        n=214    win=60.3%   avgR=-0.03   tổngR=-5.8     PF=0.93   DD=10.6    gỡ được 0%
+  nến 1m gỡ thứ tự           n=220    win=60.5%   avgR=-0.02   tổngR=-4.5     PF=0.95   DD=9.8     gỡ được 96%
+  tải nến 1m BTCUSDT (2026-05-04 → 2026-09-06) … 179400 nến
+  ── BTCUSDT 1h ──
+  giả định thận trọng        n=248    win=56.0%   avgR=-0.04   tổngR=-10.2    PF=0.90   DD=19.5    gỡ được 0%
+  nến 1m gỡ thứ tự           n=253    win=55.7%   avgR=-0.05   tổngR=-12.6    PF=0.88   DD=20.2    gỡ được 100%
+  tải nến 1m ETHUSDT (2026-05-04 → 2026-09-06) … 179400 nến
+  ── ETHUSDT 1h ──
+  giả định thận trọng        n=273    win=47.6%   avgR=-0.15   tổngR=-41.6    PF=0.70   DD=42.0    gỡ được 0%
+  nến 1m gỡ thứ tự           n=277    win=50.2%   avgR=-0.10   tổngR=-26.8    PF=0.79   DD=29.8    gỡ được 98%
+  tải nến 1m ENAUSDT (2026-05-04 → 2026-09-06) … 179400 nến
+  ── ENAUSDT 1h ──
+  giả định thận trọng        n=388    win=48.7%   avgR=0.01    tổngR=2.0      PF=1.01   DD=21.0    gỡ được 0%
+  nến 1m gỡ thứ tự           n=386    win=50.8%   avgR=0.06    tổngR=21.5     PF=1.11   DD=14.4    gỡ được 98%
+  tải nến 1m SOLUSDT (2026-05-04 → 2026-09-06) … 179400 nến
+  ── SOLUSDT 1h ──
+  giả định thận trọng        n=311    win=48.9%   avgR=-0.13   tổngR=-39.7    PF=0.75   DD=40.2    gỡ được 0%
+  nến 1m gỡ thứ tự           n=313    win=49.8%   avgR=-0.10   tổngR=-30.3    PF=0.80   DD=30.8    gỡ được 99%
+  tải nến 1m BNBUSDT (2026-05-04 → 2026-09-06) … 179400 nến
+  ── BNBUSDT 1h ──
+  giả định thận trọng        n=295    win=58.0%   avgR=-0.08   tổngR=-24.3    PF=0.81   DD=26.0    gỡ được 0%
+  nến 1m gỡ thứ tự           n=296    win=58.1%   avgR=-0.06   tổngR=-16.6    PF=0.87   DD=24.8    gỡ được 99%
+  tải nến 1m XRPUSDT (2026-05-04 → 2026-09-06) … 179400 nến
+  ── XRPUSDT 1h ──
+  giả định thận trọng        n=314    win=50.6%   avgR=-0.12   tổngR=-38.3    PF=0.76   DD=38.7    gỡ được 0%
+  nến 1m gỡ thứ tự           n=322    win=49.7%   avgR=-0.13   tổngR=-41.1    PF=0.74   DD=41.5    gỡ được 99%
+  tải nến 1m BTCUSDT (2025-04-24 → 2026-09-06) … 719280 nến
+  ── BTCUSDT 4h ──
+  giả định thận trọng        n=388    win=44.6%   avgR=-0.16   tổngR=-62.2    PF=0.72   DD=66.9    gỡ được 0%
+  nến 1m gỡ thứ tự           n=392    win=46.4%   avgR=-0.10   tổngR=-39.4    PF=0.81   DD=47.1    gỡ được 100%
+  tải nến 1m ETHUSDT (2025-04-24 → 2026-09-06) … 719280 nến
+  ── ETHUSDT 4h ──
+  giả định thận trọng        n=387    win=42.6%   avgR=-0.04   tổngR=-15.8    PF=0.93   DD=21.3    gỡ được 0%
+  nến 1m gỡ thứ tự           n=387    win=45.0%   avgR=0.04    tổngR=16.2     PF=1.08   DD=17.7    gỡ được 99%
+  tải nến 1m ENAUSDT (2025-04-24 → 2026-09-06) … 719280 nến
+  ── ENAUSDT 4h ──
+  giả định thận trọng        n=405    win=41.5%   avgR=0.00    tổngR=0.1      PF=1.00   DD=20.1    gỡ được 0%
+  nến 1m gỡ thứ tự           n=407    win=45.7%   avgR=0.09    tổngR=37.5     PF=1.18   DD=15.2    gỡ được 100%
+  tải nến 1m SOLUSDT (2025-04-24 → 2026-09-06) … 719280 nến
+  ── SOLUSDT 4h ──
+  giả định thận trọng        n=390    win=43.1%   avgR=0.01    tổngR=4.9      PF=1.02   DD=25.5    gỡ được 0%
+  nến 1m gỡ thứ tự           n=385    win=44.2%   avgR=0.05    tổngR=18.9     PF=1.10   DD=22.3    gỡ được 99%
+  tải nến 1m BNBUSDT (2025-04-24 → 2026-09-06) … 719280 nến
+  ── BNBUSDT 4h ──
+  giả định thận trọng        n=406    win=44.1%   avgR=-0.15   tổngR=-59.4    PF=0.74   DD=66.2    gỡ được 0%
+  nến 1m gỡ thứ tự           n=409    win=45.2%   avgR=-0.08   tổngR=-33.7    PF=0.85   DD=40.7    gỡ được 100%
+  tải nến 1m XRPUSDT (2025-04-24 → 2026-09-06) … 719280 nến
+  ── XRPUSDT 4h ──
+  giả định thận trọng        n=403    win=41.9%   avgR=-0.09   tổngR=-34.6    PF=0.85   DD=44.7    gỡ được 0%
+  nến 1m gỡ thứ tự           n=407    win=44.7%   avgR=-0.01   tổngR=-5.2     PF=0.98   DD=18.8    gỡ được 100%
+
+── TỔNG ──
+  giả định thận trọng        n=5461   win=48.5%   avgR=-0.09   tổngR=-515.7   PF=0.82   DD=525.8   gỡ được 0%
+  nến 1m gỡ thứ tự           n=5515   win=49.9%   avgR=-0.05   tổngR=-295.4   PF=0.89   DD=336.2   gỡ được 99%
+
+  Giả định thận trọng đang tính THIẾU 0.041R mỗi lệnh (avgR -0.09 → -0.05, PF 0.82 → 0.89).
+  150/4946 lệnh đổi kết quả khi biết thứ tự thật (3.0%) — 150 tốt lên, 0 xấu đi.
+
+── chỉ tính các lệnh ĐÃ GỠ ĐƯỢC bằng nến 1m ──
+  giả định                   n=4874   win=49.3%   avgR=-0.07   tổngR=-362.4   PF=0.85   DD=374.8   gỡ được 0%
+  số đo                      n=5437   win=50.4%   avgR=-0.04   tổngR=-215.4   PF=0.92   DD=269.5   gỡ được 100%

@@ -8,8 +8,11 @@
  * OI / funding / taker perp đều N/A. Nó kiểm chứng phần Price Action + Volume
  * Profile + cấu trúc HH/HL + taker SPOT, tức đúng những vế luôn có dữ liệu lịch sử.
  */
-import { DEFAULT_BT, calibrate, evidenceEdge, goldDiagnostics, runBacktest, stats, type BTOptions, type Trade } from '../lib/backtest';
-import { fetchKlinesHistory } from '../lib/sources';
+import { execSync } from 'node:child_process';
+import { DEFAULT_BT, calibrate, evidenceEdge, goldDiagnostics, runBacktest, stats, type BTOptions, type SimContext, type Trade } from '../lib/backtest';
+import { fingerprint, saveBacktest, saveCandles, dbNote } from '../lib/db';
+import { loadMinutes, minuteFeed } from '../lib/minute';
+import { TF_MS, fetchKlinesHistory } from '../lib/sources';
 import type { Conviction, Weights } from '../lib/direct';
 import type { Candle, TF } from '../lib/types';
 
@@ -22,6 +25,19 @@ const symbols = (arg('symbols', 'BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT') as string).sp
 const tfs = (arg('tf', '1h') as string).split(',') as TF[];
 const bars = Number(arg('bars', '3000'));
 const minConviction = (arg('min', 'C') as Conviction);
+/**
+ * `--intrabar 1m` gỡ thứ tự chạm trong nến bằng nến 1m thay vì đoán thận trọng.
+ * Mặc định vẫn là giả định, để con số mặc định không phụ thuộc vào việc tải được
+ * kho lưu trữ hay không.
+ */
+const useMinutes = arg('intrabar') === '1m';
+/** `--save <nhãn>` ghi kết quả kèm cấu hình và dấu kiểm tra dữ liệu vào SQLite. */
+const saveLabel = arg('save');
+
+function codeRev(): string {
+  try { return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim(); }
+  catch { return 'không-phải-git'; }
+}
 
 const pad = (s: string | number, n: number) => String(s).padEnd(n);
 const num = (x: number, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '∞');
@@ -39,23 +55,55 @@ function row(name: string, t: Trade[]) {
 
 async function main() {
   console.log(`Backtest · ${symbols.join(', ')} · ${tfs.join(', ')} · ${bars} nến · hạng ≥ ${minConviction}`);
-  console.log('Mù phái sinh: OI / funding / taker perp = N/A (fapi không truy cập được từ đây)\n');
+  console.log('Mù phái sinh: OI / funding / taker perp = N/A (fapi không truy cập được từ đây)');
+  console.log(useMinutes
+    ? 'Thứ tự chạm trong nến: GỠ bằng nến 1m (số đo)'
+    : 'Thứ tự chạm trong nến: giả định thận trọng — SL trước, không tính TP trên nến vào lệnh');
+  if (saveLabel && dbNote()) console.log(`Không lưu được vào CSDL: ${dbNote()}`);
+  console.log('');
 
   // Tải một lần, dùng lại cho mọi biến thể — nếu mỗi biến thể tải lại dữ liệu thì
   // vừa chậm vừa có nguy cơ so hai bộ nến khác nhau.
   const data = new Map<string, Candle[]>();
+  const ctxs = new Map<string, SimContext | undefined>();
   const all: Trade[] = [];
+  // Nến 1m dùng chung giữa các khung của cùng một mã — tải một lần thôi.
+  const minuteCache = new Map<string, Awaited<ReturnType<typeof loadMinutes>>>();
+  let fromTs = Infinity;
+  let toTs = 0;
+
   for (const tf of tfs) {
     for (const symbol of symbols) {
       const candles = await fetchKlinesHistory(symbol, tf, bars);
       data.set(`${symbol}|${tf}`, candles);
+      if (candles.length) {
+        fromTs = Math.min(fromTs, candles[0].t);
+        toTs = Math.max(toTs, candles[candles.length - 1].t);
+      }
+
+      let ctx: SimContext | undefined;
+      if (useMinutes && candles.length) {
+        const lo = candles[0].t;
+        const hi = candles[candles.length - 1].t + TF_MS[tf];
+        const key = `${symbol}|${lo}|${hi}`;
+        let m = minuteCache.get(key);
+        if (!m) {
+          process.stdout.write(`  tải nến 1m ${symbol} … `);
+          m = await loadMinutes(symbol, lo, hi);
+          minuteCache.set(key, m);
+          console.log(`${m.length} nến`);
+        }
+        ctx = { minutes: minuteFeed(m), tfMs: TF_MS[tf] };
+      }
+      ctxs.set(`${symbol}|${tf}`, ctx);
+      if (saveLabel) saveCandles(symbol, tf, candles);
       if (candles.length < 200) { console.log(`  ${symbol} ${tf}: chỉ ${candles.length} nến, bỏ qua`); continue; }
       if (arg('diag') !== undefined) {
         const g = goldDiagnostics(symbol, tf, candles);
         console.log(`  ${pad(symbol + ' ' + tf, 22)} ${g.signals} tín hiệu · ${g.golden} đạt vàng (${num((g.golden / Math.max(1, g.signals)) * 100, 2)}%)`);
         for (const b of g.blockers) console.log(`  ${pad('', 22)} chặn bởi "${pad(b.reason, 22)}" ${pad(b.n, 6)} (${num(b.pct, 1)}%)`);
       }
-      const t = runBacktest(symbol, tf, candles, { ...DEFAULT_BT, minConviction });
+      const t = runBacktest(symbol, tf, candles, { ...DEFAULT_BT, minConviction }, ctx);
       const from = new Date(candles[0].t).toISOString().slice(0, 10);
       const to = new Date(candles[candles.length - 1].t).toISOString().slice(0, 10);
       row(`${symbol} ${tf}`, t);
@@ -65,6 +113,29 @@ async function main() {
   }
 
   if (all.length === 0) { console.log('\nKhông có lệnh nào.'); return; }
+
+  if (saveLabel) {
+    // Lưu kèm ĐỦ thứ để chạy lại: cấu hình, phạm vi thời gian, dấu kiểm tra của
+    // chính chuỗi nến đã dùng, và git rev của code. Thiếu bất kỳ cái nào thì khi
+    // hai lần chạy ra số khác nhau sẽ không trả lời được là vì dữ liệu hay vì code.
+    const fp = fingerprint([...data.values()].flat());
+    const id = saveBacktest({
+      label: saveLabel, symbols, tfs, bars, fromTs, toTs,
+      config: { ...DEFAULT_BT, minConviction },
+      fingerprint: fp, codeRev: codeRev(),
+      intrabar: useMinutes ? 'nen-1m' : 'gia-dinh',
+      stats: stats(all),
+    }, all.map((t) => ({
+      symbol: t.symbol, tf: t.tf, side: t.side, conviction: t.conviction,
+      signalTime: t.signalTime, entry: t.entry, sl: t.sl, tp1: t.tp1, tp2: t.tp2,
+      exitReason: t.exitReason, r: t.r, rGross: t.rGross, costR: t.costR,
+      hitTP1: t.hitTP1, hitTP2: t.hitTP2, tradeable: t.tradeable,
+      expectancyR: t.expectancyR, intrabarResolved: t.intrabarResolved,
+    })));
+    console.log(id != null
+      ? `\nĐã lưu backtest #${id} · dấu dữ liệu ${fp} · code ${codeRev()}`
+      : '\nKhông lưu được vào CSDL (xem ghi chú ở đầu).');
+  }
 
   console.log('\n── TỔNG ──');
   row('tất cả', all);
@@ -181,7 +252,7 @@ async function main() {
         for (const symbol of symbols) {
           const cs = data.get(`${symbol}|${tf}`);
           if (!cs || cs.length < 200) continue;
-          t.push(...runBacktest(symbol, tf, cs, opt));
+          t.push(...runBacktest(symbol, tf, cs, opt, ctxs.get(`${symbol}|${tf}`)));
         }
       }
       const s2 = [...t].sort((a, b) => a.signalTime - b.signalTime);
