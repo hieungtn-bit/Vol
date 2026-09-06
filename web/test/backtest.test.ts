@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BT_WINDOW, DEFAULT_BT, blindDerivatives, runBacktest, signalAt, simulate, stats } from '@/lib/backtest';
+import { BT_WINDOW, DEFAULT_BT, blindDerivatives, findFill, runBacktest, signalAt, simulate, stats } from '@/lib/backtest';
 import type { BTOptions } from '@/lib/backtest';
 import type { Candle } from '@/lib/types';
 import type { DirectionalCall } from '@/lib/direct';
@@ -122,6 +122,76 @@ describe('mô phỏng lệnh', () => {
     expect(t.entry).toBe(100);
     expect(t.hitTP2).toBe(true);
     expect(t.r).toBeGreaterThan(0);
+  });
+
+  // ---- Hai lỗi mô phỏng đã được sửa. Giữ lại làm chốt chặn. ----
+
+  it('LỖI: nến nhảy hẳn qua mức chờ thì KHÔNG được tính là khớp ở mức đó', () => {
+    // Long chờ ở 100. Nến 1 mở 93 và cả nến nằm dưới 100 — thị trường chưa bao
+    // giờ in ra giá 100 trong nến này, nên không có lệnh nào khớp ở 100.
+    const cs = [bar(101, 101, 101, 101, 0), bar(93, 95, 90, 92, 1), bar(92, 103, 92, 103, 2)];
+    expect(simulate(cs, 0, base(), FREE)).toBeNull();
+  });
+
+  it('short đối xứng: nến nhảy hẳn lên trên mức chờ cũng không tính là khớp', () => {
+    const s = base({ side: 'SHORT', entry: [100, 101], sl: 102, tp1: 98, tp2: 94 });
+    const cs = [bar(99, 99, 99, 99, 0), bar(107, 109, 105, 106, 1), bar(106, 106, 94, 94, 2)];
+    expect(simulate(cs, 0, s, FREE)).toBeNull();
+  });
+
+  it('giá khớp luôn nằm trong biên nến khớp', () => {
+    const cs = [bar(101, 101, 101, 101, 0), bar(100.5, 101, 99, 99.5, 1), bar(99.5, 103, 99.5, 102, 2), bar(102, 107, 102, 106, 3)];
+    const t = simulate(cs, 0, base(), FREE)!;
+    const fillBar = cs[t.entryIdx];
+    expect(t.entry).toBeGreaterThanOrEqual(fillBar.l);
+    expect(t.entry).toBeLessThanOrEqual(fillBar.h);
+  });
+
+  it('LỖI: không được tính chốt lời trên CHÍNH nến vào lệnh', () => {
+    // Nến 1 vừa chạm 100 (khớp) vừa lên 107 (qua cả TP2). Không biết lệnh khớp
+    // ở phút thứ mấy nên không biết đoạn nào xảy ra sau khi vào — không tính.
+    const SHORT_HOLD: BTOptions = { ...FREE, maxHold: 2 };
+    const cs = [
+      bar(101, 101, 101, 101, 0),
+      bar(100.5, 107, 99.5, 99.6, 1),   // khớp ở 100 VÀ vọt qua cả TP2 trong cùng nến
+      bar(99.6, 99.8, 99.4, 99.5, 2),
+      bar(99.5, 99.8, 99.4, 99.5, 3),
+    ];
+    const t = simulate(cs, 0, base(), SHORT_HOLD)!;
+    expect(t.entryIdx).toBe(1);
+    expect(t.hitTP1).toBe(false);
+    expect(t.hitTP2).toBe(false);
+    expect(t.exitReason).toBe('timeout');
+    // Giá đóng 99.5 dưới entry 100, risk 2 → lỗ nhẹ, không phải +2R lãi ảo.
+    expect(t.r).toBeCloseTo(-0.25, 6);
+  });
+
+  it('nến SAU nến vào lệnh thì chốt lời tính bình thường', () => {
+    const cs = [bar(101, 101, 101, 101, 0), bar(100.5, 101, 99.5, 100, 1), bar(100, 107, 100, 106, 2)];
+    const t = simulate(cs, 0, base(), FREE)!;
+    expect(t.entryIdx).toBe(1);
+    expect(t.exitIdx).toBe(2);
+    expect(t.exitReason).toBe('tp2');
+  });
+
+  it('nhưng stop VẪN có hiệu lực ngay trên nến vào lệnh — phía xấu', () => {
+    const cs = [bar(101, 101, 101, 101, 0), bar(100.5, 101, 97, 97.5, 1), bar(97, 97, 97, 97, 2)];
+    const t = simulate(cs, 0, base(), FREE)!;
+    expect(t.entryIdx).toBe(1);
+    expect(t.exitIdx).toBe(1);
+    expect(t.exitReason).toBe('sl');
+    expect(t.r).toBe(-1);
+  });
+
+  it('findFill phân biệt ba trường hợp: khớp / nhảy qua / không tới', () => {
+    const wait = [bar(101, 101, 101, 101, 0), bar(105, 106, 104, 105, 1)];
+    expect(findFill(wait, 0, 100, true, 12).kind).toBe('never');
+
+    const hit = [bar(101, 101, 101, 101, 0), bar(101, 101, 99, 99.5, 1)];
+    expect(findFill(hit, 0, 100, true, 12)).toEqual({ kind: 'filled', idx: 1 });
+
+    const gap = [bar(101, 101, 101, 101, 0), bar(93, 95, 90, 92, 1)];
+    expect(findFill(gap, 0, 100, true, 12)).toEqual({ kind: 'gapped', idx: 1 });
   });
 
   it('thống kê rỗng không làm nổ hàm', () => {
