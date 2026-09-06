@@ -12,7 +12,7 @@ const oiNA: OIInfo = {
 
 const readEna = (tf: TF) => readTF({
   tf, candles: ena1h(), layers: buildLayers(ena15m(), ena1h(), NOW),
-  last4hClosed: null, spotPerpAgree: false, fundingPoints: 0, oi: oiNA,
+  last4hClosed: null, spotPerpAgree: false, fundingPoints: 0, oi: oiNA, hasPerpTaker: true, hasFunding: true,
 })!;
 
 describe('ENAUSDT chiều–tối 05/09 — kỳ vọng của đề bài', () => {
@@ -43,7 +43,7 @@ describe('ENAUSDT chiều–tối 05/09 — kỳ vọng của đề bài', () =>
     for (const tf of ['15m', '1h', '4h', '1d'] as TF[]) {
       const x = readTF({
         tf, candles: ena1h(), layers: buildLayers(ena15m(), ena1h(), NOW),
-        last4hClosed: null, spotPerpAgree: false, fundingPoints: 0, oi: oiNA,
+        last4hClosed: null, spotPerpAgree: false, fundingPoints: 0, oi: oiNA, hasPerpTaker: true, hasFunding: true,
       });
       if (!x) continue;
       expect(x.poc[0]).toBeGreaterThan(0.15);
@@ -97,7 +97,7 @@ describe('BTCUSDT 1d — ảnh chụp trạng thái', () => {
     const r = readTF({
       tf: '1d', candles: c,
       layers: buildLayers(c, c, c[c.length - 1].t + 86_400_000),
-      last4hClosed: null, spotPerpAgree: false, fundingPoints: 0, oi: oiNA,
+      last4hClosed: null, spotPerpAgree: false, fundingPoints: 0, oi: oiNA, hasPerpTaker: true, hasFunding: true,
     })!;
     expect(r.state).toBe('chap_nhan_ngoai');
     expect(r.state_text.toLowerCase()).toContain('chấp nhận ngoài vùng');
@@ -120,7 +120,7 @@ describe('chữ phải khớp số — điểm kiểm soát luôn nằm trong v�
     const c = btc1d();
     const r = readTF({
       tf: '1d', candles: c, layers: buildLayers(c, c, c[c.length - 1].t + 86_400_000),
-      last4hClosed: null, spotPerpAgree: false, fundingPoints: 0, oi: oiNA,
+      last4hClosed: null, spotPerpAgree: false, fundingPoints: 0, oi: oiNA, hasPerpTaker: true, hasFunding: true,
     })!;
     expect(r.poc[0]).toBeGreaterThanOrEqual(r.val - 1e-9);
     expect(r.poc[1]).toBeLessThanOrEqual(r.vah + 1e-9);
@@ -133,7 +133,7 @@ describe('chữ phải khớp số — điểm kiểm soát luôn nằm trong v�
     const layers = buildLayers(ena15m(), ena1h(), NOW);
     const used = (['15m', '1h', '4h', '1d'] as TF[]).map((tf) => readTF({
       tf, candles: ena1h(), layers, last4hClosed: null,
-      spotPerpAgree: false, fundingPoints: 0, oi: oiNA,
+      spotPerpAgree: false, fundingPoints: 0, oi: oiNA, hasPerpTaker: true, hasFunding: true,
     })!.layer);
     expect(new Set(used).size).toBeGreaterThan(1);
   });

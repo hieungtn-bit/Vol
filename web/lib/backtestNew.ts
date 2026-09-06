@@ -2,7 +2,7 @@ import { DEFAULT_BT, blindDerivatives, simulate, stats, type BTOptions, type BTS
 import { buildLayers } from './layers';
 import { readTF, type TFRead } from './tfRead';
 import { fundingPoints } from './scan';
-import type { Candle, TF } from './types';
+import type { Candle, OIInfo, TF } from './types';
 
 // ============================================================
 // BACKTEST TRÊN THƯỚC MỚI
@@ -66,6 +66,18 @@ function asOf(candles: Candle[], closeTime: number): Candle[] {
     .map((c) => (c.closed ? c : { ...c, closed: true }));
 }
 
+/**
+ * Phái sinh tại một thời điểm. Mọi trường phải là thứ ĐÃ BIẾT tại thời điểm đó:
+ * funding phải là kỳ ĐÃ CHỐT, OI phải là mẫu có create_time ≤ thời điểm đó.
+ */
+export interface PointInTimeDeriv {
+  hasPerpTaker: boolean;
+  hasFunding: boolean;
+  spotPerpAgree: boolean;
+  fundingRate: number | null;
+  oi: OIInfo;
+}
+
 export interface NewSignal {
   read: TFRead;
   /** Chỉ số nến trong chuỗi của khung đang xét. */
@@ -82,6 +94,8 @@ export function signalAtNew(
   tfCandles: Candle[],
   i: number,
   scoreFloor?: number,
+  /** Phái sinh tại ĐÚNG thời điểm nến i đóng. null = chạy mù phái sinh. */
+  deriv?: PointInTimeDeriv | null,
 ): TFRead | null {
   const bar = tfCandles[i];
   if (!bar) return null;
@@ -101,9 +115,11 @@ export function signalAtNew(
     tf, candles: own, layers, last4hClosed: last4h,
     // Backtest chạy MÙ PHÁI SINH: từ môi trường này fapi bị chặn, nên OI,
     // funding và taker perp đều N/A. Ba vế đó không được kiểm chứng ở đây.
-    spotPerpAgree: false,
-    fundingPoints: fundingPoints(null),
-    oi: blindDerivatives().oi,
+    spotPerpAgree: deriv?.spotPerpAgree ?? false,
+    fundingPoints: fundingPoints(deriv?.fundingRate ?? null),
+    oi: deriv?.oi ?? blindDerivatives().oi,
+    hasPerpTaker: deriv?.hasPerpTaker ?? false,
+    hasFunding: deriv?.hasFunding ?? false,
     scoreFloor,
   });
 }
@@ -159,6 +175,8 @@ export function runBacktestNew(
   opt: BTOptions = DEFAULT_BT,
   minBars = 400,
   scoreFloor?: number,
+  /** Tra cứu phái sinh theo thời điểm. Không truyền = chạy mù phái sinh. */
+  derivAt?: (closeTime: number) => PointInTimeDeriv | null,
 ): NewBTResult {
   const tfCandles = aggregate(c15All, tf);
   const trades: Trade[] = [];
@@ -178,7 +196,8 @@ export function runBacktestNew(
     if (opt.onePositionAtATime && i <= busyUntil) continue;
     bars++;
 
-    const r = signalAtNew(tf, c15All, tfCandles, i, scoreFloor);
+    const closeTime = bar.t + MS[tf];
+    const r = signalAtNew(tf, c15All, tfCandles, i, scoreFloor, derivAt?.(closeTime) ?? null);
     if (!r) continue;
     scores.push(r.score);
     for (const l of r.lines) {

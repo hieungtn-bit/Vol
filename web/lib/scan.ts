@@ -201,6 +201,8 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
     reads[tf] = readTF({
       tf, candles: byTf[tf], layers, last4hClosed,
       spotPerpAgree: flow?.agree ?? false, fundingPoints: fp, oi: deriv.oi,
+      hasPerpTaker: deriv.perpTaker.quality !== 'UNAVAILABLE',
+      hasFunding: deriv.funding.quality === 'REAL' && deriv.funding.rate != null,
     });
   }
 

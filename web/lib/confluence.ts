@@ -40,6 +40,24 @@ export interface ConfluenceInput {
   slPct: number | null;
   /** Lớp đang dùng có bị trộn hai cụm không (chưa tách được). */
   mixedLayer: boolean;
+  /**
+   * Vừa TỪ CHỐI mép nào (chạm VAH/VAL rồi nến đóng trở lại trong vùng).
+   *
+   * Đặc tả mục E cho phép mở NGƯỢC CHIỀU MÉP sau nến đóng, và cú từ chối mép
+   * theo định nghĩa xảy ra khi giá VẪN CÒN TRONG VÙNG. Không truyền thông tin
+   * này vào thì luật "còn trong vùng → không mở lệnh mới" nuốt luôn cả đường
+   * vào lệnh chính của thị trường cân bằng.
+   */
+  rejection: { side: 'tren' | 'duoi' } | null;
+  /**
+   * Dữ liệu bắt buộc có đủ để CHẤM ĐIỂM không.
+   *
+   * Thiếu dữ liệu ≠ thị trường không có cơ hội. Trộn hai thứ đó lại là cách một
+   * hệ báo cáo "0 lệnh" trong khi thật ra nó chưa từng đánh giá được nến nào.
+   */
+  dataOk: boolean;
+  /** Vế nào không chấm được vì thiếu dữ liệu. */
+  missing: string[];
 }
 
 export interface ConfluenceOut {
@@ -60,8 +78,26 @@ export function scoreSide(inp: ConfluenceInput, side: 'mua' | 'ban'): Confluence
   const bull = side === 'mua';
   const bar = inp.closed[inp.closed.length - 1];
 
-  // +2 — PA ở mép (từ chối hoặc giữ). Chỉ tính khi trạng thái cho phép có mép.
-  if (state.state !== 'trong_vung' || state.distance > 0.5) {
+  /**
+   * Vị trí của SETUP, không phải vị trí của cây nến xác nhận.
+   *
+   * Đây là chỗ bảng điểm cũ tự mâu thuẫn. Một cú TỪ CHỐI MÉP theo định nghĩa là
+   * "chạm mép rồi ĐÓNG TRỞ LẠI TRONG VÙNG". Nhưng vế "+2 giá tại VAL/VAH" lại đo
+   * giá ĐÓNG, và vế "−4 giá đứng giữa điểm kiểm soát" cũng đo giá đóng. Nên đúng
+   * cái setup mà luật hành động cho phép thì vừa trượt +2 vừa ăn −4 — nó bị chấm
+   * như thể là kiểu vào lệnh giữa vùng đang bị cấm.
+   *
+   * Cả hai vế đó nói về CHỖ ĐẶT LỆNH. Vậy phải đo trên chỗ đặt lệnh: mép vừa bị
+   * chạm (fade) hoặc mép vừa bị phá (đi theo chiều rời).
+   */
+  const brokenSide = state.state !== 'trong_vung' ? state.side : inp.rejection?.side ?? null;
+  const setupAt = brokenSide === 'tren' ? state.edge.vah
+    : brokenSide === 'duoi' ? state.edge.val
+    : last;
+
+  // +2 — PA ở mép (từ chối hoặc giữ). Cú từ chối mép LÀ "PA ở mép", kể cả khi
+  // nến xác nhận đã đóng trở lại trong vùng.
+  if (inp.rejection != null || state.state !== 'trong_vung' || state.distance > 0.5) {
     const atEdge = state.state === 'chap_nhan_ngoai' || state.state === 'vung_dich'
       ? (bull ? state.side === 'tren' : state.side === 'duoi')
       : true;
@@ -70,9 +106,13 @@ export function scoreSide(inp: ConfluenceInput, side: 'mua' | 'ban'): Confluence
 
   // +2 — giá tại VAL/VAH của lớp ĐƯỢC PHÉP đặt lệnh. Lớp 10 ngày không tính.
   if (!isCoarse(layer.layer)) {
-    const edge = bull ? state.edge.val : state.edge.vah;
-    const near = Math.abs(last - edge) <= Math.max(layer.step * 2, Math.abs(edge) * 0.0025);
-    if (near) lines.push({ label: `Giá tại ${bull ? 'VAL' : 'VAH'} lớp ${layer.layer}`, points: 2 });
+    // Mép liên quan là mép của SETUP. Khi không có sự kiện mép nào thì mới xét
+    // mép theo chiều lệnh như cũ.
+    const edge = brokenSide === 'tren' ? state.edge.vah
+      : brokenSide === 'duoi' ? state.edge.val
+      : bull ? state.edge.val : state.edge.vah;
+    const near = Math.abs(setupAt - edge) <= Math.max(layer.step * 2, Math.abs(edge) * 0.0025);
+    if (near) lines.push({ label: `Setup tại ${edge === state.edge.vah ? 'VAH' : 'VAL'} lớp ${layer.layer}`, points: 2 });
   }
 
   // +1.5 — nến đóng xác nhận + volume ≥ median 20
@@ -100,9 +140,10 @@ export function scoreSide(inp: ConfluenceInput, side: 'mua' | 'ban'): Confluence
   if (fp > 0) lines.push({ label: 'Funding cùng hướng', points: 0.5 });
   else if (fp < 0) lines.push({ label: 'Funding ngược hướng', points: -0.5 });
 
-  // −4 — giá đứng GIỮA điểm kiểm soát của lớp được phép đặt lệnh
-  if (!isCoarse(layer.layer) && insidePoc(layer, last)) {
-    lines.push({ label: 'Giá đứng giữa điểm kiểm soát — chỗ cấm vào', points: -4 });
+  // −4 — CHỖ ĐẶT LỆNH nằm giữa điểm kiểm soát. Luật cứng số 2 cấm VÀO LỆNH giữa
+  // vùng; nó không nói gì về chỗ cây nến xác nhận đóng.
+  if (!isCoarse(layer.layer) && insidePoc(layer, setupAt)) {
+    lines.push({ label: 'Chỗ đặt lệnh nằm giữa điểm kiểm soát — chỗ cấm vào', points: -4 });
   }
 
   // −2 — lớp đang dùng còn trộn hai cụm
@@ -137,8 +178,12 @@ export function scoreSide(inp: ConfluenceInput, side: 'mua' | 'ban'): Confluence
 export type Bias = 'dung_ngoai' | 'mua' | 'ban';
 export type Size = 'kho_nua' | 'kho_du';
 
+export type DataStatus = 'DATA_INSUFFICIENT' | 'NO_SETUP' | 'VALID_SETUP';
+
 export interface Verdict {
   bias: Bias;
+  /** Ba trạng thái tách bạch: thiếu dữ liệu / đủ dữ liệu nhưng không đạt / đạt. */
+  dataStatus: DataStatus;
   score: number;
   margin: number;
   size: Size | null;
@@ -170,26 +215,56 @@ export function verdict(
   const margin = Math.abs(mua.score - ban.score);
   const reasons: string[] = [];
 
-  if (inp.state.state === 'trong_vung') {
-    reasons.push(`Còn trong vùng — lệnh mới không mở. ${inp.state.text}`);
+  // Thiếu dữ liệu bắt buộc thì KHÔNG được kết luận gì về thị trường.
+  if (!inp.dataOk) {
+    return {
+      bias: 'dung_ngoai', dataStatus: 'DATA_INSUFFICIENT', score: win.score, margin,
+      size: null, golden: false, lines: win.lines,
+      reasons: [`Thiếu dữ liệu bắt buộc (${inp.missing.join(', ')}) — không đánh giá được, không phải "không có cơ hội".`],
+    };
   }
+
+  // Còn trong vùng thì không mở lệnh mới — TRỪ cú từ chối mép, và chỉ theo đúng
+  // chiều ngược với mép vừa bị từ chối.
+  const fadeSide: 'mua' | 'ban' | null = inp.rejection
+    ? (inp.rejection.side === 'tren' ? 'ban' : 'mua')
+    : null;
+
+  if (inp.state.state === 'trong_vung') {
+    if (!fadeSide) {
+      reasons.push(`Còn trong vùng — lệnh mới không mở. ${inp.state.text}`);
+    } else if (win.side !== fadeSide) {
+      reasons.push(
+        `Còn trong vùng, vừa từ chối mép ${inp.rejection!.side === 'tren' ? 'trên' : 'dưới'} — `
+        + `chỉ được mở ${fadeSide === 'ban' ? 'bán' : 'mua'}, nhưng điểm đang nghiêng phía kia.`,
+      );
+    }
+  }
+
   if (win.score < floor) {
     reasons.push(`Điểm ${win.score.toFixed(1)} dưới sàn ${floor} — chưa đủ để vào tiền.`);
   }
   if (perm.blocked) reasons.push(perm.blocked);
 
   if (reasons.length > 0) {
-    return { bias: 'dung_ngoai', score: win.score, margin, size: null, golden: false, lines: win.lines, reasons };
+    return {
+      bias: 'dung_ngoai', dataStatus: 'NO_SETUP', score: win.score, margin,
+      size: null, golden: false, lines: win.lines, reasons,
+    };
   }
 
   const size: Size = win.score >= Math.max(HALF_SIZE_MAX, floor + 1.5) && perm.fullSize ? 'kho_du' : 'kho_nua';
   if (size === 'kho_nua' && !perm.halfSize) {
     return {
-      bias: 'dung_ngoai', score: win.score, margin, size: null, golden: false, lines: win.lines,
+      bias: 'dung_ngoai', dataStatus: 'NO_SETUP', score: win.score, margin, size: null,
+      golden: false, lines: win.lines,
       reasons: ['Chưa có nến 15 phút đóng đủ điều kiện cho khổ nửa.'],
     };
   }
 
   const golden = margin >= GOLD_MARGIN && win.lines.every((l) => l.points >= 0);
-  return { bias: win.side, score: win.score, margin, size, golden, lines: win.lines, reasons: [] };
+  return {
+    bias: win.side, dataStatus: 'VALID_SETUP', score: win.score, margin, size,
+    golden, lines: win.lines, reasons: [],
+  };
 }

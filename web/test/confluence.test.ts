@@ -20,7 +20,7 @@ function inp(over: Partial<ConfluenceInput> = {}): ConfluenceInput {
     tf: '1h', layer, state: readState(layer, c1h, '1h'), closed: c1h,
     last: c1h[c1h.length - 1].c, volMedian20: 44e6, tfDelta: null,
     spotPerpAgree: false, fundingPoints: 0, divergence: null, oi: oiNA,
-    slPct: 1.5, mixedLayer: false, ...over,
+    slPct: 1.5, mixedLayer: false, rejection: null, dataOk: true, missing: [], ...over,
   };
 }
 

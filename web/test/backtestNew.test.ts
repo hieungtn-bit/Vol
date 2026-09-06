@@ -106,3 +106,49 @@ describe('chạy trọn một backtest thước mới', () => {
     expect(r.trades).toHaveLength(0);
   });
 });
+
+describe('metaOfCall — hồi quy cho cả warnings[] lẫn warningCount', () => {
+  it('số cảnh báo phải lấy từ warnings.length, không được im lặng về 0', async () => {
+    const { metaOfCall } = await import('@/lib/backtest');
+    const call = {
+      symbol: 'X', tf: '1h', side: 'LONG', conviction: 'B', golden: false,
+      goldenBlockers: [], unanimous: true, contestedBy: [], tradeable: true, gateBlockers: [],
+      net: 20, longScore: 60, shortScore: 40, entry: [99, 100], sl: 98, tp1: 102, tp2: 106,
+      rr1: 1, rr2: 3, rrBlended: 1.4, runner: null, size: 'Normal', trigger: '', invalidation: '',
+      evidence: [{ label: 'A', side: 'long', points: 2, detail: '' }],
+      structureNote: '', flowNote: '', fundingText: '', buyPctPerp: null, buyPctSpot: null,
+      warnings: ['một', 'hai', 'ba'], planText: '',
+    } as any;
+    const m = metaOfCall(call);
+    expect(m.warningCount).toBe(3);
+    expect(m.warningCount).toBe(call.warnings.length);
+    expect(m.evidence).toHaveLength(1);
+    expect(m.unanimous).toBe(true);
+    expect(m.tradeable).toBe(true);
+  });
+
+  it('không cảnh báo nào thì là 0, và đó là 0 THẬT chứ không phải trường bị mất', async () => {
+    const { metaOfCall } = await import('@/lib/backtest');
+    const m = metaOfCall({ warnings: [], evidence: [], symbol: 'X', tf: '1h', conviction: 'C',
+      golden: false, net: 0, rrBlended: null, unanimous: false, tradeable: false } as any);
+    expect(m.warningCount).toBe(0);
+    expect(m.unanimous).toBe(false);
+  });
+});
+
+describe('live và backtest dùng chung một hàm quyết định', () => {
+  it('scan.ts và backtestNew.ts đều đi qua readTF, không có bản sao logic', () => {
+    const fs = require('node:fs') as typeof import('node:fs');
+    for (const f of ['lib/scan.ts', 'lib/backtestNew.ts']) {
+      expect(fs.readFileSync(f, 'utf8')).toContain('readTF(');
+    }
+  });
+
+  it('cùng đầu vào thì cùng đầu ra — quyết định phải tất định', () => {
+    const c = series(1400, 11);
+    const h = aggregate(c, '1h');
+    const a = signalAtNew('1h', c, h, 250);
+    const b = signalAtNew('1h', c, h, 250);
+    expect(JSON.stringify(b)).toBe(JSON.stringify(a));
+  });
+});

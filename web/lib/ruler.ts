@@ -152,25 +152,33 @@ export function pocBand(
   topN = 3,
 ): [number, number] {
   const closed = candles.filter((c) => c.closed);
-  if (closed.length === 0) return [vp.poc, vp.poc + vp.binSize];
-
-  const top = [...closed].sort((a, b) => b.v - a.v).slice(0, Math.max(2, topN));
-  // Giao của các dải giá: nếu chúng không giao nhau thì lấy hợp của những cây
-  // nặng nhất — vẫn là một dải thật, không phải một con số bịa.
-  let lo = Math.max(...top.map((c) => c.l));
-  let hi = Math.min(...top.map((c) => c.h));
-  if (!(hi > lo)) {
-    lo = Math.min(...top.map((c) => c.l));
-    hi = Math.max(...top.map((c) => c.h));
-  }
-
-  // Điểm kiểm soát PHẢI nằm trong vùng giá trị và không được rộng hơn nó.
-  // Không kẹp thì một cây event biên độ lớn kéo dải ra ngoài cả VA, và khi đó
-  // "giá đứng giữa điểm kiểm soát" bắn nhầm ở khắp nơi — đo được trên ENA:
-  // dải 0.157–0.170 trong khi VA chỉ 0.163–0.1655.
   const vaLo = vp.va70.low;
   const vaHi = vp.va70.high;
   const maxW = Math.max((vaHi - vaLo) * 0.5, vp.binSize * 2);
+
+  // Cách của đặc tả: giao dải giá của 2–3 cây khối lượng lớn nhất đã đóng.
+  //
+  // NHƯNG chỉ nhận những cây THẬT SỰ CHỨA điểm kiểm soát của profile. Trong một
+  // cửa sổ có cây event, ba cây nặng nhất chính là các cây spike từ chối hoặc
+  // bứt phá — tức ngược hẳn với chỗ khối lượng tích tụ. Lấy nguyên chúng thì dải
+  // điểm kiểm soát bị kéo lên trùm cả VAH, và mọi setup fade ở mép lập tức bị
+  // chấm là "đặt lệnh giữa vùng" rồi trừ 4 điểm.
+  const holding = [...closed]
+    .filter((c) => c.l <= vp.poc && c.h >= vp.poc)
+    .sort((a, b) => b.v - a.v)
+    .slice(0, Math.max(2, topN));
+
+  let lo: number;
+  let hi: number;
+  if (holding.length >= 2) {
+    lo = Math.max(...holding.map((c) => c.l));
+    hi = Math.min(...holding.map((c) => c.h));
+    if (!(hi > lo)) { lo = Math.min(...holding.map((c) => c.l)); hi = Math.max(...holding.map((c) => c.h)); }
+  } else {
+    // Không có cây nào ôm điểm kiểm soát: nới ra từ chính bin POC theo phân bố
+    // khối lượng cho tới khi gom đủ POC_SHARE tổng volume.
+    [lo, hi] = expandFromPoc(vp);
+  }
 
   lo = Math.max(lo, vaLo);
   hi = Math.min(hi, vaHi);
@@ -183,6 +191,26 @@ export function pocBand(
   }
   if (hi - lo < vp.binSize) hi = Math.min(vaHi, lo + vp.binSize);
   return [lo, hi];
+}
+
+/** Phần khối lượng mà dải điểm kiểm soát phải gom được. */
+export const POC_SHARE = 0.25;
+
+/** Nới hai phía từ bin POC cho tới khi gom đủ POC_SHARE tổng volume. */
+function expandFromPoc(vp: VolumeProfile): [number, number] {
+  const bins = vp.bins;
+  let i = bins.findIndex((b) => vp.poc >= b.low && vp.poc <= b.high);
+  if (i < 0) i = bins.reduce((best, b, k) => (b.vol > bins[best].vol ? k : best), 0);
+  let lo = i;
+  let hi = i;
+  let acc = bins[i]?.vol ?? 0;
+  const target = vp.totalVol * POC_SHARE;
+  while (acc < target && (lo > 0 || hi < bins.length - 1)) {
+    const down = lo > 0 ? bins[lo - 1].vol : -1;
+    const up = hi < bins.length - 1 ? bins[hi + 1].vol : -1;
+    if (up >= down) { hi++; acc += bins[hi].vol; } else { lo--; acc += bins[lo].vol; }
+  }
+  return [bins[lo].low, bins[hi].high];
 }
 
 /** Làm tròn một mức giá về đúng thước của lớp — không in số lẻ hơn bước. */
