@@ -22,6 +22,14 @@ import { TFS } from './types';
 //   15m ≈ 2 ngày · 1h ≈ 7 ngày · 4h ≈ 3 tuần · 1D ≈ 3 tháng
 const LIMIT: Record<TF, number> = { '15m': 192, '1h': 168, '4h': 126, '1d': 90 };
 
+/**
+ * Composite profile cần tới 3 ngày, mà LIMIT['15m'] = 192 nến chỉ đúng 2.00 ngày.
+ * Trước đây cửa sổ "3D" vì thế lặng lẽ chỉ là 2 ngày, và mọi câu "giá dưới POC 3D"
+ * là so với một profile 2 ngày. Tải dư ra ở đây, còn profile 15m của engine VẪN
+ * cắt về đúng 192 nến để không đổi thuật toán.
+ */
+const COMPOSITE_15M_BARS = 320;   // 3 ngày = 288 nến, dư 32 nến phòng nến thiếu
+
 /** TF lớn hơn liền kề — dùng làm context, KHÔNG dùng để ghi đè bias TF nhỏ. */
 const PARENT: Record<TF, TF | null> = { '15m': '1h', '1h': '4h', '4h': '1d', '1d': null };
 
@@ -43,8 +51,15 @@ function sliceFrom(candles: Candle[], fromTs: number): Candle[] {
  */
 export function buildComposite(k15: Candle[], last: number, atr15: number): CompositeProfiles {
   const now = Date.now();
-  const mk = (from: number): VolumeProfile | null =>
-    computeVolumeProfile(sliceFrom(k15, from), { mode: 'close', atr: atr15 });
+  const closed = k15.filter((c) => c.closed);
+  const oldest = closed.length ? closed[0].t : now;
+
+  // Một cửa sổ chỉ được dựng khi dữ liệu THẬT SỰ phủ hết nó. Dựng "3 ngày" từ 2
+  // ngày nến rồi đặt tên là 3D là nói sai với người đọc về cái họ đang nhìn.
+  const mk = (from: number): VolumeProfile | null => {
+    if (oldest > from) return null;
+    return computeVolumeProfile(sliceFrom(closed, from), { mode: 'close', atr: atr15 });
+  };
 
   const session = mk(ictSessionStart(now));
   const h24 = mk(now - 24 * 3_600_000);
@@ -61,6 +76,9 @@ export function buildComposite(k15: Candle[], last: number, atr15: number): Comp
     } else {
       dualRead = 'Giá trên cả POC 3D và POC session → phe mua đang giữ value, chỉ tìm long ở mép.';
     }
+  } else if (session && !d3) {
+    const days = ((now - oldest) / 86_400_000).toFixed(1);
+    dualRead = `Chưa đủ 3 ngày nến 15m (mới ${days} ngày) — không có POC 3D để đối chiếu.`;
   }
   return { session, h24, d3, dualRead };
 }
@@ -80,15 +98,18 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const errors: string[] = [];
 
   const [k15, k1h, k4h, k1d, ticker] = await Promise.all([
-    fetchKlines(symbol, '15m', LIMIT['15m']).catch((e) => { errors.push(`klines 15m: ${e.message}`); return [] as Candle[]; }),
+    fetchKlines(symbol, '15m', COMPOSITE_15M_BARS).catch((e) => { errors.push(`klines 15m: ${e.message}`); return [] as Candle[]; }),
     fetchKlines(symbol, '1h', LIMIT['1h']).catch((e) => { errors.push(`klines 1h: ${e.message}`); return [] as Candle[]; }),
     fetchKlines(symbol, '4h', LIMIT['4h']).catch((e) => { errors.push(`klines 4h: ${e.message}`); return [] as Candle[]; }),
     fetchKlines(symbol, '1d', LIMIT['1d']).catch((e) => { errors.push(`klines 1d: ${e.message}`); return [] as Candle[]; }),
     fetchTicker(symbol).catch(() => null),
   ]);
 
-  const byTf: Record<TF, Candle[]> = { '15m': k15, '1h': k1h, '4h': k4h, '1d': k1d };
-  const closed15 = k15.filter((c) => c.closed);
+  // k15 tải dư cho composite; engine chỉ được thấy đúng cửa sổ 192 nến của nó,
+  // nếu không thì backtest (BT_WINDOW) đang kiểm chứng một hệ khác hệ đang chạy.
+  const k15Engine = k15.slice(-LIMIT['15m']);
+  const byTf: Record<TF, Candle[]> = { '15m': k15Engine, '1h': k1h, '4h': k4h, '1d': k1d };
+  const closed15 = k15Engine.filter((c) => c.closed);
   const last = closed15.length ? closed15[closed15.length - 1].c : (ticker?.lastPrice ?? 0);
 
   // Δ giá 1h để đọc OI (OI ↑/↓ đi cùng giá ↑/↓ mới có nghĩa)
@@ -116,7 +137,7 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const atr15 = atr(closed15);
   const composite = buildComposite(k15, last, atr15);
   const vp15Full = computeVolumeProfile(closed15, { mode: 'close', atr: atr15 });
-  const spotDelta = buildDelta(k15, vp15Full, 'binance-spot');
+  const spotDelta = buildDelta(k15Engine, vp15Full, 'binance-spot');
 
   // Tính từ TF LỚN xuống nhỏ để mỗi TF có context cha, nhưng bias vẫn tính độc lập.
   const tfs = {} as Record<TF, Recommendation>;
@@ -157,14 +178,14 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
       continue;
     }
 
-    if (!flow) flow = buildFlow(perpTaker, k15, positioning, deriv.funding);
+    if (!flow) flow = buildFlow(perpTaker, k15Engine, positioning, deriv.funding);
     const both = decideBoth(prepared, flow);
     tfs[tf] = both.strict;
     structure[tf] = prepared.structure;
     direction[tf] = both.directional;
   }
 
-  const pa15 = analyzePriceAction(k15);
+  const pa15 = analyzePriceAction(k15Engine);
 
   return {
     symbol,
