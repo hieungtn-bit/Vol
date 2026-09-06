@@ -1,6 +1,7 @@
 import { prepareTF } from './analyze';
 import { decideDirection, type Conviction, type DirectionalCall, type Weights } from './direct';
 import { buildFlow } from './flow';
+import type { MinuteFeed } from './minute';
 import type { Candle, Derivatives, TF } from './types';
 
 // ============================================================
@@ -131,6 +132,11 @@ export interface Trade {
   unanimous: boolean;
   /** Tín hiệu có qua cửa chất lượng không. */
   tradeable: boolean;
+  /**
+   * Thứ tự chạm trong nến được GỠ bằng nến 1m, hay chỉ là giả định thận trọng.
+   * false nghĩa là kết quả lệnh này vẫn còn phụ thuộc vào một giả định.
+   */
+  intrabarResolved: boolean;
 
 }
 
@@ -224,18 +230,50 @@ export function findFill(
   return { kind: 'never' };
 }
 
+export interface SimContext {
+  /**
+   * Nến 1 phút để GỠ THỨ TỰ TRONG NẾN. Không có thì mọi thứ quay về giả định
+   * thận trọng — và phải quay về đúng như thế, chứ không được coi "không có dữ
+   * liệu" là "không có gì xảy ra".
+   */
+  minutes?: MinuteFeed;
+  /** Độ dài một nến, ms. Cần để biết nến kết thúc ở đâu khi tra nến 1m. */
+  tfMs?: number;
+}
+
+/**
+ * Các bước đi bên trong một nến.
+ *
+ * Có nến 1m thì trả về từng phút; không có thì trả về chính cây nến đó, tức là
+ * một bước duy nhất — và khi đó cửa sổ mù rộng đúng bằng một nến.
+ */
+function stepsOf(candles: Candle[], j: number, ctx?: SimContext): { steps: Candle[]; resolved: boolean } {
+  if (ctx?.minutes && ctx.tfMs) {
+    const m = ctx.minutes(candles[j].t, candles[j].t + ctx.tfMs);
+    if (m && m.length) return { steps: m, resolved: true };
+  }
+  return { steps: [candles[j]], resolved: false };
+}
+
 /**
  * Mô phỏng một lệnh từ tín hiệu ở nến `from`.
  *
  * Entry là lệnh chờ ở MÉP GẦN NHẤT của vùng: long chờ giá xuống nên khớp ở mép
  * trên, short chờ giá lên nên khớp ở mép dưới. Đó cũng là mép xấu hơn cho người
  * vào lệnh, đúng tinh thần nghi ngờ thì chọn phía xấu.
+ *
+ * NGHI NGỜ THÌ CHỌN PHÍA XẤU, ÁP Ở BƯỚC NHỎ NHẤT CÓ DỮ LIỆU. Trong một bước ta
+ * không biết giá đi theo thứ tự nào, nên: stop tính ngay từ bước khớp lệnh, còn
+ * chốt lời chỉ tính từ bước SAU đó. Đưa nến 1m vào thì quy tắc không đổi, chỉ là
+ * cửa sổ mù thu từ một nến xuống một phút — đó là chỗ khác nhau giữa một giả
+ * định và một số đo.
  */
 export function simulate(
   candles: Candle[],
   from: number,
   call: DirectionalCall,
   opt: BTOptions,
+  ctx?: SimContext,
 ): Trade | null {
   const long = call.side === 'LONG';
   const entry = long ? call.entry[1] : call.entry[0];
@@ -247,75 +285,91 @@ export function simulate(
   // một hệ nhìn có edge trên giấy vẫn có thể lỗ khi chạy thật.
   const feeR = (opt.feeRate * 2 * entry) / risk;
   const slipR = (opt.slipRate * entry) / risk;
+  const lastBar = candles.length - 1;
 
-  // 1. Chờ khớp.
+  // ---- 1. Chờ khớp ----
   //
-  // Lệnh chờ chỉ khớp khi giá THẬT SỰ in ra mức đó trong nến — tức entry nằm
-  // trong [low, high]. Nếu nến nhảy hẳn qua mức chờ (long: cả nến nằm dưới
-  // entry) thì mức đó không hề được giao dịch; ghi một lệnh khớp ở đúng giá
-  // entry là bịa ra một mức giá thị trường chưa bao giờ đưa ra.
+  // Lệnh chờ chỉ khớp khi giá THẬT SỰ in ra mức đó — tức entry nằm trong
+  // [low, high] của bước đang xét. Nếu giá nhảy hẳn qua mức chờ thì mức đó không
+  // hề được giao dịch; ghi một lệnh khớp ở đúng giá entry là bịa ra một mức giá
+  // thị trường chưa bao giờ đưa ra.
   //
-  // Nến nhảy qua thì bỏ kèo, không phải một lệnh. Lý do: giá vào thật lúc đó là
-  // giá mở nến, khác hẳn kế hoạch, nên khoảng cách entry→SL — tức đơn vị R của
-  // cả lệnh — không còn là cái đã chấm điểm. Đo một hình học khác rồi gọi nó là
-  // kết quả của hệ thì tệ hơn là không đo.
-  const fill = findFill(candles, from, entry, long, opt.entryWindow);
-  if (fill.kind !== 'filled') return null;
-  const entryIdx = fill.idx;
+  // Nhảy qua thì bỏ kèo, không phải một lệnh: giá vào thật lúc đó là giá mở
+  // bước, khác hẳn kế hoạch, nên khoảng cách entry→SL — đơn vị R của cả lệnh —
+  // không còn là cái đã chấm điểm.
+  let entryIdx = -1;
+  let entryStep = -1;
+  let anyResolved = false;
 
-  // 2. Đi tiếp
+  fill: for (let j = from + 1; j <= Math.min(from + opt.entryWindow, lastBar); j++) {
+    const { steps, resolved } = stepsOf(candles, j, ctx);
+    anyResolved = anyResolved || resolved;
+    for (let k = 0; k < steps.length; k++) {
+      const b = steps[k];
+      if (entry >= b.l && entry <= b.h) { entryIdx = j; entryStep = k; break fill; }
+      if (long ? b.h < entry : b.l > entry) return null;   // nhảy qua
+    }
+  }
+  if (entryIdx < 0) return null;
+
+  // ---- 2. Đi tiếp ----
   let hitTP1 = false;
   let hitTP2 = false;
-  let exitIdx = Math.min(entryIdx + opt.maxHold, candles.length - 1);
+  let exitIdx = Math.min(entryIdx + opt.maxHold, lastBar);
   let exitReason: ExitReason = 'timeout';
   let r = 0;
+  let resolvedExit = false;
 
   const R = (price: number) => (long ? price - entry : entry - price) / risk;
 
-  let tp1Idx = -1;
+  // Mốc "đã chạm TP1" tính bằng số thứ tự bước toàn cục, để quy tắc dời stop về
+  // hoà vốn cũng chỉ có hiệu lực từ bước SAU bước chạm — cùng một lý do.
+  let tp1Step = -1;
+  let stepNo = 0;
 
-  for (let j = entryIdx; j <= Math.min(entryIdx + opt.maxHold, candles.length - 1); j++) {
-    const b = candles[j];
-    // NGAY TRÊN NẾN VÀO LỆNH: chỉ tính stop, không tính chốt lời.
-    //
-    // Trong một nến ta không biết giá đi theo thứ tự nào. Nến vào lệnh còn tệ
-    // hơn: ta thậm chí không biết lệnh khớp ở phút thứ mấy, nên phần nến nào
-    // xảy ra SAU khi khớp cũng không biết. Đếm TP trên chính nến đó là giả định
-    // giá chạm entry rồi mới chạm TP — đúng phân nửa số lần, và cái phân nửa
-    // sai kia luôn là lãi ảo. Giữ stop có hiệu lực ngay từ nến vào lệnh là phía
-    // xấu, đúng nguyên tắc 3.
-    const afterEntryBar = j > entryIdx;
-    const slHit = long ? b.l <= call.sl : b.h >= call.sl;
-    const tp1Hit = afterEntryBar && (long ? b.h >= call.tp1 : b.l <= call.tp1);
-    const tp2Hit = afterEntryBar && (long ? b.h >= call.tp2 : b.l <= call.tp2);
+  for (let j = entryIdx; j <= Math.min(entryIdx + opt.maxHold, lastBar); j++) {
+    const { steps, resolved } = stepsOf(candles, j, ctx);
+    for (let k = 0; k < steps.length; k++, stepNo++) {
+      // Bỏ qua phần nến TRƯỚC lúc khớp lệnh — lúc đó chưa có lệnh nào để thắng
+      // hay thua. Không có nến 1m thì entryStep = 0 nên không bỏ gì cả.
+      if (j === entryIdx && k < entryStep) { stepNo--; continue; }
+      const isFillStep = j === entryIdx && k === entryStep;
+      if (!isFillStep) resolvedExit = resolvedExit || resolved;
 
-    // Stop đã dời về hoà vốn? Chỉ tính từ nến SAU nến chạm TP1.
-    const beArmed = opt.breakevenAfterTP1 && hitTP1 && tp1Idx >= 0 && j > tp1Idx;
-    const beHit = beArmed && (long ? b.l <= entry : b.h >= entry);
+      const b = steps[k];
+      const slHit = long ? b.l <= call.sl : b.h >= call.sl;
+      // Trên chính bước khớp lệnh: không biết lệnh vào ở giây thứ mấy, nên phần
+      // nào của bước xảy ra sau khi vào cũng không biết. Chốt lời không tính.
+      const tp1Hit = !isFillStep && (long ? b.h >= call.tp1 : b.l <= call.tp1);
+      const tp2Hit = !isFillStep && (long ? b.h >= call.tp2 : b.l <= call.tp2);
 
-    // Stop đã dời về hoà vốn thì stop gốc không còn hiệu lực: muốn xuống tới nó
-    // giá phải đi qua giá vào lệnh trước, nên hai trường hợp đều là thoát hoà vốn.
-    if (beArmed && (beHit || slHit)) {
-      exitIdx = j;
-      r = 0.5 * R(call.tp1) + 0.5 * 0;
-      exitReason = 'tp1-then-be';
-      return mk(slipR);
-    }
-    // Trong cùng một nến, dữ liệu nến không nói được thứ tự — luôn tính SL trước.
-    if (slHit) {
-      exitIdx = j;
-      if (hitTP1) { r = 0.5 * R(call.tp1) + 0.5 * -1; exitReason = 'tp1-then-sl'; }
-      else { r = -1; exitReason = 'sl'; }
-      return mk(slipR);
-    }
-    if (!hitTP1 && tp1Hit) { hitTP1 = true; tp1Idx = j; }
-    if (hitTP1 && !hitTP2 && tp2Hit) {
-      hitTP2 = true;
-      exitIdx = j;
-      // 50% ở TP1, 30% ở TP2, 20% runner cũng đóng luôn tại TP2 cho khỏi đoán.
-      r = 0.5 * R(call.tp1) + 0.5 * R(call.tp2);
-      exitReason = 'tp2';
-      return mk(0);
+      const beArmed = opt.breakevenAfterTP1 && hitTP1 && tp1Step >= 0 && stepNo > tp1Step;
+      const beHit = beArmed && (long ? b.l <= entry : b.h >= entry);
+
+      // Stop đã dời về hoà vốn thì stop gốc không còn hiệu lực: muốn xuống tới nó
+      // giá phải đi qua giá vào lệnh trước, nên hai trường hợp đều là thoát hoà vốn.
+      if (beArmed && (beHit || slHit)) {
+        exitIdx = j;
+        r = 0.5 * R(call.tp1) + 0.5 * 0;
+        exitReason = 'tp1-then-be';
+        return mk(slipR);
+      }
+      // Trong cùng một bước, dữ liệu không nói được thứ tự — luôn tính SL trước.
+      if (slHit) {
+        exitIdx = j;
+        if (hitTP1) { r = 0.5 * R(call.tp1) + 0.5 * -1; exitReason = 'tp1-then-sl'; }
+        else { r = -1; exitReason = 'sl'; }
+        return mk(slipR);
+      }
+      if (!hitTP1 && tp1Hit) { hitTP1 = true; tp1Step = stepNo; }
+      if (hitTP1 && !hitTP2 && tp2Hit) {
+        hitTP2 = true;
+        exitIdx = j;
+        // 50% ở TP1, 30% ở TP2, 20% runner cũng đóng luôn tại TP2 cho khỏi đoán.
+        r = 0.5 * R(call.tp1) + 0.5 * R(call.tp2);
+        exitReason = 'tp2';
+        return mk(0);
+      }
     }
   }
 
@@ -344,6 +398,7 @@ export function simulate(
       entryDistPct: (Math.abs(entry - candles[from].c) / candles[from].c) * 100,
       unanimous: call.unanimous,
       tradeable: call.tradeable,
+      intrabarResolved: anyResolved && resolvedExit,
     };
   }
 }
@@ -353,6 +408,7 @@ export function runBacktest(
   tf: TF,
   candles: Candle[],
   opt: BTOptions = DEFAULT_BT,
+  ctx?: SimContext,
 ): Trade[] {
   const window = BT_WINDOW[tf];
   const trades: Trade[] = [];
@@ -375,7 +431,7 @@ export function runBacktest(
       if (px > 0 && (Math.abs(eRef - px) / px) * 100 > opt.maxEntryDistPct) continue;
     }
 
-    const t = simulate(candles, i, call, opt);
+    const t = simulate(candles, i, call, opt, ctx);
     if (!t) continue;
     trades.push(t);
     busyUntil = t.exitIdx;
