@@ -54,15 +54,6 @@ export interface VPOptions {
   atr?: number;
   /** Bỏ nến chưa đóng khỏi profile. */
   includeOpenCandle?: boolean;
-  /**
-   * Sàn số bin trên TOÀN DẢI. Mặc định 24.
-   *
-   * Thước theo lớp (`lib/ruler.ts`) ràng buộc số bin trong VÙNG 70%, và hai
-   * ràng buộc này đá nhau khi vùng 70% chiếm gần hết dải: sàn 24 bin toàn dải
-   * ép bước mịn lại, làm vùng 70% không bao giờ xuống được dưới 25 bin. Lúc đó
-   * phía gọi phải hạ sàn này xuống.
-   */
-  minBins?: number;
 }
 
 export function computeVolumeProfile(
@@ -95,8 +86,7 @@ export function computeVolumeProfile(
     binSize = widened;
   }
   // Siết lại nếu quá ít bin (cửa sổ ngắn, giá đứng im).
-  const minBins = opts.minBins ?? MIN_BINS;
-  while ((hi - lo) / binSize < minBins && binSize > 1e-9) {
+  while ((hi - lo) / binSize < MIN_BINS && binSize > 1e-9) {
     binSize = binSize / 2;
   }
 

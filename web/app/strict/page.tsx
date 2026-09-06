@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SymbolDrawer from '@/components/SymbolDrawer';
 import { BiasBadge } from '@/components/ui';
-import { fmtPct, fmtTick, fmtUsd, ictString } from '@/lib/format';
+import { fmtPct, fmtPrice, fmtUsd, ictString } from '@/lib/format';
 import { ALWAYS_INCLUDE, DEFAULT_MIN_QUOTE_VOL } from '@/config/universe';
 import { apiPath } from '@/config/site';
 import type { ScanSnapshot, SymbolScan, TF } from '@/lib/types';
@@ -103,11 +103,8 @@ export default function Page() {
           <p className="text-2xs text-muted">
             Price Action + Volume Profile + OI + Funding. Mỗi khung 15m / 1h / 4h / 1D quyết định độc lập.
           </p>
-          <a
-            href="../"
-            className="tap-sm mt-1 inline-flex items-center rounded-full border border-line bg-panel2 px-3 text-2xs font-semibold text-sky-300 active:brightness-125 hover:brightness-125"
-          >
-            ← Bản điện (Long/Short liên tục)
+          <a href="../" className="text-2xs text-sky-300 underline hover:brightness-125">
+            ← Về bản điện (Long/Short liên tục, không WAIT)
           </a>
         </div>
         <div className="mono text-xs text-muted">{clock ?? '—'}</div>
@@ -173,19 +170,8 @@ export default function Page() {
         </div>
       )}
 
-      {/* ---------- Mobile: danh sách thẻ ---------- */}
-      <div className="space-y-3 board:hidden">
-        {rows.length === 0 ? (
-          <p className="rounded-xl border border-line bg-panel px-4 py-8 text-center text-2xs leading-relaxed text-muted">
-            Bấm <b>Quét ngay</b> để chạy. Mặc định watchlist gồm {ALWAYS_INCLUDE.join(', ')}.
-          </p>
-        ) : (
-          rows.map((s) => <StrictCard key={s.symbol} s={s} onOpen={() => setOpen(s.symbol)} />)
-        )}
-      </div>
-
-      {/* ---------- Desktop: bảng dense ---------- */}
-      <div className="scroll-x hidden rounded-xl border border-line bg-panel board:block">
+      {/* Bảng chính */}
+      <div className="scroll-x rounded-lg border border-line bg-panel">
         <table className="tbl w-full text-xs">
           <thead>
             <tr>
@@ -223,72 +209,17 @@ export default function Page() {
   );
 }
 
-/**
- * Thẻ của một mã trên điện thoại.
- *
- * Bảng ở đây có TỚI 10 cột, tức còn tệ hơn bản điện. Cuộn ngang để tìm badge của
- * bốn khung là cách dùng không ai chịu nổi trên màn hình 390px.
- */
-function StrictCard({ s, onOpen }: { s: SymbolScan; onOpen: () => void }) {
-  const anyWarn = TFS.some((tf) => s.tfs[tf].warnings.length > 0);
-  const counter = TFS.some((tf) => s.tfs[tf].counterTrend);
-
-  return (
-    <article className="overflow-hidden rounded-xl border border-line bg-panel">
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`${s.symbol}, giá ${fmtTick(s.price)}. Bấm để mở chi tiết đầy đủ.`}
-        className="tap flex w-full items-baseline justify-between gap-3 px-3 py-2.5 text-left active:brightness-125"
-      >
-        <span className="min-w-0">
-          <span className="mono block truncate text-sm font-semibold text-sky-300">{s.symbol}</span>
-          <span className="block text-2xs text-muted">
-            vol 24h {fmtUsd(s.quoteVolume24h)} · range{' '}
-            <span className={s.rangePos > 80 ? 'text-red-300' : s.rangePos < 20 ? 'text-emerald-300' : ''}>
-              {s.rangePos.toFixed(0)}%
-            </span>
-          </span>
-        </span>
-        <span className="shrink-0 text-right">
-          <span className="mono block text-sm font-semibold">{fmtTick(s.price)}</span>
-          <span className={`mono block text-2xs ${s.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {fmtPct(s.change24h)}
-          </span>
-        </span>
-      </button>
-
-      <div className="grid grid-cols-4 gap-1.5 px-3">
-        {TFS.map((tf) => (
-          <BiasBadge key={tf} r={s.tfs[tf]} onClick={onOpen} stacked />
-        ))}
-      </div>
-
-      {(anyWarn || counter || s.composite.dualRead) && (
-        <div className="mt-2.5 space-y-1 border-t border-line-soft bg-panel/50 px-3 py-2 text-2xs leading-snug">
-          {(anyWarn || counter) && (
-            <p className="flex flex-wrap gap-x-2">
-              {anyWarn && <span className="text-red-400">⚠ có cảnh báo</span>}
-              {counter && <span className="text-amber-400">counter-trend</span>}
-            </p>
-          )}
-          {s.composite.dualRead && <p className="text-muted">{s.composite.dualRead}</p>}
-        </div>
-      )}
-    </article>
-  );
-}
-
 function Row({ s, onOpen }: { s: SymbolScan; onOpen: () => void }) {
+  const bs = s.tfs['15m'].vp.binSize;
   const anyWarn = TFS.some((tf) => s.tfs[tf].warnings.length > 0);
   const counter = TFS.some((tf) => s.tfs[tf].counterTrend);
 
   return (
     <tr>
       <td>
-        <button type="button" onClick={onOpen} className="tap-sm mono font-semibold text-sky-300 hover:underline">{s.symbol}</button>
+        <button onClick={onOpen} className="mono font-semibold text-sky-300 hover:underline">{s.symbol}</button>
       </td>
-      <td className="mono text-right">{fmtTick(s.price)}</td>
+      <td className="mono text-right">{fmtPrice(s.price, bs)}</td>
       <td className={`mono text-right ${s.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtPct(s.change24h)}</td>
       <td className="mono text-right text-muted">{fmtUsd(s.quoteVolume24h)}</td>
       <td className="mono text-right">
@@ -297,7 +228,7 @@ function Row({ s, onOpen }: { s: SymbolScan; onOpen: () => void }) {
         </span>
       </td>
       {TFS.map((tf) => (
-        <td key={tf} className="w-20"><BiasBadge r={s.tfs[tf]} onClick={onOpen} /></td>
+        <td key={tf} className="w-16"><BiasBadge r={s.tfs[tf]} onClick={onOpen} /></td>
       ))}
       <td className="text-2xs text-muted">
         {anyWarn && <span className="mr-2 text-red-400">⚠ cảnh báo</span>}

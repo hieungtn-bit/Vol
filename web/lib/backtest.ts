@@ -188,42 +188,11 @@ export function signalAt(
  * trên, short chờ giá lên nên khớp ở mép dưới. Đó cũng là mép xấu hơn cho người
  * vào lệnh, đúng tinh thần nghi ngờ thì chọn phía xấu.
  */
-/**
- * Phần TỐI THIỂU mà mô phỏng cần biết về một kèo.
- *
- * Engine cũ (`decideDirection`) và engine thước mới (`readTF`) sinh ra hai kiểu
- * dữ liệu khác hẳn nhau. Nếu mỗi bên có một hàm mô phỏng riêng thì hai bộ số
- * không so được với nhau — khác biệt có thể đến từ luật vào lệnh chứ không phải
- * từ thuật toán. Nên cả hai cùng đi qua đúng hàm này.
- */
-export interface PlanLike {
-  side: 'LONG' | 'SHORT';
-  entry: [number, number];
-  sl: number;
-  tp1: number;
-  tp2: number;
-}
-
-/** Phần mô tả kèo, chỉ để ghi vào bản ghi lệnh — không ảnh hưởng mô phỏng. */
-export interface TradeMeta {
-  symbol: string;
-  tf: TF;
-  conviction: Conviction;
-  golden: boolean;
-  net: number;
-  evidence: { label: string; points: number }[];
-  warningCount: number;
-  rrBlended: number | null;
-  unanimous: boolean;
-  tradeable: boolean;
-}
-
 export function simulate(
   candles: Candle[],
   from: number,
-  call: PlanLike,
+  call: DirectionalCall,
   opt: BTOptions,
-  meta: TradeMeta,
 ): Trade | null {
   const long = call.side === 'LONG';
   const entry = long ? call.entry[1] : call.entry[0];
@@ -299,33 +268,22 @@ export function simulate(
 
   function mk(extraSlip: number): Trade {
     const costR = feeR + extraSlip;
-    const m = meta;
     return {
-      symbol: m.symbol, tf: m.tf, side: call.side,
-      conviction: m.conviction, golden: m.golden, net: m.net,
+      symbol: call.symbol, tf: call.tf, side: call.side,
+      conviction: call.conviction, golden: call.golden, net: call.net,
       signalIdx: from, signalTime: candles[from].t,
       entryIdx, entry, sl: call.sl, tp1: call.tp1, tp2: call.tp2,
       exitIdx, exitReason, hitTP1, hitTP2,
       r: r - costR, rGross: r, costR,
-      evidence: m.evidence.map((e) => ({ label: e.label, points: e.points })),
-      warningCount: m.warningCount,
-      rrBlended: m.rrBlended,
+      evidence: call.evidence.map((e) => ({ label: e.label, points: e.points })),
+      warningCount: call.warnings.length,
+      rrBlended: call.rrBlended,
       slPct: (risk / entry) * 100,
       entryDistPct: (Math.abs(entry - candles[from].c) / candles[from].c) * 100,
-      unanimous: m.unanimous,
-      tradeable: m.tradeable,
+      unanimous: call.unanimous,
+      tradeable: call.tradeable,
     };
   }
-}
-
-/** Metadata của một kèo từ engine cũ. Tường minh để không im lặng mất trường nào. */
-export function metaOfCall(call: DirectionalCall): TradeMeta {
-  return {
-    symbol: call.symbol, tf: call.tf, conviction: call.conviction, golden: call.golden,
-    net: call.net, evidence: call.evidence.map((e) => ({ label: e.label, points: e.points })),
-    warningCount: call.warnings.length, rrBlended: call.rrBlended,
-    unanimous: call.unanimous, tradeable: call.tradeable,
-  };
 }
 
 export function runBacktest(
@@ -354,7 +312,7 @@ export function runBacktest(
       if (px > 0 && (Math.abs(eRef - px) / px) * 100 > opt.maxEntryDistPct) continue;
     }
 
-    const t = simulate(candles, i, call, opt, metaOfCall(call));
+    const t = simulate(candles, i, call, opt);
     if (!t) continue;
     trades.push(t);
     busyUntil = t.exitIdx;

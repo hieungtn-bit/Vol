@@ -10,9 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "backtest": "tsx scripts/backtest.ts",
-    "backtest:new": "tsx scripts/backtestNew.ts",
-    "backtest:archive": "tsx scripts/backtestArchive.ts"
+    "backtest": "tsx scripts/backtest.ts"
   },
   "dependencies": {
     "next": "14.2.15",

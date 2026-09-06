@@ -16,38 +16,22 @@ export const STAGE_VI: Record<Stage, string> = {
   'mid-range': 'không có mép',
 };
 
-export function BiasBadge({
-  r, onClick, stacked,
-}: {
-  r: Recommendation; onClick?: () => void;
-  /** Dạng thẻ trên điện thoại: cao đủ ngón tay và có nhãn khung ở trên. */
-  stacked?: boolean;
-}) {
+export function BiasBadge({ r, onClick }: { r: Recommendation; onClick?: () => void }) {
   const lean =
     r.bias === 'WAIT' && r.confluence.score >= 4
       ? r.stage === 'edge-fail' || r.stage === 'breakdown' ? '↓' : r.stage === 'mid-range' ? '' : '↑'
       : '';
-  const label = `${r.tf}: ${r.bias}${r.counterTrend && r.bias !== 'WAIT' ? ' counter-trend' : ''}, `
-    + `${STAGE_VI[r.stage]}, điểm ${r.confluence.score.toFixed(1)} trên 10`;
-
   return (
     <button
-      type="button"
       onClick={onClick}
-      aria-label={onClick ? `${label}. Bấm để mở chi tiết.` : label}
-      className={[
-        'flex w-full flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1.5 leading-none',
-        stacked ? 'tap min-h-tap' : 'tap-sm min-h-[38px]',
-        BIAS_CLASS[r.bias],
-        onClick ? 'cursor-pointer active:brightness-125 hover:brightness-125' : '',
-      ].join(' ')}
+      className={`w-full rounded border px-1.5 py-1 text-2xs leading-tight ${BIAS_CLASS[r.bias]} ${onClick ? 'cursor-pointer hover:brightness-125' : ''}`}
+      title={`${STAGE_VI[r.stage]} · score ${r.confluence.score.toFixed(1)}/10`}
     >
-      {stacked && <span className="mono text-[10px] uppercase tracking-wide opacity-70">{r.tf}</span>}
-      <span className="whitespace-nowrap text-[11px] font-bold">
+      <div className="font-semibold">
         {r.bias === 'WAIT' ? `WAIT${lean}` : r.bias}
         {r.counterTrend && r.bias !== 'WAIT' ? '*' : ''}
-      </span>
-      <span className="mono whitespace-nowrap text-[10px] opacity-75">{r.confluence.score.toFixed(1)}</span>
+      </div>
+      <div className="mono opacity-70">{r.confluence.score.toFixed(1)}</div>
     </button>
   );
 }
@@ -72,21 +56,14 @@ export function Warn({ children }: { children: React.ReactNode }) {
 
 export function Field({ label, value, mono = true }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-line/60 py-1.5">
-      <span className="shrink-0 text-2xs text-muted">{label}</span>
-      <span className={`min-w-0 text-right text-xs ${mono ? 'mono' : ''}`}>{value}</span>
+    <div className="flex items-baseline justify-between gap-2 border-b border-line/60 py-1">
+      <span className="text-2xs text-muted">{label}</span>
+      <span className={`text-xs ${mono ? 'mono' : ''}`}>{value}</span>
     </div>
   );
 }
 
-/**
- * VP mini: thanh ngang VA + POC + vị trí giá hiện tại. Không phải chart, chỉ để định vị.
- *
- * Bản trước đặt tên của TỪNG vạch trong thuộc tính `title` — POC, HVN, LVN, giá
- * hiện tại. Trên điện thoại không rê chuột được, nên cả hình chỉ còn là mấy vạch
- * màu vô nghĩa. Giờ có chú giải bằng chữ ngay dưới, và cả khối có nhãn cho trình
- * đọc màn hình.
- */
+/** VP mini: thanh ngang VA + POC + vị trí giá hiện tại. Không phải chart, chỉ để định vị. */
 export function VPMini({ r }: { r: Recommendation }) {
   const { vaLow, vaHigh, poc, last } = r.vp;
   const lo = Math.min(vaLow, last, ...r.vp.lvn, ...r.vp.hvn);
@@ -95,12 +72,7 @@ export function VPMini({ r }: { r: Recommendation }) {
   const pos = (x: number) => `${Math.max(0, Math.min(100, ((x - lo) / span) * 100))}%`;
 
   return (
-    <div className="mt-1">
-    <div
-      className="relative h-8 w-full rounded bg-panel2"
-      role="img"
-      aria-label={`Value area ${vaLow} đến ${vaHigh}, POC ${poc}, giá hiện tại ${last}`}
-    >
+    <div className="relative mt-1 h-8 w-full rounded bg-panel2">
       <div
         className="absolute inset-y-1 rounded bg-sky-500/15 border border-sky-500/30"
         style={{ left: pos(vaLow), width: `calc(${pos(vaHigh)} - ${pos(vaLow)})` }}
@@ -114,14 +86,6 @@ export function VPMini({ r }: { r: Recommendation }) {
       ))}
       <div className="absolute inset-y-0 w-0.5 bg-fuchsia-400" style={{ left: pos(poc) }} title={`POC ${poc}`} />
       <div className="absolute inset-y-0 w-0.5 bg-white" style={{ left: pos(last) }} title={`Giá ${last}`} />
-    </div>
-      <ul className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[10px] text-muted">
-        <li className="flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm bg-sky-500/40 ring-1 ring-sky-500/50" aria-hidden />VA</li>
-        <li className="flex items-center gap-1"><i className="inline-block h-2.5 w-0.5 bg-fuchsia-400" aria-hidden />POC</li>
-        <li className="flex items-center gap-1"><i className="inline-block h-2.5 w-0.5 bg-white" aria-hidden />giá</li>
-        <li className="flex items-center gap-1"><i className="inline-block h-2.5 w-0.5 bg-amber-400/60" aria-hidden />HVN</li>
-        <li className="flex items-center gap-1"><i className="inline-block h-2.5 w-0.5 bg-slate-500/60" aria-hidden />LVN</li>
-      </ul>
     </div>
   );
 }

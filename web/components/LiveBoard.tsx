@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import { fmtPct, fmtTick, fmtUsd } from '@/lib/format';
 import type { DirectionalCall } from '@/lib/direct';
-import type { TFRead } from '@/lib/tfRead';
-import { TFDetail, TFTile } from './TFRead';
 import { positioningSplit } from '@/lib/flow';
 import type { FlowInfo } from '@/lib/flow';
 import type { TF } from '@/lib/types';
@@ -17,8 +15,6 @@ export interface LiveRow {
   change24h: number;
   quoteVolume24h: number;
   direction: Record<TF, DirectionalCall | null>;
-  /** Hợp đồng mới. Khi có, bản điện dùng nó và bỏ hẳn nhánh cũ. */
-  reads?: Record<TF, TFRead | null>;
   flow: FlowInfo | null;
 }
 
@@ -324,25 +320,20 @@ export function SymbolCard({ r }: { r: LiveRow }) {
       </header>
 
       <div className="grid grid-cols-4 gap-1.5 px-3 pt-3">
-        {TFS.map((tf) => {
-          const nr = r.reads?.[tf];
-          return nr ? (
-            <TFTile key={tf} r={nr} open={open === tf} onToggle={() => setOpen(open === tf ? null : tf)} />
-          ) : (
-            <TFCell
-              key={tf} tf={tf} c={r.direction[tf]} stacked
-              open={open === tf}
-              onToggle={() => setOpen(open === tf ? null : tf)}
-            />
-          );
-        })}
+        {TFS.map((tf) => (
+          <TFCell
+            key={tf} tf={tf} c={r.direction[tf]} stacked
+            open={open === tf}
+            onToggle={() => setOpen(open === tf ? null : tf)}
+          />
+        ))}
       </div>
 
-      {open && (r.reads?.[open] ? (
-        <div className="px-3 pt-2"><TFDetail r={r.reads[open]!} /></div>
-      ) : r.direction[open] ? (
-        <div className="px-3 pt-2"><Detail c={r.direction[open]!} /></div>
-      ) : null)}
+      {open && r.direction[open] && (
+        <div className="px-3 pt-2">
+          <Detail c={r.direction[open]!} />
+        </div>
+      )}
 
       <div className="mt-3 border-t border-line-soft bg-panel/50 px-3 py-2.5">
         <FlowBlock flow={r.flow} />
@@ -377,29 +368,20 @@ export function BoardRow({ r }: { r: LiveRow }) {
             <FlowBlock flow={r.flow} />
           </div>
         </td>
-        {TFS.map((tf) => {
-          const nr = r.reads?.[tf];
-          return (
-            <td key={tf} className="w-[86px]">
-              {nr ? (
-                <TFTile r={nr} open={open === tf} onToggle={() => setOpen(open === tf ? null : tf)} />
-              ) : (
-                <TFCell
-                  tf={tf} c={r.direction[tf]}
-                  open={open === tf}
-                  onToggle={() => setOpen(open === tf ? null : tf)}
-                />
-              )}
-            </td>
-          );
-        })}
+        {TFS.map((tf) => (
+          <td key={tf} className="w-[86px]">
+            <TFCell
+              tf={tf} c={r.direction[tf]}
+              open={open === tf}
+              onToggle={() => setOpen(open === tf ? null : tf)}
+            />
+          </td>
+        ))}
       </tr>
-      {open && (r.reads?.[open] || r.direction[open]) && (
+      {open && r.direction[open] && (
         <tr>
           <td colSpan={7} className="pb-3">
-            {r.reads?.[open]
-              ? <TFDetail r={r.reads[open]!} />
-              : <Detail c={r.direction[open]!} />}
+            <Detail c={r.direction[open]!} />
           </td>
         </tr>
       )}

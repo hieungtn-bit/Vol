@@ -67,7 +67,7 @@ export default function LivePage() {
       if (!j.ok) throw new Error(j.error ?? 'scan lỗi');
       setRows(j.symbols.map((s: any) => ({
         symbol: s.symbol, price: s.price, change24h: s.change24h,
-        quoteVolume24h: s.quoteVolume24h, direction: s.direction, reads: s.reads, flow: s.flow,
+        quoteVolume24h: s.quoteVolume24h, direction: s.direction, flow: s.flow,
       })));
       setDegraded(j.degraded ?? []);
       setUpdated(j.ictTime ?? null);
@@ -100,13 +100,6 @@ export default function LivePage() {
   const tally = useMemo(() => {
     let long = 0, short = 0, gold = 0, ok = 0;
     for (const r of rows) for (const tf of TFS) {
-      const nr = r.reads?.[tf];
-      if (nr) {
-        if (nr.bias === 'mua') long++;
-        else if (nr.bias === 'ban') short++;
-        if (nr.gate.pass) ok++;
-        continue;
-      }
       const c = r.direction?.[tf];
       if (!c) continue;
       if (c.side === 'LONG') long++; else short++;
@@ -118,9 +111,7 @@ export default function LivePage() {
 
   const shown = useMemo(() => {
     let out = rows;
-    if (tradeableOnly) {
-      out = out.filter((r) => TFS.some((tf) => r.reads?.[tf]?.gate.pass ?? r.direction?.[tf]?.tradeable));
-    }
+    if (tradeableOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.tradeable));
     if (goldOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.golden));
     return out;
   }, [rows, goldOnly, tradeableOnly]);
@@ -310,15 +301,12 @@ export default function LivePage() {
           </div>
         </details>
 
-        <div className="mt-3 flex flex-col items-center gap-2">
-          <a
-            href="strict/"
-            className="tap-sm inline-flex items-center rounded-full border border-line bg-panel2 px-4 text-2xs font-semibold text-sky-300 active:brightness-125 hover:brightness-125"
-          >
-            Bảng kỷ luật (có WAIT) →
+        <p className="mt-3 text-center text-[10px] text-muted">
+          {updated ? `Cập nhật ${updated}` : '—'} ·{' '}
+          <a className="underline underline-offset-2 hover:text-sky-300" href="strict/">
+            bảng kỷ luật (có WAIT)
           </a>
-          <p className="text-[10px] text-muted">{updated ? `Cập nhật ${updated}` : '—'}</p>
-        </div>
+        </p>
       </main>
     </div>
   );
