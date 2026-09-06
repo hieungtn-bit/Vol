@@ -1,4 +1,5 @@
 import { buildLongLevels, buildShortLevels, rr, type DecideInput, type Levels } from './decide';
+import { expectancy, type Expectancy } from './expectancy';
 import { fmtPrice } from './format';
 import { OI_READ_VI } from './derivatives';
 import { positioningSplit, type FlowInfo } from './flow';
@@ -88,8 +89,29 @@ export const FUNDING_HIST = {
 };
 
 export const GATE = {
-  /** Trên mức này thì TP2 xa quá, backtest đo ra avgR âm. */
-  maxRRBlended: 1.5,
+  /**
+   * Kỳ vọng SAU PHÍ tối thiểu, tính bằng R. Xem lib/expectancy.ts.
+   *
+   * Thay cho ngưỡng maxRRBlended = 1.5 cũ. Ngưỡng cũ hỏng theo hai cách: nó đo
+   * trên thang 0.5×RR1 + 0.3×RR2 mà bộ mô phỏng lại trả 0.5/0.5, và nó chặn TP2
+   * xa bằng một con số chặn cứng thay vì bằng xác suất chạm. Ngưỡng mới nói đúng
+   * điều cần nói: kèo này, với tỉ lệ chạm ĐO ĐƯỢC ở đúng khoảng cách đó, có ăn
+   * nổi phí không.
+   *
+   * Giá trị lấy từ scripts/expsweep.ts — xem bench/expectancy-sweep.txt.
+   */
+  minExpectancy: 0,
+  // Vì sao đúng 0 chứ không phải mức "đẹp nhất" trên đường cong: sweep (6 mã ×
+  // 15m/1h/4h, 5460 lệnh, bench/expectancy-sweep.txt) cho thấy ngưỡng 0 kéo PF
+  // 0.84 → 0.97 toàn mẫu và 0.78 → 0.91 ngoài mẫu, còn MỌI ngưỡng cao hơn đều
+  // TỆ ĐI: ≥0.15 cho PF 0.75, ≥0.2 cho 0.73. Ô ≥0.3 nhìn đẹp ở nửa đầu (PF 1.82,
+  // n=25) và sập ở nửa sau (0.73) — đúng hình dạng của uốn tham số.
+  //
+  // 0 cũng là mức DUY NHẤT có lý do cơ học chứ không phải lý do thống kê: dưới 0
+  // là kèo mà chính bảng xác suất của mình nói là lỗ.
+  //
+  /** Trên mức này thì TP2 xa quá so với stop — cảnh báo, không phải cửa. */
+  maxRewardRatio: 2.5,
   /**
    * Phí không được ăn quá bấy nhiêu phần của 1R.
    *
@@ -113,11 +135,6 @@ export const GATE = {
    * n=599 là uốn tham số — nên lấy mức có lý do cơ học thay vì mức đẹp nhất.
    */
   maxFeeShare: 0.1,
-  /**
-   * Dưới mức này thì mục tiêu sát stop quá. KHÔNG phải "lỗ kỳ vọng" — backtest đo
-   * nhóm 0.5–1 là nhóm tốt nhất, chỉ nhóm dưới 0.5 mới yếu (avgR 0.02 vs 0.09).
-   */
-  minRRBlended: 0.5,
 };
 
 export interface Evidence {
@@ -159,8 +176,15 @@ export interface DirectionalCall {
   tp2: number;
   rr1: number | null;
   rr2: number | null;
-  /** R kỳ vọng nếu cả hai mốc chốt đều chạm: 0.5×RR1 + 0.3×RR2. */
-  rrBlended: number | null;
+  /**
+   * TỶ LỆ LỜI/LỖ CỦA KẾ HOẠCH — không phải kỳ vọng. Là số R ăn được NẾU cả hai
+   * mốc chốt đều chạm: 0.5×RR1 + 0.5×RR2, đúng bằng payout mà simulate() trả.
+   * (Trước đây trọng số là 0.5/0.3 — cộng lại 0.8, tức phần runner 20% bị bỏ
+   * rơi lặng lẽ, nên màn hình và bộ mô phỏng đang nói hai thang khác nhau.)
+   */
+  rewardRatio: number | null;
+  /** Kỳ vọng THẬT, có xác suất chạm đo từ backtest. Xem lib/expectancy.ts. */
+  expectancy: Expectancy | null;
   runner: string | null;
   size: SizeHint;
   trigger: string;
@@ -376,25 +400,30 @@ export function decideDirection(
   const entryRef = side === 'LONG' ? lv.entry[1] : lv.entry[0];
   const rr1 = rr(entryRef, lv.sl, lv.tp1);
   const rr2 = rr(entryRef, lv.sl, lv.tp2);
-  // Kế hoạch là 50% ở TP1, 30% ở TP2, 20% runner. R kỳ vọng bỏ qua runner cho thận trọng.
-  const rrBlended = rr1 != null && rr2 != null ? 0.5 * rr1 + 0.3 * rr2 : null;
+  const slPct = (Math.abs(entryRef - lv.sl) / last) * 100;
+  const feeR = feeInR(entryRef, Math.abs(entryRef - lv.sl));
+  // Tỷ lệ lời/lỗ của kế hoạch, trọng số 0.5/0.5 để khớp đúng payout của
+  // simulate(). Đây KHÔNG phải kỳ vọng — nó giả định cả hai mốc đều chạm.
+  const rewardRatio = rr1 != null && rr2 != null ? 0.5 * rr1 + 0.5 * rr2 : null;
+  // Kỳ vọng thật: nhân với xác suất chạm đo được, rồi trừ phí.
+  const exp = expectancy(rr1, rr2, feeR);
 
   const warnings: string[] = [];
   if (conviction === 'C') {
     warnings.push('Hạng C — bằng chứng hai phía gần cân nhau. Đây là thiên hướng, không phải kèo để vào tiền lớn.');
   }
-  // R kỳ vọng < 1 KHÔNG phải "lỗ kỳ vọng". Con số này giả định CẢ HAI mốc chốt đều
-  // chạm, nên nó là tỷ lệ lời/lỗ của kế hoạch, không phải kỳ vọng có xác suất.
-  // Backtest còn nói ngược hẳn: nhóm 0.5–1 là nhóm TỐT NHẤT (avgR 0.09, PF 1.23),
-  // hơn cả nhóm 1–1.5 (0.07). Chỉ nhóm dưới 0.5 mới thật sự yếu (0.02).
-  if (rrBlended != null && rrBlended < GATE.minRRBlended) {
+  if (exp != null && exp.net < 0) {
     warnings.push(
-      `R kỳ vọng ${rrBlended.toFixed(2)} — mục tiêu quá sát so với stop. ` +
-      `Backtest: nhóm dưới ${GATE.minRRBlended} chỉ đạt avgR 0.02, kém hẳn nhóm 0.5–1 (0.09).`,
+      `Kỳ vọng ÂM ${exp.net.toFixed(2)}R sau phí — xác suất chạm không bù nổi khoảng cách. ` +
+      `Chạm TP1 ${(exp.pTP1 * 100).toFixed(0)}%, rồi TP2 ${(exp.pTP2 * 100).toFixed(0)}%.`,
     );
   }
-  const slPct = (Math.abs(entryRef - lv.sl) / last) * 100;
-  const feeR = feeInR(entryRef, Math.abs(entryRef - lv.sl));
+  if (exp != null && exp.weak) {
+    warnings.push(
+      'TP2 xa tới vùng mà backtest chưa đủ mẫu để đo tỉ lệ chạm — xác suất dùng ở đây ' +
+      'là ước lượng thấp, không phải số đo.',
+    );
+  }
   if (feeR != null && feeR > GATE.maxFeeShare) {
     warnings.push(
       `Stop chỉ ${slPct.toFixed(2)}% giá — phí vào-ra ăn mất ${(feeR * 100).toFixed(0)}% của 1R. ` +
@@ -413,9 +442,9 @@ export function decideDirection(
   }
   if (!lv.tp1InVA) warnings.push('TP1 nằm ngoài VA — đã kéo về mép value gần nhất.');
   if (lv.crossings >= 3) warnings.push(`Đoạn TP1→TP2 xuyên ${lv.crossings} HVN — phần cuối chạy như runner.`);
-  if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
+  if (rewardRatio != null && rewardRatio > GATE.maxRewardRatio) {
     warnings.push(
-      `R kỳ vọng ${rrBlended.toFixed(2)} — TP2 xa tới mức backtest đo ra vùng LỖ (avgR âm). ` +
+      `Tỷ lệ lời/lỗ kế hoạch ${rewardRatio.toFixed(2)} — TP2 xa tới mức backtest đo ra vùng LỖ. ` +
       'Chốt sạch ở TP1 hoặc bỏ kèo.',
     );
   }
@@ -455,20 +484,41 @@ export function decideDirection(
   if (golden) conviction = 'GOLD';
 
   // ---- CỬA CHẤT LƯỢNG ----
-  // Ba điều kiện dưới đây không phải ý kiến, chúng là thứ backtest đo được. Trên
-  // 5521 lệnh (BTC/ETH/SOL/BNB/XRP/ENA · 15m+1h+4h), lọc bằng đúng ba điều kiện
-  // này giữ lại 22% số lệnh nhưng nâng avgR 0.05 → 0.18, PF 1.13 → 1.61, và hạ
-  // sụt giảm tối đa từ 105.9R xuống 8.7R. Nửa mẫu ngoài: 0.01 → 0.11.
-  // Nó đúng trên CẢ BA khung (15m từ âm 0.05 thành dương 0.07), cả sáu mã, và
-  // cả hai chiều — nên đây không phải uốn tham số theo một mã hay một khung.
+  //
+  // ĐỌC KỸ TRƯỚC KHI TIN VÀO CỬA NÀY.
+  //
+  // Chỗ này từng ghi: "lọc bằng ba điều kiện giữ 22% số lệnh nhưng nâng avgR
+  // 0.05 → 0.18, PF 1.13 → 1.61". Những con số đó đo bằng một bộ mô phỏng có hai
+  // lỗi (khớp ở giá nến chưa in ra, và tính chốt lời ngay trên nến vào lệnh). Sau
+  // khi sửa, đo lại ĐÚNG cùng dữ liệu — 5280 lệnh, 6 mã × 15m/1h/4h, 3000 nến:
+  //
+  //   không cửa nào          avgR −0.08   PF 0.84   (ngoài mẫu PF 0.78)
+  //   cửa cũ                 avgR −0.06   PF 0.89   (ngoài mẫu PF 0.84)
+  //   cửa đầy đủ 4 điều kiện avgR −0.02   PF 0.96   (ngoài mẫu PF 0.95)
+  //   + siết stop ≥ 1.5%     avgR −0.02   PF 0.96   (ngoài mẫu PF 1.00)
+  //
+  // Nghĩa là: cửa VẪN lọc đúng chiều — mỗi điều kiện thêm vào đều kéo PF lên, và
+  // kéo lên trên cả nửa mẫu ngoài. Nhưng nó kéo từ LỖ về HOÀ, không kéo lên lãi.
+  // Trên mẫu rộng này hệ chưa có lợi thế đo được. Chi tiết: bench/full-sau-sua.txt.
+  //
+  // Vì vậy cửa ở đây giữ nguyên vai trò "lọc bớt kèo tệ", KHÔNG được đọc thành
+  // "kèo qua cửa là kèo có lãi kỳ vọng".
   const unanimous = against.length === 0;
   const contestedBy = against.map((e) => e.label);
 
   const gateBlockers: string[] = [];
   if (!unanimous) gateBlockers.push(`${against.length} vế ngược hướng: ${contestedBy.join(', ')}`);
   if (conviction === 'C') gateBlockers.push(`độ lệch ${mag.toFixed(0)} — dưới hạng B (cần ≥ 15)`);
-  if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
-    gateBlockers.push(`R kỳ vọng ${rrBlended.toFixed(2)} > ${GATE.maxRRBlended} — TP2 quá xa`);
+  if (exp != null && exp.net < GATE.minExpectancy) {
+    gateBlockers.push(
+      `kỳ vọng ${exp.net >= 0 ? '+' : ''}${exp.net.toFixed(2)}R sau phí — dưới ${GATE.minExpectancy}R`,
+    );
+  }
+  if (!inp.hasClosedBar) {
+    // Engine "luôn ra hướng" trước đây KHÔNG hề kiểm tra điều này, trong khi
+    // decideBias() chặn ở ba chỗ. Hướng vẫn hiện, nhưng nó không phải kèo để
+    // đặt tiền: mọi mức entry/SL/TP đang dựng trên một nến chưa chốt.
+    gateBlockers.push(`chưa có nến ${TRIG[tf]} đóng của chu kỳ vừa xong — dữ liệu cũ`);
   }
   if (feeR != null && feeR > GATE.maxFeeShare) {
     gateBlockers.push(
@@ -496,7 +546,7 @@ export function decideDirection(
     unanimous, contestedBy, tradeable, gateBlockers,
     longScore, shortScore,
     entry: lv.entry, sl: lv.sl, tp1: lv.tp1, tp2: lv.tp2,
-    rr1, rr2, rrBlended, runner: lv.runner, size, trigger, invalidation,
+    rr1, rr2, rewardRatio, expectancy: exp, runner: lv.runner, size, trigger, invalidation,
     evidence: ev,
     structureNote: structure.note,
     flowNote: flow.note,
@@ -522,7 +572,8 @@ export function buildDirectPlan(c: DirectionalCall): string {
   L.push(`SL: ${c.sl}`);
   L.push(`TP1: ${c.tp1} gỡ 50%${c.rr1 != null ? ` · RR ${c.rr1.toFixed(2)}` : ''}`);
   L.push(`TP2: ${c.tp2} gỡ 30%${c.rr2 != null ? ` · RR ${c.rr2.toFixed(2)}` : ''}`);
-  if (c.rrBlended != null) L.push(`R kỳ vọng (50%@TP1 + 30%@TP2): ${c.rrBlended.toFixed(2)}`);
+  if (c.rewardRatio != null) L.push(`Tỷ lệ lời/lỗ nếu chạm cả hai mốc: ${c.rewardRatio.toFixed(2)}`);
+  if (c.expectancy != null) L.push(`Kỳ vọng sau phí: ${c.expectancy.text}`);
   L.push(`Runner: ${c.runner ?? 'không mở'}`);
   L.push(`Hủy: ${c.invalidation}`);
   L.push(`Size: ${c.size} · rủi ro 0.5–1% tài khoản`);

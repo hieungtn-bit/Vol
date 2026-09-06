@@ -1,0 +1,169 @@
+Backtest · BTCUSDT, ETHUSDT, ENAUSDT, SOLUSDT, BNBUSDT, XRPUSDT · 15m, 1h, 4h · 3000 nến · hạng ≥ C
+Mù phái sinh: OI / funding / taker perp = N/A (fapi không truy cập được từ đây)
+
+  BTCUSDT 15m            n=175   win=55.4%   avgR=-0.24   tổngR=-42.0    PF=0.48   DD=44.1    TP1=70% TP2=60%
+                         (2999 nến, 2026-08-06 → 2026-09-06)
+  ETHUSDT 15m            n=190   win=59.5%   avgR=-0.10   tổngR=-18.6    PF=0.77   DD=21.8    TP1=69% TP2=56%
+                         (2999 nến, 2026-08-06 → 2026-09-06)
+  ENAUSDT 15m            n=256   win=49.6%   avgR=-0.07   tổngR=-18.1    PF=0.86   DD=23.9    TP1=57% TP2=47%
+                         (2999 nến, 2026-08-06 → 2026-09-06)
+  SOLUSDT 15m            n=222   win=52.7%   avgR=-0.18   tổngR=-39.7    PF=0.62   DD=40.8    TP1=64% TP2=52%
+                         (2999 nến, 2026-08-06 → 2026-09-06)
+  BNBUSDT 15m            n=195   win=51.8%   avgR=-0.36   tổngR=-69.7    PF=0.32   DD=69.7    TP1=63% TP2=52%
+                         (2999 nến, 2026-08-06 → 2026-09-06)
+  XRPUSDT 15m            n=214   win=59.8%   avgR=-0.03   tổngR=-6.0     PF=0.93   DD=10.6    TP1=67% TP2=59%
+                         (2999 nến, 2026-08-06 → 2026-09-06)
+  BTCUSDT 1h             n=248   win=56.0%   avgR=-0.04   tổngR=-10.2    PF=0.90   DD=19.5    TP1=69% TP2=55%
+                         (2999 nến, 2026-05-04 → 2026-09-06)
+  ETHUSDT 1h             n=273   win=47.6%   avgR=-0.15   tổngR=-41.6    PF=0.70   DD=42.0    TP1=60% TP2=46%
+                         (2999 nến, 2026-05-04 → 2026-09-06)
+  ENAUSDT 1h             n=388   win=48.7%   avgR=0.01    tổngR=2.0      PF=1.01   DD=21.0    TP1=54% TP2=45%
+                         (2999 nến, 2026-05-04 → 2026-09-06)
+  SOLUSDT 1h             n=311   win=48.9%   avgR=-0.13   tổngR=-39.7    PF=0.75   DD=40.2    TP1=58% TP2=49%
+                         (2999 nến, 2026-05-04 → 2026-09-06)
+  BNBUSDT 1h             n=295   win=58.0%   avgR=-0.08   tổngR=-24.3    PF=0.81   DD=26.0    TP1=66% TP2=57%
+                         (2999 nến, 2026-05-04 → 2026-09-06)
+  XRPUSDT 1h             n=314   win=50.6%   avgR=-0.12   tổngR=-38.3    PF=0.76   DD=38.7    TP1=58% TP2=48%
+                         (2999 nến, 2026-05-04 → 2026-09-06)
+  BTCUSDT 4h             n=388   win=44.6%   avgR=-0.16   tổngR=-62.2    PF=0.72   DD=66.9    TP1=50% TP2=44%
+                         (2999 nến, 2025-04-24 → 2026-09-06)
+  ETHUSDT 4h             n=387   win=42.6%   avgR=-0.04   tổngR=-15.8    PF=0.93   DD=21.3    TP1=50% TP2=41%
+                         (2999 nến, 2025-04-24 → 2026-09-06)
+  ENAUSDT 4h             n=405   win=41.5%   avgR=0.00    tổngR=0.1      PF=1.00   DD=20.1    TP1=46% TP2=37%
+                         (2999 nến, 2025-04-24 → 2026-09-06)
+  SOLUSDT 4h             n=390   win=43.1%   avgR=0.01    tổngR=4.9      PF=1.02   DD=25.5    TP1=52% TP2=41%
+                         (2999 nến, 2025-04-24 → 2026-09-06)
+  BNBUSDT 4h             n=406   win=44.1%   avgR=-0.15   tổngR=-59.4    PF=0.74   DD=66.2    TP1=50% TP2=42%
+                         (2999 nến, 2025-04-24 → 2026-09-06)
+  XRPUSDT 4h             n=403   win=41.9%   avgR=-0.09   tổngR=-34.6    PF=0.85   DD=44.7    TP1=48% TP2=41%
+                         (2999 nến, 2025-04-24 → 2026-09-06)
+
+── TỔNG ──
+  tất cả                 n=5460  win=48.4%   avgR=-0.09   tổngR=-513.2   PF=0.82   DD=525.5   TP1=56% TP2=47%
+                         trước phí 171.5R · phí 684.7R (0.125R mỗi lệnh) · sau phí -513.2R
+
+── tách theo thời gian (nửa sau là ngoài mẫu) ──
+  nửa đầu                n=2730  win=44.6%   avgR=-0.07   tổngR=-186.2   PF=0.88   DD=194.8   TP1=51% TP2=43%
+  nửa sau                n=2730  win=52.3%   avgR=-0.12   tổngR=-327.0   PF=0.75   DD=327.3   TP1=62% TP2=51%
+
+── theo hạng tin cậy ──
+  GOLD                   n=514   win=57.2%   avgR=0.05    tổngR=26.0     PF=1.12   DD=21.1    TP1=66% TP2=57%
+  A                      n=650   win=52.9%   avgR=-0.05   tổngR=-32.9    PF=0.89   DD=33.0    TP1=62% TP2=52%
+  B                      n=1554  win=51.7%   avgR=-0.04   tổngR=-68.4    PF=0.91   DD=80.3    TP1=60% TP2=51%
+  C                      n=2742  win=43.9%   avgR=-0.16   tổngR=-438.0   PF=0.72   DD=442.9   TP1=52% TP2=42%
+
+── theo hướng ──
+  LONG                   n=2839  win=48.7%   avgR=-0.11   tổngR=-311.4   PF=0.79   DD=317.6   TP1=56% TP2=47%
+  SHORT                  n=2621  win=48.2%   avgR=-0.08   tổngR=-201.9   PF=0.85   DD=212.8   TP1=57% TP2=47%
+
+── theo khung ──
+  15m                    n=1252  win=54.6%   avgR=-0.16   tổngR=-194.1   PF=0.67   DD=200.0   TP1=65% TP2=54%
+  1h                     n=1829  win=51.4%   avgR=-0.08   tổngR=-152.2   PF=0.83   DD=156.2   TP1=60% TP2=50%
+  4h                     n=2379  win=43.0%   avgR=-0.07   tổngR=-166.9   PF=0.88   DD=178.9   TP1=49% TP2=41%
+
+── kiểu thoát lệnh ──
+  tp2                    n=2556  (46.8%) avgR=0.89
+  sl                     n=2350  (43.0%) avgR=-1.14
+  tp1-then-sl            n=502   (9.2%) avgR=-0.22
+  tp1-then-timeout       n=26    (0.5%) avgR=0.47
+  timeout                n=26    (0.5%) avgR=-0.18
+
+── HIỆU CHUẨN NGƯỠNG BẰNG DỮ LIỆU ──
+  [|net|]
+    0–10                   n=1963   avgR=-0.18   PF=0.69
+    10–20                  n=1422   avgR=-0.09   PF=0.83
+    20–30                  n=911    avgR=-0.03   PF=0.93
+    30–40                  n=553    avgR=-0.04   PF=0.90
+    40–200                 n=611    avgR=0.03    PF=1.07
+  [số cảnh báo]
+    0                      n=81     avgR=0.13    PF=1.31
+    1                      n=625    avgR=0.03    PF=1.07
+    ≥2                     n=4754   avgR=-0.11   PF=0.78
+  [nhất trí]
+    không vế nào ngược     n=1413   avgR=0.02    PF=1.05
+    có vế ngược            n=4047   avgR=-0.13   PF=0.75
+  [R kỳ vọng]
+    -99–0.5                n=5456   avgR=-0.09   PF=0.82
+    0.5–1                  n=4      avgR=-0.84   PF=0.00
+  [SL cách entry (% giá)]
+    0–1%                   n=2570   avgR=-0.17   PF=0.69
+    1–2%                   n=2252   avgR=-0.05   PF=0.91
+    2–3%                   n=479    avgR=0.06    PF=1.13
+    3–5%                   n=127    avgR=0.04    PF=1.09
+    5–999%                 n=32     avgR=-0.17   PF=0.64
+  [entry cách giá (%)]
+    0–0.5%                 n=3224   avgR=-0.10   PF=0.79
+    0.5–1%                 n=1150   avgR=-0.09   PF=0.84
+    1–2%                   n=766    avgR=-0.06   PF=0.89
+    2–4%                   n=264    avgR=-0.18   PF=0.73
+    4–999%                 n=56     avgR=0.01    PF=1.02
+  [ứng viên vàng]
+    net≥30                 n=1164   avgR=-0.01   PF=0.99
+    net≥30 + nhất trí      n=857    avgR=0.04    PF=1.11
+    net≥40 + nhất trí      n=527    avgR=0.04    PF=1.10
+    net≥30 + nhất trí + Rkv<1.5 n=195    avgR=0.23    PF=1.60
+    CŨ: +Rkv≥1 +0 c.báo    n=2      avgR=-0.16   PF=0.70
+
+── LUẬT CHỌN LỆNH (đo trên cùng bộ lệnh) ──
+  tất cả (gốc)                     n=5460  (100% ) avgR=-0.09   tổngR=-513.2   PF=0.82   DD=525.5   | ngoài mẫu avgR=-0.12   PF=0.75
+  nhất trí (không vế nào ngược)    n=1413  (26%  ) avgR=0.02    tổngR=32.4     PF=1.05   DD=50.6    | ngoài mẫu avgR=-0.05   PF=0.87
+  hạng ≥ B                         n=2718  (50%  ) avgR=-0.03   tổngR=-75.2    PF=0.94   DD=89.8    | ngoài mẫu avgR=-0.06   PF=0.86
+  hạng ≥ A                         n=1164  (21%  ) avgR=-0.01   tổngR=-6.9     PF=0.99   DD=43.6    | ngoài mẫu avgR=-0.06   PF=0.85
+  nhất trí + hạng ≥ B              n=1216  (22%  ) avgR=0.04    tổngR=53.4     PF=1.10   DD=35.9    | ngoài mẫu avgR=-0.03   PF=0.92
+  nhất trí HOẶC hạng ≥ A           n=1720  (32%  ) avgR=-0.01   tổngR=-12.2    PF=0.98   DD=70.6    | ngoài mẫu avgR=-0.08   PF=0.81
+  nhất trí + kỳ vọng > 0           n=298   (5%   ) avgR=0.16    tổngR=48.8     PF=1.39   DD=12.2    | ngoài mẫu avgR=0.20    PF=1.55
+  nhất trí + ≥B + kỳ vọng > 0      n=266   (5%   ) avgR=0.19    tổngR=51.0     PF=1.48   DD=10.1    | ngoài mẫu avgR=0.25    PF=1.74
+  ≥B + kỳ vọng > 0                 n=581   (11%  ) avgR=0.07    tổngR=38.7     PF=1.14   DD=14.1    | ngoài mẫu avgR=0.05    PF=1.11
+  CỬA ĐẦY ĐỦ (4 điều kiện)         n=150   (3%   ) avgR=0.22    tổngR=33.0     PF=1.59   DD=6.1     | ngoài mẫu avgR=0.25    PF=1.67
+
+  ["CỬA ĐẦY ĐỦ (4 điều kiện)" bẻ ra theo khung và theo mã]
+    15m                  n=6     win=66.7%   avgR=0.34    tổngR=2.0      PF=2.48   DD=1.1     TP1=83% TP2=67%
+    1h                   n=17    win=41.2%   avgR=-0.07   tổngR=-1.2     PF=0.84   DD=5.1     TP1=65% TP2=35%
+    4h                   n=127   win=55.1%   avgR=0.25    tổngR=32.1     PF=1.68   DD=6.1     TP1=67% TP2=54%
+    BTCUSDT              n=11    win=54.5%   avgR=0.17    tổngR=1.9      PF=1.41   DD=2.3     TP1=64% TP2=55%
+    ETHUSDT              n=18    win=66.7%   avgR=0.41    tổngR=7.4      PF=2.15   DD=2.2     TP1=67% TP2=67%
+    ENAUSDT              n=55    win=43.6%   avgR=0.02    tổngR=1.2      PF=1.04   DD=8.9     TP1=55% TP2=40%
+    SOLUSDT              n=32    win=62.5%   avgR=0.44    tổngR=14.2     PF=3.47   DD=2.6     TP1=88% TP2=63%
+    BNBUSDT              n=12    win=50.0%   avgR=0.10    tổngR=1.2      PF=1.26   DD=2.1     TP1=67% TP2=50%
+    XRPUSDT              n=22    win=59.1%   avgR=0.32    tổngR=7.0      PF=1.99   DD=2.6     TP1=73% TP2=55%
+    LONG                 n=69    win=58.0%   avgR=0.24    tổngR=16.7     PF=1.69   DD=3.2     TP1=70% TP2=55%
+    SHORT                n=81    win=50.6%   avgR=0.20    tổngR=16.2     PF=1.51   DD=5.5     TP1=65% TP2=49%
+
+── ĐỘ RỘNG STOP: GỘP vs RÒNG (phí có phải là lý do không?) ──
+  0–0.5%       n=382   gộp=-0.13   phí=0.409   ròng=-0.54
+  0.5–1%       n=2188  gộp=0.04    phí=0.142   ròng=-0.11
+  1–1.5%       n=1620  gộp=0.04    phí=0.092   ròng=-0.05
+  1.5–2%       n=632   gộp=0.03    phí=0.065   ròng=-0.04
+  2–3%         n=479   gộp=0.11    phí=0.047   ròng=0.06
+  3–999%       n=159   gộp=0.02    phí=0.028   ròng=-0.01
+
+── "cửa đầy đủ + SL ≥ 1.5%" bẻ ra theo khung và mã ──
+    15m                  n=12    win=58.3%   avgR=0.06    tổngR=0.7      PF=1.16   DD=3.5     TP1=67% TP2=58%
+    1h                   n=29    win=51.7%   avgR=0.17    tổngR=4.9      PF=1.40   DD=4.3     TP1=62% TP2=48%
+    4h                   n=192   win=49.0%   avgR=0.09    tổngR=16.5     PF=1.19   DD=8.9     TP1=60% TP2=46%
+    BTCUSDT              n=14    win=57.1%   avgR=0.18    tổngR=2.5      PF=1.46   DD=3.6     TP1=64% TP2=57%
+    ETHUSDT              n=22    win=63.6%   avgR=0.31    tổngR=6.9      PF=1.81   DD=4.3     TP1=64% TP2=64%
+    ENAUSDT              n=110   win=44.5%   avgR=0.01    tổngR=1.1      PF=1.02   DD=8.9     TP1=54% TP2=40%
+    SOLUSDT              n=39    win=59.0%   avgR=0.27    tổngR=10.5     PF=2.02   DD=3.9     TP1=79% TP2=59%
+    BNBUSDT              n=12    win=50.0%   avgR=0.22    tổngR=2.7      PF=1.59   DD=2.5     TP1=67% TP2=50%
+    XRPUSDT              n=36    win=44.4%   avgR=-0.04   tổngR=-1.6     PF=0.91   DD=6.8     TP1=56% TP2=42%
+    LONG                 n=121   win=49.6%   avgR=0.04    tổngR=4.8      PF=1.08   DD=7.7     TP1=57% TP2=48%
+    SHORT                n=112   win=50.0%   avgR=0.15    tổngR=17.2     PF=1.38   DD=10.5    TP1=64% TP2=46%
+
+── SO BIẾN THỂ (cùng dữ liệu, chỉ đổi một luật mỗi lần) ──
+  Cột "ngoài mẫu" là nửa sau theo thời gian — phần chưa dùng để chỉnh gì.
+  gốc (không cửa nào)                    n=5280  avgR=-0.08   tổngR=-422.5   PF=0.84   DD=443.2   | ngoài mẫu n=2640  avgR=-0.11   PF=0.78
+  cửa cũ: nhất trí+≥B+Rkv≤1.5            n=4304  avgR=-0.06   tổngR=-236.9   PF=0.89   DD=254.8   | ngoài mẫu n=2152  avgR=-0.07   PF=0.84
+  CỬA MỚI: + phí ≤ 10% của 1R            n=1973  avgR=-0.02   tổngR=-41.6    PF=0.96   DD=80.4    | ngoài mẫu n=987   avgR=-0.02   PF=0.95
+  cửa mới, ngưỡng phí 8% (SL≥1.5%)       n=1246  avgR=-0.02   tổngR=-25.5    PF=0.96   DD=73.9    | ngoài mẫu n=623   avgR=0.00    PF=1.00
+  cắt value dời chỗ (đo riêng)           n=5460  avgR=-0.09   tổngR=-513.2   PF=0.82   DD=525.5   | ngoài mẫu n=2730  avgR=-0.12   PF=0.75
+
+── EDGE THẬT CỦA TỪNG VẾ CHẤM ĐIỂM ──
+  (avgR khi vế đó ủng hộ hướng đã vào, trừ avgR khi nó chống lại)
+  Cấu trúc HH/HL/LH/LL       ủng hộ n=3600  avgR=-0.04   | chống n=1462  avgR=-0.22   | edge=0.18    ✓ có edge
+  Taker Buy/Sell             ủng hộ n=1738  avgR=-0.06   | chống n=1027  avgR=-0.17   | edge=0.10    ✓ có edge
+  Price Action               ủng hộ n=3902  avgR=-0.09   | chống n=1164  avgR=-0.12   | edge=0.03    · nhiễu
+  Vị trí trong Value Area    ủng hộ n=3516  avgR=-0.09   | chống n=1641  avgR=-0.10   | edge=0.01    · nhiễu
+  Open Interest              ủng hộ n=0     avgR=0.00    | chống n=0     avgR=0.00    | edge=0.00    · nhiễu
+  Volume (hệ số cho PA)      ủng hộ n=0     avgR=0.00    | chống n=0     avgR=0.00    | edge=0.00    · nhiễu
+  Funding (ai trả ai)        ủng hộ n=0     avgR=0.00    | chống n=0     avgR=0.00    | edge=0.00    · nhiễu

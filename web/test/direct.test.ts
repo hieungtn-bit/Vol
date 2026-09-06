@@ -284,7 +284,12 @@ describe('bán lẻ vs nhóm lớn', () => {
 
 describe('hạng tín hiệu vàng', () => {
   /** Dựng một call rồi cho phép bẻ từng điều kiện để xem hạng vàng có tắt đúng không. */
-  function callWith(specs: Spec[], perpRows: { buy: number; sell: number }[] | null, oiRead?: string) {
+  function callWith(
+    specs: Spec[],
+    perpRows: { buy: number; sell: number }[] | null,
+    oiRead?: string,
+    hasClosedBar = true,
+  ) {
     const candles = mkCandles(specs);
     const closed = candles.filter((c) => c.closed);
     const vp = computeVolumeProfile(closed, { binSize: 0.2 })!;
@@ -301,7 +306,7 @@ describe('hạng tín hiệu vàng', () => {
     const flow = buildFlow(perpRows, candles, noPos, deriv.funding);
     return decideDirection(
       { symbol: 'T', tf: '15m', candles, vp, pa, delta: buildDelta(candles, vp, 'binance-spot'),
-        deriv, htf: null, hasClosedBar: true, last: closed[closed.length - 1].c },
+        deriv, htf: null, hasClosedBar, last: closed[closed.length - 1].c },
       st, flow,
     );
   }
@@ -341,22 +346,16 @@ describe('hạng tín hiệu vàng', () => {
     expect(why).not.toContain('cảnh báo');
   });
 
-  it('R kỳ vọng = 0.5×RR1 + 0.3×RR2, và cảnh báo bám vào nó chứ không bám RR1', () => {
+  it('tỷ lệ lời/lỗ kế hoạch = 0.5×RR1 + 0.5×RR2 — khớp đúng payout của simulate()', () => {
     const c = callWith(trend(true), [{ buy: 70, sell: 30 }], 'new-longs');
     if (c.rr1 != null && c.rr2 != null) {
-      expect(c.rrBlended!).toBeCloseTo(0.5 * c.rr1 + 0.3 * c.rr2, 6);
+      // 0.5/0.3 cũ cộng lại chỉ 0.8: phần runner 20% bị bỏ rơi, nên màn hình và
+      // bộ mô phỏng đang nói hai thang khác nhau.
+      expect(c.rewardRatio!).toBeCloseTo(0.5 * c.rr1 + 0.5 * c.rr2, 6);
     }
     const warn = c.warnings.join(' ');
-    // không được còn cảnh báo kiểu "RR TP1 < 1" nữa
     expect(warn).not.toContain('RR TP1');
-    // Ngưỡng là 0.5, KHÔNG phải 1: backtest đo nhóm 0.5–1 là nhóm tốt nhất
-    // (avgR 0.09), chỉ nhóm dưới 0.5 mới yếu (0.02). Cảnh báo phải bám số đo.
-    if (c.rrBlended != null && c.rrBlended < 0.5) expect(warn).toContain('R kỳ vọng');
-    if (c.rrBlended != null && c.rrBlended >= 0.5 && c.rrBlended <= 1.5) {
-      expect(warn).not.toContain('R kỳ vọng');
-    }
-    // Câu "lỗ kỳ vọng" là sai: R kỳ vọng giả định cả hai mốc đều chạm, nó không
-    // phải kỳ vọng có xác suất. Không được xuất hiện ở đâu nữa.
+    // "R kỳ vọng" là nhãn sai cho một tỷ lệ lời/lỗ — không được còn ở đâu nữa.
     expect(warn).not.toContain('lỗ kỳ vọng');
   });
 
@@ -377,5 +376,47 @@ describe('hạng tín hiệu vàng', () => {
   it('plan text ghi ★ khi vàng, ghi lý do thiếu khi chưa', () => {
     const c = callWith(flat(60, 100, 100), null);
     expect(c.planText).toContain(c.golden ? '★ TÍN HIỆU VÀNG' : 'Chưa đạt tín hiệu vàng vì:');
+  });
+});
+
+// ============================================================
+// LỖI ĐÃ SỬA: engine "luôn ra hướng" từng KHÔNG hề kiểm tra nến đã đóng chưa,
+// trong khi decideBias() chặn ở ba chỗ. Hai đường quyết định chạy trên cùng một
+// pipeline nên sự bất đối xứng đó là lỗ hổng, không phải lựa chọn thiết kế.
+// ============================================================
+describe('nến cũ thì không được là kèo để đặt tiền', () => {
+  function mk(hasClosedBar: boolean) {
+    const candles = mkCandles(trend(true));
+    const closed = candles.filter((c) => c.closed);
+    const vp = computeVolumeProfile(closed, { binSize: 0.2 })!;
+    const deriv = noDerivatives();
+    const flow = buildFlow([{ buy: 70, sell: 30 }], candles, noPos, deriv.funding);
+    return decideDirection(
+      { symbol: 'T', tf: '15m', candles, vp, pa: analyzePriceAction(candles),
+        delta: buildDelta(candles, vp, 'binance-spot'),
+        deriv, htf: null, hasClosedBar, last: closed[closed.length - 1].c },
+      analyzeStructure(candles), flow,
+    );
+  }
+
+  it('chưa có nến đóng của chu kỳ vừa xong → trượt cửa, và nói rõ vì sao', () => {
+    const cu = mk(false);
+    expect(cu.tradeable).toBe(false);
+    expect(cu.gateBlockers.some((b) => b.includes('nến') && b.includes('đóng'))).toBe(true);
+  });
+
+  it('nhưng VẪN CÓ HƯỚNG — dữ liệu cũ không được biến thành WAIT', () => {
+    const cu = mk(false);
+    const moi = mk(true);
+    expect(['LONG', 'SHORT']).toContain(cu.side);
+    expect(cu.side).toBe(moi.side);
+    expect(cu.net).toBe(moi.net);
+    // điểm số và mức giá không đổi; chỉ có cửa đổi
+    expect(cu.entry).toEqual(moi.entry);
+    expect(cu.sl).toBe(moi.sl);
+  });
+
+  it('có nến đóng thì lý do đó biến mất khỏi danh sách chặn', () => {
+    expect(mk(true).gateBlockers.some((b) => b.includes('dữ liệu cũ'))).toBe(false);
   });
 });

@@ -45,8 +45,10 @@ export interface BTOptions {
   breakevenAfterTP1: boolean;
   /** Bỏ tín hiệu có |net| dưới ngưỡng này. null = không lọc. */
   minNet: number | null;
-  /** Bỏ tín hiệu có R kỳ vọng trên ngưỡng này (TP2 quá xa). null = không lọc. */
-  maxRRBlended: number | null;
+  /** Bỏ tín hiệu có tỷ lệ lời/lỗ kế hoạch trên ngưỡng này. null = không lọc. */
+  maxRewardRatio: number | null;
+  /** Bỏ tín hiệu có kỳ vọng sau phí dưới ngưỡng này (R). null = không lọc. */
+  minExpectancy: number | null;
   /** Bộ trọng số chấm điểm. null = dùng bộ đang chạy thật. */
   weights: Weights | null;
   /** Cắt profile tại điểm value dời chỗ. */
@@ -70,7 +72,8 @@ export const DEFAULT_BT: BTOptions = {
   onePositionAtATime: true,
   breakevenAfterTP1: false,
   minNet: null,
-  maxRRBlended: null,
+  maxRewardRatio: null,
+  minExpectancy: null,
   weights: null,
   valueMigration: true,
   maxVAoverATR: null,
@@ -111,7 +114,16 @@ export interface Trade {
   evidence: { label: string; points: number }[];
   /** Để hiệu chuẩn ngưỡng hạng vàng bằng dữ liệu thay vì bằng cảm tính. */
   warningCount: number;
-  rrBlended: number | null;
+  /** Tỷ lệ lời/lỗ của KẾ HOẠCH (0.5×RR1 + 0.5×RR2) — không phải kỳ vọng. */
+  rewardRatio: number | null;
+  /** Kỳ vọng SAU PHÍ, có xác suất chạm đo được. Đây mới là con số so được. */
+  expectancyR: number | null;
+  /** Xác suất kết thúc có lãi, theo bảng tỉ lệ chạm. */
+  pWin: number | null;
+  /** Khoảng cách TP1/TP2 tính theo R — đơn vị không phụ thuộc giá, dùng để đo
+   *  tỉ lệ chạm theo ĐỘ XA thay vì chỉ theo hạng. */
+  rr1: number | null;
+  rr2: number | null;
   /** Khoảng cách entry→SL tính theo % giá. Stop rộng = phí nặng theo R và kèo tồi. */
   slPct: number;
   /** Vùng entry cách giá lúc ra tín hiệu bao nhiêu % — entry quá xa là mức giá rác. */
@@ -324,7 +336,10 @@ export function simulate(
       r: r - costR, rGross: r, costR,
       evidence: call.evidence.map((e) => ({ label: e.label, points: e.points })),
       warningCount: call.warnings.length,
-      rrBlended: call.rrBlended,
+      rewardRatio: call.rewardRatio,
+      expectancyR: call.expectancy?.net ?? null,
+      pWin: call.expectancy?.pWin ?? null,
+      rr1: R(call.tp1), rr2: R(call.tp2),
       slPct: (risk / entry) * 100,
       entryDistPct: (Math.abs(entry - candles[from].c) / candles[from].c) * 100,
       unanimous: call.unanimous,
@@ -349,7 +364,8 @@ export function runBacktest(
     if (!call) continue;
     if (RANK[call.conviction] < RANK[opt.minConviction]) continue;
     if (opt.minNet !== null && Math.abs(call.net) < opt.minNet) continue;
-    if (opt.maxRRBlended !== null && call.rrBlended !== null && call.rrBlended > opt.maxRRBlended) continue;
+    if (opt.maxRewardRatio !== null && call.rewardRatio !== null && call.rewardRatio > opt.maxRewardRatio) continue;
+    if (opt.minExpectancy !== null && call.expectancy !== null && call.expectancy.net < opt.minExpectancy) continue;
     const eRef = call.side === 'LONG' ? call.entry[1] : call.entry[0];
     const slPct = eRef > 0 ? (Math.abs(eRef - call.sl) / eRef) * 100 : 0;
     if (opt.maxSLPct !== null && slPct > opt.maxSLPct) continue;
@@ -490,7 +506,7 @@ export function calibrate(trades: Trade[]): { dim: string; bucket: string; n: nu
   put('nhất trí', 'có vế ngược', trades.filter((t) => !t.unanimous));
   for (const [lo, hi] of [[-99, 0.5], [0.5, 1], [1, 1.5], [1.5, 99]]) {
     put('R kỳ vọng', `${lo}–${hi}`,
-      trades.filter((t) => t.rrBlended != null && t.rrBlended >= lo && t.rrBlended < hi));
+      trades.filter((t) => t.expectancyR != null && t.expectancyR >= lo && t.expectancyR < hi));
   }
   // Độ rộng stop: stop rộng vừa ăn phí nặng theo R, vừa là dấu hiệu mức giá được
   // dựng từ một node ở quá xa — đúng ca ENA 1d ra entry cách giá 7.9%.
@@ -510,8 +526,8 @@ export function calibrate(trades: Trade[]): { dim: string; bucket: string; n: nu
   put('ứng viên vàng', 'net≥30 + nhất trí', trades.filter((t) => net30(t) && t.unanimous));
   put('ứng viên vàng', 'net≥40 + nhất trí', trades.filter((t) => net40(t) && t.unanimous));
   put('ứng viên vàng', 'net≥30 + nhất trí + Rkv<1.5',
-    trades.filter((t) => net30(t) && t.unanimous && t.rrBlended != null && t.rrBlended < 1.5));
+    trades.filter((t) => net30(t) && t.unanimous && t.expectancyR != null && t.expectancyR > 0));
   put('ứng viên vàng', 'CŨ: +Rkv≥1 +0 c.báo',
-    trades.filter((t) => net40(t) && t.unanimous && (t.rrBlended ?? 0) >= 1 && t.warningCount === 0));
+    trades.filter((t) => net40(t) && t.unanimous && (t.expectancyR ?? -1) > 0 && t.warningCount === 0));
   return out;
 }

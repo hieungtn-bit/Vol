@@ -1,0 +1,42 @@
+BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến · 5460 lệnh
+
+── NỬA ĐẦU (chọn ngưỡng ở đây) ──
+  không cửa        n=2730   giữ 100%   win=44.6%   avgR=-0.07   tổngR=-186.2   PF=0.88   DD=194.8
+  kỳ vọng ≥ -0.1   n=1582   giữ 58%    win=43.7%   avgR=-0.03   tổngR=-54.5    PF=0.94   DD=81.0
+  kỳ vọng ≥ -0.05  n=1127   giữ 41%    win=42.9%   avgR=-0.03   tổngR=-35.1    PF=0.94   DD=47.5
+  kỳ vọng ≥ 0      n=700    giữ 26%    win=42.3%   avgR=0.00    tổngR=1.2      PF=1.00   DD=22.8
+  kỳ vọng ≥ 0.05   n=411    giữ 15%    win=38.7%   avgR=-0.04   tổngR=-16.6    PF=0.92   DD=35.4
+  kỳ vọng ≥ 0.1    n=245    giữ 9%     win=33.9%   avgR=-0.11   tổngR=-27.1    PF=0.80   DD=32.0
+  kỳ vọng ≥ 0.15   n=139    giữ 5%     win=30.9%   avgR=-0.08   tổngR=-11.0    PF=0.85   DD=19.7
+  kỳ vọng ≥ 0.2    n=76     giữ 3%     win=30.3%   avgR=-0.05   tổngR=-3.8     PF=0.91   DD=15.2
+  kỳ vọng ≥ 0.3    n=25     giữ 1%     win=44.0%   avgR=0.35    tổngR=8.8      PF=1.82   DD=3.3
+
+── NỬA SAU (kiểm tra) ──
+  không cửa        n=2730   giữ 100%   win=52.3%   avgR=-0.12   tổngR=-327.0   PF=0.75   DD=327.3
+  kỳ vọng ≥ -0.1   n=961    giữ 35%    win=46.9%   avgR=-0.06   tổngR=-54.0    PF=0.88   DD=57.4
+  kỳ vọng ≥ -0.05  n=622    giữ 23%    win=46.5%   avgR=-0.03   tổngR=-20.5    PF=0.93   DD=37.0
+  kỳ vọng ≥ 0      n=373    giữ 14%    win=43.4%   avgR=-0.04   tổngR=-16.0    PF=0.91   DD=23.5
+  kỳ vọng ≥ 0.05   n=208    giữ 8%     win=39.4%   avgR=-0.08   tổngR=-16.8    PF=0.84   DD=28.1
+  kỳ vọng ≥ 0.1    n=132    giữ 5%     win=40.9%   avgR=-0.03   tổngR=-3.7     PF=0.94   DD=20.8
+  kỳ vọng ≥ 0.15   n=69     giữ 3%     win=30.4%   avgR=-0.26   tổngR=-17.7    PF=0.57   DD=24.9
+  kỳ vọng ≥ 0.2    n=30     giữ 1%     win=20.0%   avgR=-0.41   tổngR=-12.3    PF=0.36   DD=15.4
+  kỳ vọng ≥ 0.3    n=13     giữ 0%     win=23.1%   avgR=-0.14   tổngR=-1.8     PF=0.73   DD=4.4
+
+── TOÀN MẪU ──
+  không cửa        n=5460   giữ 100%   win=48.4%   avgR=-0.09   tổngR=-513.2   PF=0.82   DD=515.1
+  kỳ vọng ≥ -0.1   n=2543   giữ 47%    win=44.9%   avgR=-0.04   tổngR=-108.4   PF=0.92   DD=108.9
+  kỳ vọng ≥ -0.05  n=1749   giữ 32%    win=44.1%   avgR=-0.03   tổngR=-55.5    PF=0.94   DD=63.1
+  kỳ vọng ≥ 0      n=1073   giữ 20%    win=42.7%   avgR=-0.01   tổngR=-14.7    PF=0.97   DD=34.6
+  kỳ vọng ≥ 0.05   n=619    giữ 11%    win=38.9%   avgR=-0.05   tổngR=-33.5    PF=0.90   DD=35.4
+  kỳ vọng ≥ 0.1    n=377    giữ 7%     win=36.3%   avgR=-0.08   tổngR=-30.8    PF=0.84   DD=37.6
+  kỳ vọng ≥ 0.15   n=208    giữ 4%     win=30.8%   avgR=-0.14   tổngR=-28.7    PF=0.75   DD=32.3
+  kỳ vọng ≥ 0.2    n=106    giữ 2%     win=27.4%   avgR=-0.15   tổngR=-16.1    PF=0.73   DD=19.3
+  kỳ vọng ≥ 0.3    n=38     giữ 1%     win=36.8%   avgR=0.18    tổngR=7.0      PF=1.40   DD=4.4
+
+── kiểm tra hiệu chuẩn: kỳ vọng dự báo vs R thực hiện ──
+  [-1, -0.15)      n=2062   dự báo -0.249   thực -0.159   | p thắng dự báo 48%    thực 52%
+  [-0.15, -0.05)   n=1633   dự báo -0.101   thực -0.064   | p thắng dự báo 47%    thực 48%
+  [-0.05, 0.05)    n=1130   dự báo -0.006   thực -0.020   | p thắng dự báo 49%    thực 47%
+  [0.05, 0.15)     n=411    dự báo 0.092    thực -0.012   | p thắng dự báo 50%    thực 43%
+  [0.15, 0.3)      n=170    dự báo 0.200    thực -0.210   | p thắng dự báo 48%    thực 29%
+  [0.3, 10)        n=38     dự báo 0.387    thực 0.183    | p thắng dự báo 46%    thực 37%

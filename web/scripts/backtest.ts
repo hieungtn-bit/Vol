@@ -115,10 +115,10 @@ async function main() {
     { name: 'hạng ≥ A', ok: (t) => RANKN[t.conviction] >= 2 },
     { name: 'nhất trí + hạng ≥ B', ok: (t) => t.unanimous && RANKN[t.conviction] >= 1 },
     { name: 'nhất trí HOẶC hạng ≥ A', ok: (t) => t.unanimous || RANKN[t.conviction] >= 2 },
-    { name: 'nhất trí + Rkv ≤ 1.5', ok: (t) => t.unanimous && (t.rrBlended ?? 0) <= 1.5 },
-    { name: 'nhất trí + ≥B + Rkv ≤ 1.5', ok: (t) => t.unanimous && RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 },
-    { name: '≥B + Rkv ≤ 1.5', ok: (t) => RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 },
-    { name: 'CỬA ĐẦY ĐỦ (4 điều kiện)', ok: (t) => t.unanimous && RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 && t.slPct >= 1.2 },
+    { name: 'nhất trí + kỳ vọng > 0', ok: (t) => t.unanimous && (t.expectancyR ?? -1) > 0 },
+    { name: 'nhất trí + ≥B + kỳ vọng > 0', ok: (t) => t.unanimous && RANKN[t.conviction] >= 1 && (t.expectancyR ?? -1) > 0 },
+    { name: '≥B + kỳ vọng > 0', ok: (t) => RANKN[t.conviction] >= 1 && (t.expectancyR ?? -1) > 0 },
+    { name: 'CỬA ĐẦY ĐỦ (4 điều kiện)', ok: (t) => t.unanimous && RANKN[t.conviction] >= 1 && (t.expectancyR ?? -1) > 0 && t.slPct >= 1.2 },
   ];
   for (const r of rules) {
     const kept = all.filter(r.ok);
@@ -134,7 +134,7 @@ async function main() {
 
   // Luật thắng cuộc bẻ ra theo khung và theo mã: một luật chỉ đáng tin khi nó
   // không sống nhờ đúng một khung hoặc đúng một mã.
-  const best = { name: 'CỬA ĐẦY ĐỦ (4 điều kiện)', ok: (t: Trade) => t.unanimous && RANKN[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 && t.slPct >= 1.2 };
+  const best = { name: 'CỬA ĐẦY ĐỦ (4 điều kiện)', ok: (t: Trade) => t.unanimous && RANKN[t.conviction] >= 1 && (t.expectancyR ?? -1) > 0 && t.slPct >= 1.2 };
   const kept = all.filter(best.ok);
   console.log(`\n  ["${best.name}" bẻ ra theo khung và theo mã]`);
   for (const tf of tfs) row(`  ${tf}`, kept.filter((t) => t.tf === tf));
@@ -157,7 +157,7 @@ async function main() {
 
   console.log('\n── "cửa đầy đủ + SL ≥ 1.5%" bẻ ra theo khung và mã ──');
   const R2: Record<Conviction, number> = { C: 0, B: 1, A: 2, GOLD: 3 };
-  const win = all.filter((t) => R2[t.conviction] >= 1 && (t.rrBlended ?? 0) <= 1.5 && t.slPct >= 1.5);
+  const win = all.filter((t) => R2[t.conviction] >= 1 && (t.expectancyR ?? -1) > 0 && t.slPct >= 1.5);
   for (const tf of tfs) row(`  ${tf}`, win.filter((t) => t.tf === tf));
   for (const sym of symbols) row(`  ${sym}`, win.filter((t) => t.symbol === sym));
   row('  LONG', win.filter((t) => t.side === 'LONG'));

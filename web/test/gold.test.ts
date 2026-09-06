@@ -139,7 +139,7 @@ describe('cửa chất lượng (ngưỡng do backtest hiệu chuẩn)', () => {
       const c = call(cleanShortSetup(), buy, 'new-shorts', -0.0003);
       const expected = c.unanimous
         && c.conviction !== 'C'
-        && (c.rrBlended ?? 0) <= GATE.maxRRBlended
+        && (c.expectancy?.net ?? 0) >= GATE.minExpectancy
         && feeOk(c);
       expect(c.tradeable).toBe(expected);
     }
@@ -169,10 +169,12 @@ describe('cửa chất lượng (ngưỡng do backtest hiệu chuẩn)', () => {
     const c = call(cleanShortSetup(), 10, 'new-shorts', -0.0003);
     expect(c.unanimous).toBe(true);
     expect(c.contestedBy).toEqual([]);
-    // Fixture này có R kỳ vọng ~2.96: đúng vùng backtest đo ra avgR âm. Hạng vàng
-    // nói "mọi vế đồng thuận", cửa nói "kèo này đáng đặt tiền không" — hai câu hỏi
-    // khác nhau, và một kèo đồng thuận với TP2 quá xa vẫn là kèo không nên vào.
-    expect(c.gateBlockers.some((b) => b.includes('TP2 quá xa'))).toBe(true);
+    // Fixture này đặt TP2 rất xa. Hạng vàng nói "mọi vế đồng thuận", cửa nói
+    // "kèo này đáng đặt tiền không" — hai câu hỏi khác nhau. Ở đây xác suất chạm
+    // đo được tại đúng khoảng cách đó không bù nổi phí, nên kỳ vọng âm và kèo
+    // trượt cửa dù nhất trí.
+    expect(c.expectancy!.net).toBeLessThan(0);
+    expect(c.gateBlockers.some((b) => b.includes('kỳ vọng'))).toBe(true);
     expect(c.tradeable).toBe(false);
   });
 

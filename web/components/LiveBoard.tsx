@@ -48,8 +48,9 @@ const P4 = fmtTick;
 export function GateLine({ c, className = '' }: { c: DirectionalCall; className?: string }) {
   return c.tradeable ? (
     <p className={`rounded-md border border-emerald-400/40 bg-emerald-400/10 px-2 py-1.5 text-2xs leading-snug text-emerald-200 ${className}`}>
-      <b>Qua cửa chất lượng.</b> Mọi vế cùng hướng · hạng {c.conviction} · R kỳ vọng{' '}
-      {c.rrBlended?.toFixed(2) ?? 'N/A'} ≤ 1.5 · stop đủ rộng để phí không ăn quá 10% của 1R.
+      <b>Qua cửa chất lượng.</b> Mọi vế cùng hướng · hạng {c.conviction} · kỳ vọng{' '}
+      {c.expectancy != null ? `${c.expectancy.net >= 0 ? '+' : ''}${c.expectancy.net.toFixed(2)}R` : 'N/A'}{' '}
+      sau phí · nến đã đóng · stop đủ rộng để phí không ăn quá 10% của 1R.
     </p>
   ) : (
     <p className={`rounded-md border border-slate-500/40 bg-slate-500/10 px-2 py-1.5 text-2xs leading-snug text-slate-300 ${className}`}>
@@ -231,9 +232,36 @@ export function Detail({ c }: { c: DirectionalCall }) {
         <Row k="SL" v={<span className="text-red-300">{P4(c.sl)}</span>} />
         <Row k="TP1 · chốt 50%" v={<><span className="text-emerald-300">{P4(c.tp1)}</span>{c.rr1 != null ? <span className="text-muted"> · RR {c.rr1.toFixed(2)}</span> : null}</>} />
         <Row k="TP2 · chốt 30%" v={<><span className="text-emerald-300">{P4(c.tp2)}</span>{c.rr2 != null ? <span className="text-muted"> · RR {c.rr2.toFixed(2)}</span> : null}</>} />
-        <Row k="R kỳ vọng" v={c.rrBlended != null ? c.rrBlended.toFixed(2) : 'N/A'} />
+        <Row k="Lời/lỗ nếu chạm cả hai" v={c.rewardRatio != null ? `${c.rewardRatio.toFixed(2)}R` : 'N/A'} />
         <Row k="Long / Short" v={`${c.longScore} / ${c.shortScore}`} />
       </div>
+
+      {/* KỲ VỌNG THẬT — có xác suất, không phải tỷ lệ lời/lỗ. Đặt riêng một khối
+          vì đây là con số quyết định, và vì phải nói rõ xác suất lấy ở đâu ra. */}
+      {c.expectancy != null ? (
+        <div
+          className={`mt-2 rounded-md border px-2 py-1.5 text-2xs leading-snug ${
+            c.expectancy.net >= 0
+              ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+              : 'border-amber-400/40 bg-amber-400/10 text-amber-200'
+          }`}
+        >
+          <b>
+            Kỳ vọng sau phí {c.expectancy.net >= 0 ? '+' : ''}
+            {c.expectancy.net.toFixed(2)}R
+          </b>{' '}
+          · thắng {(c.expectancy.pWin * 100).toFixed(0)}%
+          <span className="mt-0.5 block text-muted">
+            Chạm TP1 {(c.expectancy.pTP1 * 100).toFixed(0)}%, rồi TP2{' '}
+            {(c.expectancy.pTP2 * 100).toFixed(0)}% — tỉ lệ đo trên 5460 lệnh backtest theo
+            đúng khoảng cách TP của kế hoạch này, không phải theo hạng.
+            {c.expectancy.weak ? ' TP2 ở đây xa tới vùng chưa đủ mẫu để đo, nên xác suất là ước lượng thấp.' : ''}
+            {c.expectancy.optimistic
+              ? ' Trên +0.15R thì đối chiếu dự báo với kết quả thật cho thấy mô hình lạc quan quá — số cao hơn KHÔNG có nghĩa kèo ngon hơn.'
+              : ''}
+          </span>
+        </div>
+      ) : null}
 
       <div className="mt-2 space-y-1 text-2xs leading-relaxed">
         <p className="text-slate-300"><b className="text-slate-400">Trigger:</b> {c.trigger}</p>
