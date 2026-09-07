@@ -82,6 +82,33 @@ Quanh 0 mô hình bám sát → dùng làm ngưỡng âm/dương là hợp lệ 
 Phía cao lạc quan có hệ thống → **không** dùng để xếp hạng kèo. Ngưỡng để đúng 0,
 là mức duy nhất có lý do cơ học; mọi ngưỡng cao hơn đều tệ đi khi đo ngoài mẫu.
 
+## Một giả thuyết đã bị chính số đo bác bỏ
+
+Nhìn màn hình thấy một kèo BTC 15m có `rr1 ≈ 0.1` — TP1 chỉ cách entry 0.043% giá,
+tức **gần hơn cả vòng phí vào-ra 0.12%**. Nghi bộ dựng mức giá đang rò kèo hỏng.
+
+Đo trên 16515 tín hiệu (`scripts/levels.ts`, 3 mã × 15m/1h/4h):
+
+| | n | tỉ lệ | trong đó qua cửa |
+|---|---:|---:|---:|
+| TP1 gần hơn phí vào-ra (0.120%) | 368 | 2.2% | **0** |
+| TP1 gần hơn 2× phí | 1737 | 10.5% | — |
+| rr1 < 0.15 | 160 | 1.0% | **0%** |
+| rr1 0.15–0.3 | 1363 | 8.3% | 0.1% |
+
+**Cửa chất lượng đã chặn 100% số kèo đó.** Không có rò rỉ, và không có gì để sửa
+trong thuật toán. Giả thuyết sai.
+
+Thứ duy nhất đáng sửa là CÁCH NÓI: màn hình ghi "kỳ vọng −0.54R" — đúng, nhưng
+không cho biết là **kế hoạch tự nó đã hỏng**, chứ không phải xác suất xấu. Nay có
+thêm một lý do chặn gọi đúng tên: *"TP1 chỉ cách entry 0.043% — gần hơn cả phí
+vào-ra 0.120%, kế hoạch không thể có lãi"*.
+
+Điều kiện mới **không lọc thêm kèo nào**, và đã kiểm chứng bằng cách chạy lại đúng
+bộ dữ liệu (`full-nen1m-kem-dieu-kien-phi.txt`): PF giống hệt tới hai chữ số ở cả
+năm biến thể (0.92 / 0.96 / 1.05 / 1.03 / 0.89). Chênh lệch n dưới 5 trên ~5300 là
+do lần tải dữ liệu khác nhau ở mép, không phải do điều kiện mới.
+
 ## Giới hạn còn lại
 
 - Backtest chạy **mù phái sinh**: OI / funding / taker perp = N/A. Ba vế đó chưa

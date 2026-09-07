@@ -73,6 +73,26 @@ export function feeInR(entry: number, risk: number): number | null {
 }
 
 /**
+ * Mục tiêu có ĐỦ XA để bù nổi chi phí không.
+ *
+ * Đây là một câu số học, không phải một tiêu chuẩn: nếu TP1 nằm gần entry hơn cả
+ * vòng phí vào-ra thì kèo đó KHÔNG THỂ có lãi, kể cả khi đi đúng hướng và chạm
+ * mục tiêu ngay. Bộ dựng mức giá đặt TP1 ở tham chiếu VA gần nhất cách entry ít
+ * nhất `gap = max(ATR×0.5, binSize×3)`; trên khung nhỏ lúc thị trường lặng, gap
+ * đó có thể nhỏ hơn phí.
+ *
+ * Đo trên 16515 tín hiệu (3 mã × 15m/1h/4h): 2.2% rơi vào trường hợp này, và
+ * CẢ 2.2% đó đều đã trượt cửa sẵn vì lý do khác (phí ăn quá 10% của 1R). Nên
+ * thêm điều kiện này KHÔNG lọc thêm kèo nào — nó chỉ nói đúng tên của vấn đề,
+ * thay vì để người đọc nhìn "kỳ vọng −0.54R" mà không biết là kế hoạch tự nó đã
+ * hỏng chứ không phải xác suất xấu.
+ */
+export function targetBelowCost(entry: number, tp1: number): boolean {
+  if (!(entry > 0)) return false;
+  return Math.abs(tp1 - entry) / entry < FEES.perSide * 2 + FEES.slip;
+}
+
+/**
  * Ngưỡng đọc lịch sử funding. Đặt bằng lập luận, KHÔNG bằng đo — backtest chạy mù
  * phái sinh nên chưa kiểm chứng được vế này. Vì thế các hệ số đều nhỏ và lấy từ
  * ngân sách của chính vế funding, không cộng thêm trọng số mới.
@@ -440,6 +460,13 @@ export function decideDirection(
       'stop rộng cho R ròng cao hơn), nhưng isolated đòn bẩy cao ở đây là cháy. Hạ size.',
     );
   }
+  if (targetBelowCost(entryRef, lv.tp1)) {
+    warnings.push(
+      'Mục tiêu gần hơn chi phí: TP1 cách entry ít hơn một vòng phí vào-ra, nên kèo này ' +
+      'không thể có lãi kể cả khi đi đúng hướng và chạm mục tiêu ngay. Đây là lỗi của kế ' +
+      'hoạch, không phải của xác suất.',
+    );
+  }
   if (!lv.tp1InVA) warnings.push('TP1 nằm ngoài VA — đã kéo về mép value gần nhất.');
   if (lv.crossings >= 3) warnings.push(`Đoạn TP1→TP2 xuyên ${lv.crossings} HVN — phần cuối chạy như runner.`);
   if (rewardRatio != null && rewardRatio > GATE.maxRewardRatio) {
@@ -512,6 +539,12 @@ export function decideDirection(
   if (exp != null && exp.net < GATE.minExpectancy) {
     gateBlockers.push(
       `kỳ vọng ${exp.net >= 0 ? '+' : ''}${exp.net.toFixed(2)}R sau phí — dưới ${GATE.minExpectancy}R`,
+    );
+  }
+  if (targetBelowCost(entryRef, lv.tp1)) {
+    gateBlockers.push(
+      `TP1 chỉ cách entry ${((Math.abs(lv.tp1 - entryRef) / entryRef) * 100).toFixed(3)}% — ` +
+      `gần hơn cả phí vào-ra ${((FEES.perSide * 2 + FEES.slip) * 100).toFixed(3)}%, kế hoạch không thể có lãi`,
     );
   }
   if (!inp.hasClosedBar) {

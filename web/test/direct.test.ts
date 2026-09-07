@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeStructure } from '@/lib/structure';
 import { buildFlow, fundingFlow, perpTakerFlow, positioningSplit, spotTakerFlow } from '@/lib/flow';
-import { decideDirection } from '@/lib/direct';
+import { FEES, decideDirection, feeInR, targetBelowCost } from '@/lib/direct';
 import { analyzePriceAction } from '@/lib/priceAction';
 import { buildDelta } from '@/lib/derivatives';
 import { computeVolumeProfile } from '@/lib/volumeProfile';
@@ -418,5 +418,37 @@ describe('nến cũ thì không được là kèo để đặt tiền', () => {
 
   it('có nến đóng thì lý do đó biến mất khỏi danh sách chặn', () => {
     expect(mk(true).gateBlockers.some((b) => b.includes('dữ liệu cũ'))).toBe(false);
+  });
+});
+
+// ============================================================
+// Mục tiêu gần hơn chi phí là một câu SỐ HỌC, không phải một tiêu chuẩn: kèo đó
+// không thể có lãi kể cả khi đi đúng hướng và chạm mục tiêu ngay.
+//
+// Đo trên 16515 tín hiệu: 2.2% rơi vào đây và CẢ 2.2% đã trượt cửa sẵn vì lý do
+// khác. Nên điều kiện này không lọc thêm kèo nào — nó chỉ gọi đúng tên vấn đề.
+// ============================================================
+describe('mục tiêu gần hơn chi phí thì nói thẳng là kế hoạch hỏng', () => {
+  const cost = FEES.perSide * 2 + FEES.slip;
+
+  it('đúng ngưỡng: dưới một vòng phí là hỏng, trên thì không', () => {
+    expect(targetBelowCost(100, 100 + 100 * cost * 0.99)).toBe(true);
+    expect(targetBelowCost(100, 100 + 100 * cost * 1.01)).toBe(false);
+    // short: đo bằng khoảng cách tuyệt đối, không phụ thuộc chiều
+    expect(targetBelowCost(100, 100 - 100 * cost * 0.99)).toBe(true);
+    expect(targetBelowCost(100, 100 - 100 * cost * 1.01)).toBe(false);
+  });
+
+  it('giá không hợp lệ thì trả false chứ không nổ', () => {
+    expect(targetBelowCost(0, 1)).toBe(false);
+    expect(targetBelowCost(-5, 1)).toBe(false);
+  });
+
+  it('stop rộng KHÔNG cứu được mục tiêu quá gần — hai câu hỏi khác nhau', () => {
+    // Phí quy ra R nhỏ (stop rộng) nhưng TP1 vẫn nằm trong phí tính theo % giá.
+    // Cửa cũ chỉ nhìn phí/R nên bắt được trường hợp này một cách tình cờ, không
+    // phải vì nó đang đo đúng thứ cần đo.
+    expect(feeInR(100, 10)).toBeLessThan(0.1);        // stop 10% giá → phí nhẹ theo R
+    expect(targetBelowCost(100, 100.05)).toBe(true);  // nhưng TP1 chỉ cách 0.05%
   });
 });
