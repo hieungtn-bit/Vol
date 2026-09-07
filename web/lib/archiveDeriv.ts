@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { buildFundingHistory } from './derivatives';
 import { archiveGet, toMs } from './minute';
-import type { Derivatives, FundingInfo, OIInfo, OIRead } from './types';
+import type { Candle, Derivatives, FundingInfo, OIInfo, OIRead } from './types';
 
 // ============================================================
 // PHÁI SINH LỊCH SỬ TỪ KHO LƯU TRỮ BINANCE.
@@ -90,7 +90,19 @@ function daysBetween(from: number, to: number): string[] {
   return out;
 }
 
-const rows = (csv: string) => csv.split('\n').slice(1).map((l) => l.trim()).filter(Boolean);
+/**
+ * Tách dòng dữ liệu, bỏ dòng tiêu đề NẾU CÓ.
+ *
+ * Không cắt cứng dòng đầu: một số file trong kho không có tiêu đề, và cắt mù sẽ
+ * lặng lẽ nuốt mất dòng dữ liệu đầu tiên của tháng đó. Nhận diện tiêu đề bằng
+ * việc trường đầu không phải số.
+ */
+function rows(csv: string): string[] {
+  const all = csv.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (all.length === 0) return all;
+  const first = all[0].split(',')[0];
+  return Number.isFinite(Number(first)) && first !== '' ? all : all.slice(1);
+}
 
 /** Funding đã chốt, cũ → mới, rate quy về thang 8 giờ. */
 export async function loadFunding(symbol: string, from: number, to: number): Promise<FundingRow[]> {
@@ -165,6 +177,69 @@ export async function loadPerpBars(symbol: string, tf: string, from: number, to:
   out.sort((a, b) => a.t - b.t);
   return out;
 }
+
+/**
+ * Nến perp ĐẦY ĐỦ (OHLCV) — để chạy chính bộ engine trên giá perp.
+ *
+ * Khác `loadPerpBars` ở chỗ trả về `Candle` dùng được cho volume profile, price
+ * action, cấu trúc và mô phỏng lệnh; `loadPerpBars` chỉ lấy đủ trường cho taker.
+ *
+ * Cột giống hệt kline spot, nhưng mốc thời gian là MILI giây (spot là micro) —
+ * `toMs` xử lý cả hai.
+ */
+export async function loadPerpCandles(
+  symbol: string, tf: string, from: number, to: number,
+): Promise<Candle[]> {
+  const out: Candle[] = [];
+  const take = (csv: string) => {
+    for (const line of rows(csv)) {
+      const f = line.split(',');
+      const t = toMs(Number(f[0]));
+      if (!Number.isFinite(t) || t < from || t > to) continue;
+      out.push({
+        t, o: +f[1], h: +f[2], l: +f[3], c: +f[4], v: +f[5], q: +f[7],
+        takerBuyBase: +f[9],
+        closed: true,   // kho chỉ có nến đã đóng
+      });
+    }
+  };
+
+  for (const m of monthsBetween(from, to)) {
+    const name = `${symbol}-${tf}-${m}.zip`;
+    const csv = await archiveGet(
+      futuresPath('monthly', `klines/${symbol}/${tf}/${name}`),
+      join('deriv', symbol, tf, name),
+    );
+    if (csv) { take(csv); continue; }
+
+    // Tháng hiện tại chưa có file tháng. Bỏ qua nó thì cửa sổ so sánh mất đúng
+    // đoạn gần đây nhất — lần chạy đầu chỉ còn 2380 trên 3000 nến vì lý do này.
+    for (const day of daysIn(m, from, to)) {
+      const dn = `${symbol}-${tf}-${day}.zip`;
+      const dc = await archiveGet(
+        futuresPath('daily', `klines/${symbol}/${tf}/${dn}`),
+        join('deriv', symbol, tf, dn),
+      );
+      if (dc) take(dc);
+    }
+  }
+  out.sort((a, b) => a.t - b.t);
+  return out;
+}
+
+/** Các ngày của một tháng nằm trong khoảng quan tâm. */
+function daysIn(month: string, from: number, to: number): string[] {
+  const [y, mo] = month.split('-').map(Number);
+  const out: string[] = [];
+  const d = new Date(Date.UTC(y, mo - 1, 1));
+  while (d.getUTCMonth() === mo - 1) {
+    const t = d.getTime();
+    if (t + 86_400_000 > from && t <= to) out.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return out;
+}
+
 
 /**
  * Bản ghi gần nhất KHÔNG MUỘN HƠN `t`.

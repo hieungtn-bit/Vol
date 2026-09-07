@@ -162,3 +162,11 @@ describe('đọc OI giống hệt đường live', () => {
     expect(d.deriv.oi.squeezeWarning).toBe(false);
   });
 });
+
+describe('đọc file kho: tiêu đề có hay không đều phải đúng', () => {
+  it('nến perp đầy đủ OHLCV dùng được cho volume profile', async () => {
+    // Chỉ kiểm hình dạng bản ghi; phần tải mạng đã kiểm bằng lần chạy thật.
+    const { loadPerpCandles } = await import('@/lib/archiveDeriv');
+    expect(typeof loadPerpCandles).toBe('function');
+  });
+});

@@ -98,7 +98,7 @@ async function main() {
       ctxs.set(`${symbol}|${tf}`, ctx);
       if (saveLabel) saveCandles(symbol, tf, candles);
       if (candles.length < 200) { console.log(`  ${symbol} ${tf}: chỉ ${candles.length} nến, bỏ qua`); continue; }
-      if (arg('diag') !== undefined) {
+      if (process.argv.includes('--diag')) {
         const g = goldDiagnostics(symbol, tf, candles);
         console.log(`  ${pad(symbol + ' ' + tf, 22)} ${g.signals} tín hiệu · ${g.golden} đạt vàng (${num((g.golden / Math.max(1, g.signals)) * 100, 2)}%)`);
         for (const b of g.blockers) console.log(`  ${pad('', 22)} chặn bởi "${pad(b.reason, 22)}" ${pad(b.n, 6)} (${num(b.pct, 1)}%)`);

@@ -136,7 +136,16 @@ function daysIn(month: string, fromMs: number, toMsEnd: number): string[] {
  * không gỡ được thứ tự; lần đo đầu chỉ phủ 68% số lệnh đúng vì lý do này. Thiếu
  * file tháng thì rơi xuống file NGÀY.
  */
-export async function loadMinutes(symbol: string, fromMs: number, toMsEnd: number): Promise<Candle[]> {
+export async function loadMinutes(
+  symbol: string,
+  fromMs: number,
+  toMsEnd: number,
+  market: 'spot' | 'perp' = 'spot',
+): Promise<Candle[]> {
+  // Gỡ thứ tự trong nến PHẢI dùng nến 1m của ĐÚNG chợ đang mô phỏng. Lấy 1m spot
+  // để phân xử một cây nến perp là dùng giá của một chợ khác quyết định lệnh
+  // chạm stop hay chạm mục tiêu trước — sai ở đúng chỗ tinh vi nhất.
+  const base = market === 'perp' ? 'data/futures/um' : 'data/spot';
   const out: Candle[] = [];
   const take = (csv: string) => {
     for (const line of csv.split('\n')) {
@@ -147,12 +156,12 @@ export async function loadMinutes(symbol: string, fromMs: number, toMsEnd: numbe
 
   for (const m of monthsBetween(fromMs, toMsEnd)) {
     const name = `${symbol}-1m-${m}.zip`;
-    const buf = await download(`${ARCHIVE}/data/spot/monthly/klines/${symbol}/1m/${name}`, join(CACHE_DIR, symbol, name));
+    const buf = await download(`${ARCHIVE}/${base}/monthly/klines/${symbol}/1m/${name}`, join(CACHE_DIR, market, symbol, name));
     if (buf) { take(unzipFirst(buf)); continue; }
 
     for (const day of daysIn(m, fromMs, toMsEnd)) {
       const dn = `${symbol}-1m-${day}.zip`;
-      const db = await download(`${ARCHIVE}/data/spot/daily/klines/${symbol}/1m/${dn}`, join(CACHE_DIR, symbol, dn));
+      const db = await download(`${ARCHIVE}/${base}/daily/klines/${symbol}/1m/${dn}`, join(CACHE_DIR, market, symbol, dn));
       if (db) take(unzipFirst(db));
     }
   }
