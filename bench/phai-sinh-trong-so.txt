@@ -1,0 +1,29 @@
+Kiểm định giả thuyết "funding đang làm hại" · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến
+
+..................
+18 cặp mã×khung.
+
+── đang chạy (funding 8, taker 20, OI 12) ──
+  mọi lệnh · nửa đầu       n=2743   win=46.3%   avgR=-0.01   PF=0.98   DD=74.0
+  mọi lệnh · NỬA SAU       n=2744   win=53.4%   avgR=-0.10   PF=0.79   DD=274.0
+  qua cửa · nửa đầu        n=121    win=47.9%   avgR=0.08    PF=1.17   DD=8.8
+  qua cửa · NỬA SAU        n=24     win=54.2%   avgR=0.26    PF=1.91   DD=2.5
+
+── bỏ funding (funding 0, taker 28, OI 12) ──
+  mọi lệnh · nửa đầu       n=2746   win=46.2%   avgR=-0.01   PF=0.98   DD=74.7
+  mọi lệnh · NỬA SAU       n=2746   win=53.2%   avgR=-0.10   PF=0.79   DD=280.2
+  qua cửa · nửa đầu        n=121    win=48.8%   avgR=0.12    PF=1.28   DD=8.7
+  qua cửa · NỬA SAU        n=25     win=52.0%   avgR=0.21    PF=1.65   DD=2.5
+
+── bỏ funding + OI (funding 0, taker 40, OI 0) ──
+  mọi lệnh · nửa đầu       n=2739   win=46.7%   avgR=-0.01   PF=0.99   DD=72.0
+  mọi lệnh · NỬA SAU       n=2739   win=53.6%   avgR=-0.09   PF=0.81   DD=257.5
+  qua cửa · nửa đầu        n=121    win=46.3%   avgR=0.08    PF=1.18   DD=8.7
+  qua cửa · NỬA SAU        n=24     win=45.8%   avgR=0.05    PF=1.12   DD=3.5
+
+── đối chứng: tăng funding (funding 16, taker 12, OI 12) ──
+  mọi lệnh · nửa đầu       n=2745   win=46.1%   avgR=-0.01   PF=0.98   DD=76.1
+  mọi lệnh · NỬA SAU       n=2746   win=53.1%   avgR=-0.10   PF=0.79   DD=279.6
+  qua cửa · nửa đầu        n=133    win=48.1%   avgR=0.07    PF=1.16   DD=12.2
+  qua cửa · NỬA SAU        n=27     win=48.1%   avgR=0.14    PF=1.41   DD=3.9
+

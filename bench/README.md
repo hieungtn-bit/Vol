@@ -109,9 +109,67 @@ bộ dữ liệu (`full-nen1m-kem-dieu-kien-phi.txt`): PF giống hệt tới ha
 năm biến thể (0.92 / 0.96 / 1.05 / 1.03 / 0.89). Chênh lệch n dưới 5 trên ~5300 là
 do lần tải dữ liệu khác nhau ở mép, không phải do điều kiện mới.
 
+## Ba vế phái sinh: đo được rồi, và câu trả lời là KHÔNG
+
+OI, funding và taker perp chiếm **40 trên 103** trọng số chấm điểm, nhưng backtest
+tới nay chạy mù phái sinh nên edge của chúng luôn đo ra 0 — trọng số của chúng là
+niềm tin, không phải bằng chứng. Nay lấy được từ kho lưu trữ (`scripts/deriv.ts`,
+`bench/phai-sinh.txt`), 5487 lệnh, 6 mã × 15m/1h/4h, nến 1m gỡ thứ tự.
+
+**Tổng thể: không đổi gì cả.**
+
+| | avgR | PF | ngoài mẫu avgR | ngoài mẫu PF |
+|---|---:|---:|---:|---:|
+| mù phái sinh | −0.05 | 0.89 | −0.10 | 0.79 |
+| có phái sinh | −0.05 | 0.89 | −0.10 | 0.79 |
+
+**Từng vế, khi đã có dữ liệu thật:**
+
+| vế | n | edge | đọc |
+|---|---:|---:|---|
+| Cấu trúc HH/HL/LH/LL | 5080 | +0.16 | ✓ có edge |
+| Taker Buy/Sell (spot **+ perp**) | 3232 | +0.08 | ✓ có edge — nhưng **thấp hơn** khi chỉ có spot (+0.11) |
+| Open Interest | 1252 | +0.05 | nhiễu |
+| Price Action | 5095 | +0.04 | nhiễu |
+| Vị trí trong Value Area | 5166 | −0.00 | nhiễu |
+| **Funding (ai trả ai)** | 133 | **−0.12** | ✗ **ĐI NGƯỢC** |
+| Lịch sử funding | 12 | −0.37 | gần như không bao giờ bắn |
+
+Và phần lệnh **qua cửa** còn **tệ đi**: avgR 0.21 → 0.11, PF 1.59 → 1.26.
+
+### Đã kiểm định giả thuyết "bỏ funding thì tốt hơn" — KHÔNG ĐÚNG
+
+Chọn trên nửa đầu, xác nhận trên nửa sau (`bench/phai-sinh-trong-so.txt`). Tổng
+trọng số giữ nguyên 103 ở mọi biến thể, nếu không thì ngưỡng hạng đổi nghĩa.
+
+| biến thể | qua cửa · nửa đầu | qua cửa · **NỬA SAU** |
+|---|---:|---:|
+| đang chạy (funding 8) | 0.08 | **0.26** |
+| bỏ funding (→ taker 28) | 0.12 | **0.21** |
+| bỏ funding + OI (→ taker 40) | 0.08 | **0.05** |
+| đối chứng: tăng funding ×2 | 0.07 | **0.14** |
+
+Cái đẹp lên trong mẫu (0.08 → 0.12) **đảo chiều** ngoài mẫu (0.26 → 0.21). Và
+ngoài mẫu chỉ có **n = 24–27 lệnh** — không con số nào ở cột đó nói được gì.
+"Mọi lệnh" thì bốn biến thể giống hệt nhau (−0.01 / −0.10, PF 0.98 / 0.79).
+
+**Kết luận: KHÔNG đổi trọng số.** Đổi trọng số dựa trên 24 lệnh ngoài mẫu đúng
+là kiểu uốn tham số mà cả bản audit này tồn tại để tránh.
+
+### Nói thẳng ra thì
+
+Ba vế phái sinh, ở mức trọng số hiện tại, **không làm được việc gì đo được**.
+Vế funding còn chỉ sai hướng, chỉ là mẫu quá nhỏ để hành động. Hệ thống thật ra
+đơn giản hơn cái nó tự mô tả: gần như toàn bộ tín hiệu đo được nằm ở **cấu trúc**
+và **taker flow**.
+
+Một giới hạn phải nêu: cửa chất lượng lọc chặt tới mức nửa sau của mẫu chỉ còn
+24 lệnh qua cửa. Mọi kết luận về "kèo qua cửa" đều đứng trên nền mẫu mỏng đó, bất
+kể trọng số thế nào.
+
 ## Giới hạn còn lại
 
-- Backtest chạy **mù phái sinh**: OI / funding / taker perp = N/A. Ba vế đó chưa
-  bao giờ được kiểm chứng, nên trọng số của chúng vẫn là niềm tin.
+- Backtest **mù phái sinh** đã hết là giới hạn — nay đo được (xem mục trên). Giới
+  hạn mới là mẫu: vế funding chỉ bắn 133 lần trên 5487 lệnh.
 - Nến dùng là **spot**, trong khi hệ khuyến nghị trên perp.
 - Nến 1m gỡ được tới mức phút; trong chính phút đó vẫn giữ giả định phía xấu.

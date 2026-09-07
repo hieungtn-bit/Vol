@@ -1,0 +1,107 @@
+Mù phái sinh vs có phái sinh · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến
+Thứ tự trong nến: gỡ bằng nến 1m
+
+  tải phái sinh BTCUSDT 15m … 87 kỳ funding · 8970 ảnh OI · 2459 nến perp 15m
+  ── BTCUSDT 15m ──
+  mù phái sinh           n=182    win=58.2%   avgR=-0.23   tổngR=-42.4    PF=0.48   DD=43.2
+  có phái sinh           n=185    win=62.7%   avgR=-0.18   tổngR=-32.9    PF=0.54   DD=33.7
+  tải phái sinh ETHUSDT 15m … 87 kỳ funding · 8970 ảnh OI · 2459 nến perp 15m
+  ── ETHUSDT 15m ──
+  mù phái sinh           n=195    win=61.0%   avgR=-0.08   tổngR=-16.0    PF=0.81   DD=25.6
+  có phái sinh           n=192    win=58.9%   avgR=-0.09   tổngR=-18.1    PF=0.78   DD=28.5
+  tải phái sinh ENAUSDT 15m … 174 kỳ funding · 8970 ảnh OI · 2459 nến perp 15m
+  ── ENAUSDT 15m ──
+  mù phái sinh           n=254    win=48.0%   avgR=-0.09   tổngR=-23.6    PF=0.81   DD=26.5
+  có phái sinh           n=263    win=47.9%   avgR=-0.09   tổngR=-24.9    PF=0.81   DD=27.8
+  tải phái sinh SOLUSDT 15m … 87 kỳ funding · 8970 ảnh OI · 2459 nến perp 15m
+  ── SOLUSDT 15m ──
+  mù phái sinh           n=231    win=52.8%   avgR=-0.14   tổngR=-32.6    PF=0.70   DD=36.2
+  có phái sinh           n=222    win=52.7%   avgR=-0.13   tổngR=-27.8    PF=0.73   DD=31.3
+  tải phái sinh BNBUSDT 15m … 87 kỳ funding · 8970 ảnh OI · 2459 nến perp 15m
+  ── BNBUSDT 15m ──
+  mù phái sinh           n=193    win=55.4%   avgR=-0.29   tổngR=-56.2    PF=0.41   DD=60.4
+  có phái sinh           n=197    win=55.3%   avgR=-0.30   tổngR=-58.2    PF=0.40   DD=62.4
+  tải phái sinh XRPUSDT 15m … 87 kỳ funding · 8970 ảnh OI · 2459 nến perp 15m
+  ── XRPUSDT 15m ──
+  mù phái sinh           n=220    win=60.0%   avgR=-0.02   tổngR=-5.3     PF=0.94   DD=9.9
+  có phái sinh           n=215    win=58.6%   avgR=-0.04   tổngR=-9.5     PF=0.89   DD=12.0
+  tải phái sinh BTCUSDT 1h … 368 kỳ funding · 35961 ảnh OI · 11456 nến perp 15m
+  ── BTCUSDT 1h ──
+  mù phái sinh           n=252    win=55.6%   avgR=-0.05   tổngR=-13.3    PF=0.87   DD=20.2
+  có phái sinh           n=245    win=56.7%   avgR=-0.03   tổngR=-7.8     PF=0.92   DD=15.7
+  tải phái sinh ETHUSDT 1h … 368 kỳ funding · 35961 ảnh OI · 11456 nến perp 15m
+  ── ETHUSDT 1h ──
+  mù phái sinh           n=279    win=50.5%   avgR=-0.10   tổngR=-26.5    PF=0.80   DD=29.7
+  có phái sinh           n=280    win=48.9%   avgR=-0.12   tổngR=-34.7    PF=0.75   DD=36.3
+  tải phái sinh ENAUSDT 1h … 736 kỳ funding · 35961 ảnh OI · 11456 nến perp 15m
+  ── ENAUSDT 1h ──
+  mù phái sinh           n=386    win=51.0%   avgR=0.06    tổngR=22.7     PF=1.12   DD=14.4
+  có phái sinh           n=391    win=50.9%   avgR=0.06    tổngR=25.2     PF=1.13   DD=15.8
+  tải phái sinh SOLUSDT 1h … 368 kỳ funding · 35961 ảnh OI · 11456 nến perp 15m
+  ── SOLUSDT 1h ──
+  mù phái sinh           n=314    win=50.6%   avgR=-0.08   tổngR=-26.4    PF=0.83   DD=27.4
+  có phái sinh           n=312    win=49.0%   avgR=-0.10   tổngR=-32.2    PF=0.80   DD=33.1
+  tải phái sinh BNBUSDT 1h … 368 kỳ funding · 35961 ảnh OI · 11456 nến perp 15m
+  ── BNBUSDT 1h ──
+  mù phái sinh           n=296    win=57.8%   avgR=-0.06   tổngR=-18.7    PF=0.85   DD=25.2
+  có phái sinh           n=295    win=57.6%   avgR=-0.07   tổngR=-21.7    PF=0.83   DD=27.6
+  tải phái sinh XRPUSDT 1h … 368 kỳ funding · 35961 ảnh OI · 11456 nến perp 15m
+  ── XRPUSDT 1h ──
+  mù phái sinh           n=320    win=49.7%   avgR=-0.13   tổngR=-41.5    PF=0.74   DD=42.3
+  có phái sinh           n=318    win=51.9%   avgR=-0.09   tổngR=-28.2    PF=0.81   DD=29.0
+  tải phái sinh BTCUSDT 4h … 1493 kỳ funding · 143958 ảnh OI · 47456 nến perp 15m
+  ── BTCUSDT 4h ──
+  mù phái sinh           n=391    win=46.3%   avgR=-0.10   tổngR=-40.7    PF=0.80   DD=47.1
+  có phái sinh           n=386    win=46.4%   avgR=-0.09   tổngR=-34.5    PF=0.83   DD=40.8
+  tải phái sinh ETHUSDT 4h … 1493 kỳ funding · 143958 ảnh OI · 47456 nến perp 15m
+  ── ETHUSDT 4h ──
+  mù phái sinh           n=388    win=44.8%   avgR=0.04    tổngR=16.5     PF=1.08   DD=17.7
+  có phái sinh           n=388    win=45.1%   avgR=0.05    tổngR=17.7     PF=1.09   DD=19.9
+  tải phái sinh ENAUSDT 4h … 2986 kỳ funding · 143958 ảnh OI · 47456 nến perp 15m
+  ── ENAUSDT 4h ──
+  mù phái sinh           n=411    win=45.5%   avgR=0.09    tổngR=36.1     PF=1.17   DD=15.2
+  có phái sinh           n=404    win=42.3%   avgR=0.01    tổngR=3.6      PF=1.02   DD=18.2
+  tải phái sinh SOLUSDT 4h … 1493 kỳ funding · 143958 ảnh OI · 47456 nến perp 15m
+  ── SOLUSDT 4h ──
+  mù phái sinh           n=388    win=43.8%   avgR=0.04    tổngR=15.2     PF=1.07   DD=22.3
+  có phái sinh           n=388    win=45.1%   avgR=0.07    tổngR=26.3     PF=1.13   DD=23.1
+  tải phái sinh BNBUSDT 4h … 1493 kỳ funding · 143958 ảnh OI · 47456 nến perp 15m
+  ── BNBUSDT 4h ──
+  mù phái sinh           n=408    win=45.1%   avgR=-0.09   tổngR=-34.7    PF=0.84   DD=40.7
+  có phái sinh           n=404    win=45.5%   avgR=-0.08   tổngR=-30.6    PF=0.86   DD=38.6
+  tải phái sinh XRPUSDT 4h … 1493 kỳ funding · 143958 ảnh OI · 47456 nến perp 15m
+  ── XRPUSDT 4h ──
+  mù phái sinh           n=407    win=45.0%   avgR=-0.01   tổngR=-3.8     PF=0.98   DD=17.7
+  có phái sinh           n=402    win=45.0%   avgR=0.00    tổngR=1.4      PF=1.01   DD=18.7
+
+══ TỔNG ══
+  mù phái sinh           n=5515   win=49.9%   avgR=-0.05   tổngR=-291.4   PF=0.89   DD=327.4
+  có phái sinh           n=5487   win=49.8%   avgR=-0.05   tổngR=-286.9   PF=0.89   DD=317.9
+
+  Ngoài mẫu (nửa sau theo thời gian):
+    mù   avgR=-0.10 PF=0.79
+    có   avgR=-0.10 PF=0.79
+
+── EDGE TỪNG VẾ · MÙ PHÁI SINH ──
+  Cấu trúc HH/HL/LH/LL               ủng hộ n=3630   avgR=-0.00   | chống n=1468   avgR=-0.17   | edge=0.17    ✓ có edge
+  Taker Buy/Sell                     ủng hộ n=1745   avgR=-0.02   | chống n=1045   avgR=-0.14   | edge=0.11    ✓ có edge
+  Price Action                       ủng hộ n=3964   avgR=-0.05   | chống n=1154   avgR=-0.08   | edge=0.03    · nhiễu
+  Vị trí trong Value Area            ủng hộ n=3512   avgR=-0.05   | chống n=1676   avgR=-0.06   | edge=0.00    · nhiễu
+  Open Interest                      ủng hộ n=0      avgR=0.00    | chống n=0      avgR=0.00    | edge=0.00    · quá ít mẫu
+  Volume (hệ số cho PA)              ủng hộ n=0      avgR=0.00    | chống n=0      avgR=0.00    | edge=0.00    · quá ít mẫu
+  Funding (ai trả ai)                ủng hộ n=0      avgR=0.00    | chống n=0      avgR=0.00    | edge=0.00    · quá ít mẫu
+
+── EDGE TỪNG VẾ · CÓ PHÁI SINH ──
+  Cấu trúc HH/HL/LH/LL               ủng hộ n=3566   avgR=-0.00   | chống n=1514   avgR=-0.16   | edge=0.16    ✓ có edge
+  Taker Buy/Sell                     ủng hộ n=2113   avgR=-0.03   | chống n=1119   avgR=-0.11   | edge=0.08    ✓ có edge
+  Open Interest                      ủng hộ n=1026   avgR=0.04    | chống n=226    avgR=-0.01   | edge=0.05    · nhiễu
+  Price Action                       ủng hộ n=3994   avgR=-0.05   | chống n=1101   avgR=-0.09   | edge=0.04    · nhiễu
+  Volume (hệ số cho PA)              ủng hộ n=0      avgR=0.00    | chống n=0      avgR=0.00    | edge=0.00    · quá ít mẫu
+  Thế đứng lẻ vs lớn                 ủng hộ n=0      avgR=0.00    | chống n=0      avgR=0.00    | edge=0.00    · quá ít mẫu
+  Vị trí trong Value Area            ủng hộ n=3467   avgR=-0.05   | chống n=1699   avgR=-0.05   | edge=-0.00   · nhiễu
+  Funding (ai trả ai)                ủng hộ n=87     avgR=-0.08   | chống n=46     avgR=0.04    | edge=-0.12   ✗ NGƯỢC
+  Lịch sử funding (chuỗi / đảo chiều) ủng hộ n=8      avgR=-0.81   | chống n=4      avgR=-0.44   | edge=-0.37   · quá ít mẫu
+
+── chỉ lệnh QUA CỬA ──
+  mù phái sinh           n=156    win=53.2%   avgR=0.21    tổngR=33.1     PF=1.59   DD=5.5
+  có phái sinh           n=145    win=49.0%   avgR=0.11    tổngR=15.6     PF=1.26   DD=12.3
