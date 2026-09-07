@@ -67,9 +67,9 @@ async function main() {
       const to = candles[candles.length - 1].t + TF_MS[tf];
 
       process.stdout.write(`  tải phái sinh ${symbol} ${tf} … `);
-      const archive = await loadDerivArchive(symbol, tf, from, to);
+      const archive = await loadDerivArchive(symbol, from, to);
       console.log(
-        `${archive.funding.length} kỳ funding · ${archive.metrics.length} ảnh OI · ${archive.perp.length} nến perp`,
+        `${archive.funding.length} kỳ funding · ${archive.metrics.length} ảnh OI · ${archive.perp15m.length} nến perp 15m`,
       );
       if (archive.funding.length === 0 && archive.metrics.length === 0) {
         console.log(`  ${symbol} ${tf}: kho không có phái sinh, bỏ qua`);

@@ -4,7 +4,7 @@ import { asOf, derivAt, priceChg1h, utcStampToMs, type DerivArchive } from '@/li
 const H = 3_600_000;
 
 function mk(over: Partial<DerivArchive> = {}): DerivArchive {
-  return { funding: [], metrics: [], perp: [], perp1h: [], ...over };
+  return { funding: [], metrics: [], perp15m: [], perp1h: [], ...over };
 }
 
 describe('đọc mốc thời gian của kho — ba bẫy đã vấp', () => {
@@ -56,15 +56,27 @@ describe('KHÔNG NHÌN TRỘM TƯƠNG LAI — chỗ dễ hỏng lặng lẽ nh�
     expect(priceChg1h(mk({ perp1h }), 3 * H)).toBeCloseTo(((999 - 110) / 110) * 100, 6);
   });
 
-  it('nến perp dùng cho taker cũng cắt tại t', () => {
-    const perp = [
+  it('nến perp cho taker phải ĐÓNG trước t, không chỉ bắt đầu trước t', () => {
+    const M15 = 15 * 60_000;
+    const perp15m = [
       { t: 0, c: 1, v: 100, takerBuyBase: 90 },
-      { t: 1000, c: 1, v: 100, takerBuyBase: 10 },
-      { t: 5000, c: 1, v: 100, takerBuyBase: 0 },
+      { t: M15, c: 1, v: 100, takerBuyBase: 10 },
+      { t: 2 * M15, c: 1, v: 100, takerBuyBase: 0 },   // còn đang chạy tại t
     ];
-    const d = derivAt(mk({ perp }), 2000);
+    const d = derivAt(mk({ perp15m }), 2 * M15 + 60_000);
     expect(d.perpRows).toHaveLength(2);
     expect(d.perpRows!.map((r) => r.buy)).toEqual([90, 10]);
+  });
+
+  it('taker perp LUÔN lấy nến 15m, không lấy nến của khung backtest', () => {
+    // Live gọi takerlongshortRatio?period=15m&limit=48 rồi lấy 8 dòng cuối = 2
+    // giờ. Backtest khung 4h mà lấy 8 nến 4h thì đang đo 32 giờ và gọi nó bằng
+    // cùng một cái tên. Ở đây chỉ có một chuỗi 15m nên không thể lẫn.
+    const M15 = 15 * 60_000;
+    const perp15m = Array.from({ length: 60 }, (_, i) => ({
+      t: i * M15, c: 1, v: 100, takerBuyBase: 50,
+    }));
+    expect(derivAt(mk({ perp15m }), 60 * M15).perpRows).toHaveLength(48);
   });
 });
 

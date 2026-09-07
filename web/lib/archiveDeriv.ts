@@ -194,8 +194,16 @@ const FUNDING_HISTORY_N = 12;
 export interface DerivArchive {
   funding: FundingRow[];
   metrics: MetricRow[];
-  /** Nến perp ở ĐÚNG khung backtest — dùng cho taker delta. */
-  perp: PerpBar[];
+  /**
+   * Nến perp 15 PHÚT — dùng cho taker delta, và LUÔN là 15m bất kể khung backtest.
+   *
+   * Đường live gọi `takerlongshortRatio?period=15m&limit=48` rồi `perpTakerFlow`
+   * lấy 8 dòng cuối, tức 2 GIỜ gần nhất — con số đó không đổi theo khung đang
+   * phân tích. Nếu backtest khung 4h lại lấy 8 nến 4h thì nó đang đo 32 giờ và
+   * gọi kết quả là "taker perp" giống hệt tên mà live dùng cho 2 giờ. Hai thứ
+   * khác nhau đội cùng một cái tên là cách chắc chắn nhất để kết luận sai.
+   */
+  perp15m: PerpBar[];
   /**
    * Nến perp 1 GIỜ, tải bất kể khung backtest là gì.
    *
@@ -207,19 +215,26 @@ export interface DerivArchive {
   perp1h: PerpBar[];
 }
 
-/** Tải trọn bộ phái sinh cho một mã trong một khoảng. */
+/**
+ * Tải trọn bộ phái sinh cho một mã trong một khoảng.
+ *
+ * KHÔNG nhận khung backtest: mọi chuỗi ở đây có khung CỐ ĐỊNH, đúng bằng khung
+ * mà đường live dùng cho từng thứ (taker 15m, Δ giá 1h). Nhận khung vào đây là
+ * mở cửa cho việc backtest khung 4h đo một thứ khác live.
+ */
 export async function loadDerivArchive(
-  symbol: string, tf: string, from: number, to: number,
+  symbol: string, from: number, to: number,
 ): Promise<DerivArchive> {
   // Funding cần lùi thêm để lịch sử tại nến đầu tiên cũng đủ kỳ.
   const back = from - FUNDING_HISTORY_N * 8 * 3_600_000;
-  const [funding, metrics, perp, perp1h] = await Promise.all([
+  const [funding, metrics, perp15m, perp1h] = await Promise.all([
     loadFunding(symbol, back, to),
     loadMetrics(symbol, from - 25 * 3_600_000, to),   // lùi 25h cho phép tính Δ24h
-    loadPerpBars(symbol, tf, from, to),
-    tf === '1h' ? Promise.resolve(null) : loadPerpBars(symbol, '1h', from - 3 * 3_600_000, to),
+    // Lùi thêm 12 tiếng: tại nến đầu tiên cũng phải đủ 8 cây 15m phía sau.
+    loadPerpBars(symbol, '15m', from - 12 * 3_600_000, to),
+    loadPerpBars(symbol, '1h', from - 3 * 3_600_000, to),
   ]);
-  return { funding, metrics, perp, perp1h: perp1h ?? perp };
+  return { funding, metrics, perp15m, perp1h };
 }
 
 /**
@@ -314,7 +329,10 @@ export function derivAt(
   // ---- Taker perp ----
   // buildFlow() nhận các dòng {buy, sell} chứ không nhận DeltaInfo, nên dựng ở đây
   // rồi để chính buildFlow tính — cùng đường code với live.
-  const perpBars = a.perp.filter((b) => b.t <= t).slice(-24);
+  //
+  // 48 dòng 15m, đúng bằng `limit=48` mà live gọi; perpTakerFlow sẽ tự lấy 8
+  // dòng cuối. Chỉ nhận nến đã ĐÓNG trước t.
+  const perpBars = a.perp15m.filter((b) => b.t + 15 * 60_000 <= t).slice(-48);
   const perpRows = perpBars.length
     ? perpBars.map((b) => ({ buy: b.takerBuyBase, sell: Math.max(0, b.v - b.takerBuyBase) }))
     : null;
