@@ -1,6 +1,8 @@
 import { prepareTF } from './analyze';
+import { derivAt } from './archiveDeriv';
 import { decideDirection, type Conviction, type DirectionalCall, type Weights } from './direct';
 import { buildFlow } from './flow';
+import type { DerivArchive } from './archiveDeriv';
 import type { MinuteFeed } from './minute';
 import type { Candle, Derivatives, TF } from './types';
 
@@ -177,6 +179,16 @@ function sliceAsOf(candles: Candle[], i: number, window: number): Candle[] {
   return candles.slice(from, i + 1).map((c) => (c.closed ? c : { ...c, closed: true }));
 }
 
+/**
+ * Nguồn phái sinh lịch sử. Không truyền thì backtest chạy MÙ PHÁI SINH như cũ —
+ * và khi đó ba vế OI / funding / taker perp không chấm điểm, đúng như trước.
+ */
+export interface DerivSource {
+  archive: DerivArchive;
+  /** Độ dài một nến, ms — để biết nến i đóng lúc nào. */
+  tfMs: number;
+}
+
 /** Tín hiệu tại nến i, chỉ nhìn 0..i. Trả null khi không đủ dữ liệu. */
 export function signalAt(
   symbol: string,
@@ -187,15 +199,27 @@ export function signalAt(
   weights: Weights | null = null,
   valueMigration = true,
   maxVAoverATR: number | null = null,
+  derivSrc: DerivSource | null = null,
 ): DirectionalCall | null {
   const slice = sliceAsOf(candles, i, window);
-  const deriv = blindDerivatives();
+
+  // Thời điểm nến i ĐÓNG. Phái sinh chỉ được lấy tới đúng mốc này — funding chốt
+  // lúc 16:00 thì tại nến 15:45 ta chưa biết nó.
+  const closeT = candles[i].t + (derivSrc?.tfMs ?? 0);
+  const d = derivSrc ? derivAt(derivSrc.archive, closeT) : null;
+  const deriv = d?.deriv ?? blindDerivatives();
+
   const prepared = prepareTF({
     symbol, tf, candles: slice, deriv, htf: null, hasClosedBar: true,
     valueMigration, maxVAoverATR,
   });
   if (!prepared) return null;
-  const flow = buildFlow(null, slice, { retailLongPct: null, topLongPct: null }, deriv.funding);
+  const flow = buildFlow(
+    d?.perpRows ?? null,
+    slice,
+    d?.positioning ?? { retailLongPct: null, topLongPct: null },
+    deriv.funding,
+  );
   return decideDirection(prepared.input, prepared.structure, flow, weights ?? undefined);
 }
 
@@ -409,6 +433,7 @@ export function runBacktest(
   candles: Candle[],
   opt: BTOptions = DEFAULT_BT,
   ctx?: SimContext,
+  derivSrc: DerivSource | null = null,
 ): Trade[] {
   const window = BT_WINDOW[tf];
   const trades: Trade[] = [];
@@ -416,7 +441,7 @@ export function runBacktest(
 
   for (let i = window; i < candles.length - 2; i++) {
     if (opt.onePositionAtATime && i <= busyUntil) continue;
-    const call = signalAt(symbol, tf, candles, i, window, opt.weights, opt.valueMigration, opt.maxVAoverATR);
+    const call = signalAt(symbol, tf, candles, i, window, opt.weights, opt.valueMigration, opt.maxVAoverATR, derivSrc);
     if (!call) continue;
     if (RANK[call.conviction] < RANK[opt.minConviction]) continue;
     if (opt.minNet !== null && Math.abs(call.net) < opt.minNet) continue;

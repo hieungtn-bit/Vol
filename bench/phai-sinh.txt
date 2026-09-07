@@ -1,0 +1,8 @@
+Mù phái sinh vs có phái sinh · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến
+Thứ tự trong nến: gỡ bằng nến 1m
+
+  tải phái sinh BTCUSDT 15m … 87 kỳ funding · 8976 ảnh OI · 2413 nến perp
+  ── BTCUSDT 15m ──
+  mù phái sinh           n=181    win=58.0%   avgR=-0.24   tổngR=-43.2    PF=0.47   DD=43.2
+  có phái sinh           n=179    win=61.5%   avgR=-0.19   tổngR=-34.5    PF=0.51   DD=34.5
+  tải phái sinh ETHUSDT 15m … 

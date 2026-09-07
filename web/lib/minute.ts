@@ -86,6 +86,18 @@ function monthsBetween(fromMs: number, toMsEnd: number): string[] {
   return out;
 }
 
+/**
+ * Tải một file trong kho và trả về nội dung CSV, hoặc null khi kho không có.
+ *
+ * Tách ra vì phái sinh lịch sử (archiveDeriv.ts) dùng đúng cơ chế này — cùng
+ * cache trên đĩa, cùng cách nhớ 404 — chỉ khác đường dẫn. Chép lại thì hai bản
+ * sẽ trôi khỏi nhau đúng lúc không ai để ý.
+ */
+export async function archiveGet(path: string, cacheName: string): Promise<string | null> {
+  const buf = await download(`${ARCHIVE}/${path}`, join(CACHE_DIR, cacheName));
+  return buf ? unzipFirst(buf) : null;
+}
+
 async function download(url: string, cachePath: string): Promise<Buffer | null> {
   if (existsSync(cachePath)) {
     const b = readFileSync(cachePath);
