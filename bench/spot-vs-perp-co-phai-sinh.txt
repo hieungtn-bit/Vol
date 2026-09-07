@@ -1,76 +1,76 @@
 Nến spot vs nến perp · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến
-Phái sinh: mù (để chỉ còn một biến đổi)
+Phái sinh: CÓ
 
-  ── BTCUSDT 15m (2380 nến khớp) ──
-  nến spot                   n=145    win=57.9%   avgR=-0.21   tổngR=-30.8    PF=0.50   DD=30.8
-  nến perp                   n=161    win=62.1%   avgR=-0.12   tổngR=-19.8    PF=0.64   DD=20.1
-  ── ETHUSDT 15m (2380 nến khớp) ──
-  nến spot                   n=150    win=62.0%   avgR=-0.05   tổngR=-7.1     PF=0.89   DD=13.3
-  nến perp                   n=148    win=54.7%   avgR=-0.17   tổngR=-24.8    PF=0.61   DD=28.8
-  ── ENAUSDT 15m (2380 nến khớp) ──
-  nến spot                   n=201    win=48.8%   avgR=-0.07   tổngR=-14.3    PF=0.85   DD=23.8
-  nến perp                   n=192    win=48.4%   avgR=-0.10   tổngR=-19.6    PF=0.80   DD=33.1
-  ── SOLUSDT 15m (2380 nến khớp) ──
-  nến spot                   n=187    win=52.4%   avgR=-0.14   tổngR=-25.4    PF=0.70   DD=28.0
-  nến perp                   n=199    win=54.3%   avgR=-0.18   tổngR=-34.8    PF=0.63   DD=35.9
-  ── BNBUSDT 15m (2380 nến khớp) ──
-  nến spot                   n=153    win=54.2%   avgR=-0.33   tổngR=-50.2    PF=0.36   DD=50.9
-  nến perp                   n=140    win=51.4%   avgR=-0.37   tổngR=-52.4    PF=0.31   DD=53.9
-  ── XRPUSDT 15m (2380 nến khớp) ──
-  nến spot                   n=163    win=60.1%   avgR=-0.01   tổngR=-1.1     PF=0.98   DD=9.3
-  nến perp                   n=157    win=57.3%   avgR=0.02    tổngR=2.7      PF=1.04   DD=9.1
-  ── BTCUSDT 1h (2845 nến khớp) ──
-  nến spot                   n=246    win=54.9%   avgR=-0.08   tổngR=-19.7    PF=0.82   DD=21.5
-  nến perp                   n=277    win=55.2%   avgR=-0.12   tổngR=-33.8    PF=0.73   DD=35.1
-  ── ETHUSDT 1h (2845 nến khớp) ──
-  nến spot                   n=262    win=49.2%   avgR=-0.10   tổngR=-27.1    PF=0.78   DD=29.4
-  nến perp                   n=272    win=52.9%   avgR=0.02    tổngR=4.2      PF=1.03   DD=16.9
-  ── ENAUSDT 1h (2845 nến khớp) ──
-  nến spot                   n=365    win=51.2%   avgR=0.07    tổngR=24.7     PF=1.14   DD=14.4
-  nến perp                   n=318    win=44.0%   avgR=-0.05   tổngR=-15.8    PF=0.91   DD=41.0
-  ── SOLUSDT 1h (2845 nến khớp) ──
-  nến spot                   n=298    win=51.0%   avgR=-0.08   tổngR=-22.8    PF=0.84   DD=24.9
-  nến perp                   n=315    win=48.6%   avgR=-0.12   tổngR=-37.8    PF=0.77   DD=43.0
-  ── BNBUSDT 1h (2845 nến khớp) ──
-  nến spot                   n=279    win=58.4%   avgR=-0.04   tổngR=-12.3    PF=0.89   DD=24.8
-  nến perp                   n=255    win=52.9%   avgR=-0.09   tổngR=-23.4    PF=0.79   DD=25.7
-  ── XRPUSDT 1h (2845 nến khớp) ──
-  nến spot                   n=298    win=49.7%   avgR=-0.13   tổngR=-38.5    PF=0.74   DD=38.5
-  nến perp                   n=294    win=54.8%   avgR=-0.01   tổngR=-3.8     PF=0.97   DD=19.5
-  ── BTCUSDT 4h (2961 nến khớp) ──
-  nến spot                   n=384    win=46.4%   avgR=-0.10   tổngR=-39.6    PF=0.80   DD=46.3
-  nến perp                   n=383    win=48.0%   avgR=-0.05   tổngR=-18.2    PF=0.91   DD=27.1
-  ── ETHUSDT 4h (2961 nến khớp) ──
-  nến spot                   n=383    win=44.9%   avgR=0.04    tổngR=16.6     PF=1.08   DD=17.7
-  nến perp                   n=384    win=52.9%   avgR=0.16    tổngR=61.4     PF=1.36   DD=14.5
-  ── ENAUSDT 4h (2961 nến khớp) ──
-  nến spot                   n=408    win=45.3%   avgR=0.09    tổngR=38.3     PF=1.18   DD=15.2
-  nến perp                   n=399    win=43.1%   avgR=0.01    tổngR=5.1      PF=1.02   DD=21.2
-  ── SOLUSDT 4h (2961 nến khớp) ──
-  nến spot                   n=383    win=43.9%   avgR=0.05    tổngR=17.4     PF=1.09   DD=22.3
-  nến perp                   n=392    win=45.2%   avgR=-0.00   tổngR=-0.1     PF=1.00   DD=31.3
-  ── BNBUSDT 4h (2961 nến khớp) ──
-  nến spot                   n=401    win=45.1%   avgR=-0.08   tổngR=-33.2    PF=0.84   DD=40.7
-  nến perp                   n=391    win=43.2%   avgR=-0.16   tổngR=-62.9    PF=0.72   DD=67.1
-  ── XRPUSDT 4h (2961 nến khớp) ──
-  nến spot                   n=401    win=45.1%   avgR=-0.01   tổngR=-2.5     PF=0.99   DD=17.5
-  nến perp                   n=402    win=45.8%   avgR=-0.02   tổngR=-9.1     PF=0.96   DD=29.3
+  ── BTCUSDT 15m (2956 nến khớp) ──
+  nến spot                   n=181    win=63.0%   avgR=-0.15   tổngR=-27.2    PF=0.58   DD=27.2
+  nến perp                   n=193    win=58.5%   avgR=-0.18   tổngR=-35.3    PF=0.53   DD=35.6
+  ── ETHUSDT 15m (2956 nến khớp) ──
+  nến spot                   n=191    win=57.6%   avgR=-0.12   tổngR=-22.7    PF=0.74   DD=29.5
+  nến perp                   n=193    win=51.3%   avgR=-0.24   tổngR=-46.8    PF=0.50   DD=48.7
+  ── ENAUSDT 15m (2956 nến khớp) ──
+  nến spot                   n=259    win=47.5%   avgR=-0.09   tổngR=-24.0    PF=0.81   DD=25.8
+  nến perp                   n=229    win=52.4%   avgR=0.04    tổngR=8.9      PF=1.09   DD=12.4
+  ── SOLUSDT 15m (2956 nến khớp) ──
+  nến spot                   n=222    win=52.7%   avgR=-0.13   tổngR=-28.1    PF=0.73   DD=31.4
+  nến perp                   n=240    win=53.8%   avgR=-0.19   tổngR=-44.4    PF=0.63   DD=44.7
+  ── BNBUSDT 15m (2956 nến khớp) ──
+  nến spot                   n=197    win=54.8%   avgR=-0.32   tổngR=-62.4    PF=0.37   DD=63.6
+  nến perp                   n=180    win=54.4%   avgR=-0.31   tổngR=-56.6    PF=0.38   DD=58.4
+  ── XRPUSDT 15m (2956 nến khớp) ──
+  nến spot                   n=214    win=58.4%   avgR=-0.04   tổngR=-9.4     PF=0.89   DD=12.5
+  nến perp                   n=204    win=59.8%   avgR=0.01    tổngR=1.9      PF=1.02   DD=7.9
+  ── BTCUSDT 1h (2989 nến khớp) ──
+  nến spot                   n=247    win=56.3%   avgR=-0.04   tổngR=-10.3    PF=0.90   DD=15.9
+  nến perp                   n=284    win=53.2%   avgR=-0.14   tổngR=-40.9    PF=0.69   DD=43.7
+  ── ETHUSDT 1h (2989 nến khớp) ──
+  nến spot                   n=278    win=48.9%   avgR=-0.12   tổngR=-33.1    PF=0.76   DD=35.9
+  nến perp                   n=290    win=52.1%   avgR=0.00    tổngR=1.1      PF=1.01   DD=19.8
+  ── ENAUSDT 1h (2989 nến khớp) ──
+  nến spot                   n=390    win=51.0%   avgR=0.07    tổngR=27.1     PF=1.14   DD=15.8
+  nến perp                   n=342    win=45.0%   avgR=-0.04   tổngR=-13.7    PF=0.92   DD=31.2
+  ── SOLUSDT 1h (2989 nến khớp) ──
+  nến spot                   n=310    win=49.0%   avgR=-0.10   tổngR=-31.9    PF=0.80   DD=33.1
+  nến perp                   n=322    win=49.4%   avgR=-0.10   tổngR=-32.2    PF=0.80   DD=41.9
+  ── BNBUSDT 1h (2989 nến khớp) ──
+  nến spot                   n=293    win=57.3%   avgR=-0.07   tổngR=-21.9    PF=0.83   DD=27.6
+  nến perp                   n=274    win=51.1%   avgR=-0.14   tổngR=-37.9    PF=0.71   DD=38.1
+  ── XRPUSDT 1h (2989 nến khớp) ──
+  nến spot                   n=318    win=51.9%   avgR=-0.09   tổngR=-28.3    PF=0.81   DD=29.1
+  nến perp                   n=299    win=55.2%   avgR=-0.02   tổngR=-4.6     PF=0.96   DD=19.4
+  ── BTCUSDT 4h (2997 nến khớp) ──
+  nến spot                   n=384    win=46.6%   avgR=-0.08   tổngR=-32.1    PF=0.84   DD=40.1
+  nến perp                   n=381    win=48.0%   avgR=-0.04   tổngR=-15.2    PF=0.92   DD=21.6
+  ── ETHUSDT 4h (2997 nến khớp) ──
+  nến spot                   n=387    win=45.2%   avgR=0.04    tổngR=17.1     PF=1.08   DD=19.9
+  nến perp                   n=392    win=51.3%   avgR=0.12    tổngR=48.2     PF=1.26   DD=18.8
+  ── ENAUSDT 4h (2997 nến khớp) ──
+  nến spot                   n=404    win=42.3%   avgR=0.01    tổngR=4.2      PF=1.02   DD=18.2
+  nến perp                   n=410    win=43.7%   avgR=0.03    tổngR=11.4     PF=1.05   DD=20.5
+  ── SOLUSDT 4h (2997 nến khớp) ──
+  nến spot                   n=388    win=45.1%   avgR=0.07    tổngR=26.3     PF=1.13   DD=23.1
+  nến perp                   n=397    win=44.8%   avgR=0.00    tổngR=0.8      PF=1.00   DD=28.3
+  ── BNBUSDT 4h (2997 nến khớp) ──
+  nến spot                   n=404    win=45.5%   avgR=-0.08   tổngR=-30.6    PF=0.86   DD=38.6
+  nến perp                   n=400    win=43.0%   avgR=-0.16   tổngR=-65.3    PF=0.71   DD=71.4
+  ── XRPUSDT 4h (2997 nến khớp) ──
+  nến spot                   n=402    win=45.3%   avgR=0.01    tổngR=3.5      PF=1.02   DD=18.7
+  nến perp                   n=410    win=43.4%   avgR=-0.09   tổngR=-35.8    PF=0.84   DD=41.2
 
 ── hai chợ khác nhau bao nhiêu ──
   giá đóng lệch trung bình 0.0515% · lớn nhất 0.460%
-  volume perp / volume spot trung bình 8.12×
+  volume perp / volume spot trung bình 8.10×
 
 ══ TỔNG ══
-  nến spot                   n=5107   win=49.6%   avgR=-0.04   tổngR=-227.8   PF=0.91   DD=272.0
-  nến perp                   n=5079   win=49.6%   avgR=-0.06   tổngR=-283.0   PF=0.89   DD=298.4
+  nến spot                   n=5469   win=49.8%   avgR=-0.05   tổngR=-283.5   PF=0.89   DD=317.5
+  nến perp                   n=5440   win=49.5%   avgR=-0.07   tổngR=-356.5   PF=0.87   DD=358.5
 
   Ngoài mẫu (nửa sau theo thời gian):
-    spot  n=2554   avgR=-0.09 PF=0.81
-    perp  n=2540   avgR=-0.10 PF=0.79
+    spot  n=2735   avgR=-0.10 PF=0.79
+    perp  n=2720   avgR=-0.10 PF=0.79
 
 ── chỉ lệnh QUA CỬA ──
-  nến spot                   n=155    win=52.9%   avgR=0.21    tổngR=32.5     PF=1.57   DD=5.5
-  nến perp                   n=172    win=50.0%   avgR=0.14    tổngR=23.9     PF=1.33   DD=9.2
+  nến spot                   n=145    win=49.0%   avgR=0.11    tổngR=15.6     PF=1.26   DD=12.3
+  nến perp                   n=150    win=48.0%   avgR=0.09    tổngR=12.8     PF=1.19   DD=15.1
   ngoài mẫu:
-    spot  n=27     avgR=0.22 PF=1.71
-    perp  n=50     avgR=0.16 PF=1.43
+    spot  n=24     avgR=0.26 PF=1.91
+    perp  n=38     avgR=0.32 PF=2.07

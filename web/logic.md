@@ -31,7 +31,12 @@ Mọi symbol chạy **cùng một engine**. Không có ngoại lệ hardcode cho
 > (n=156, t = +2.36, KTC 95% [+0.03, +0.36]). Đọc là **giả thuyết có bằng chứng
 > ủng hộ**, chưa phải lợi thế đã chứng minh.
 >
-> Nguồn đầy đủ, kèm cách chạy lại: [`bench/README.md`](../bench/README.md).
+> Nguồn đầy đủ, kèm cách chạy lại: [`bench/README.md`](../bench/README.md).>
+> **Hai điều đã đo và KHÔNG đáng đổi:** (1) ba vế phái sinh — OI, funding, taker
+> perp, chiếm 40/103 trọng số — nay lấy được dữ liệu lịch sử thật và **không làm
+> được việc gì đo được**; vế funding còn chỉ sai hướng (edge −0.12). (2) Hệ phân
+> tích nến **spot** rồi khuyến nghị lệnh **perp**; chạy lại toàn bộ trên nến perp
+> cho kết quả **không tốt hơn** (PF 0.87 vs 0.89).
 > Các bảng dưới đây giữ nguyên để đối chiếu lịch sử, **không phải để tin**.
 
 

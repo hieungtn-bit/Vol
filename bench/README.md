@@ -167,9 +167,46 @@ Một giới hạn phải nêu: cửa chất lượng lọc chặt tới mức n
 24 lệnh qua cửa. Mọi kết luận về "kèo qua cửa" đều đứng trên nền mẫu mỏng đó, bất
 kể trọng số thế nào.
 
+## Nến spot hay nến perp? — đo rồi, không đáng đổi
+
+Hệ khuyến nghị lệnh trên **perp**, nhưng cả đường live lẫn backtest đều dựng
+volume profile, price action, cấu trúc và mọi mức giá từ nến **spot**
+(`scan.ts` gọi `fetchKlines` trên SPOT base). Nên backtest **không sai so với
+live** — cả hai cùng lệch một kiểu. Câu hỏi là chỗ lệch đó có đổi kết quả không.
+
+`scripts/market.ts` đổi **đúng một biến**: nguồn nến. Giao hai chuỗi theo
+timestamp để hai bên có đúng cùng những cây nến; nến 1m gỡ thứ tự cũng lấy đúng
+chợ đang mô phỏng.
+
+Hai chợ khác nhau: giá đóng lệch trung bình **0.0515%** (lớn nhất 0.46%), nhưng
+volume perp gấp **8.10×** volume spot — tức volume profile được dựng từ hai phân
+bố rất khác nhau.
+
+| | mù phái sinh | | có phái sinh | |
+|---|---:|---:|---:|---:|
+| | **spot** | **perp** | **spot** | **perp** |
+| mọi lệnh · avgR | −0.05 | −0.06 | −0.05 | −0.07 |
+| mọi lệnh · PF | 0.89 | 0.87 | 0.89 | 0.87 |
+| ngoài mẫu · PF | 0.79 | 0.78 | 0.79 | 0.79 |
+| qua cửa · avgR | 0.21 | 0.13 | 0.11 | 0.09 |
+| qua cửa · n | 156 | 176 | 145 | 150 |
+| qua cửa ngoài mẫu · avgR | 0.18 (n=26) | 0.14 (n=48) | 0.26 (n=24) | **0.32 (n=38)** |
+
+**Kết luận: không đổi.** Perp không tốt hơn ở bất kỳ cột nào có đủ mẫu, và hơi
+tệ hơn ở tổng thể. Ô duy nhất perp thắng (qua cửa ngoài mẫu, có phái sinh) có
+n=38 và **đảo chiều** khi chạy mù phái sinh trên cùng dữ liệu — chính sự bất ổn
+đó là bằng chứng ô đó là nhiễu.
+
+Một điểm nhất quán ở cả hai cấu hình: nến perp cho **nhiều** kèo qua cửa hơn
+nhưng **avgR thấp hơn**, tức nó làm cửa bớt chọn lọc. Ghi lại để biết, không đủ
+để hành động.
+
+Chỗ lệch spot/perp vì thế là một lo lắng **đã được gỡ**, không phải một lỗi cần sửa.
+
 ## Giới hạn còn lại
 
 - Backtest **mù phái sinh** đã hết là giới hạn — nay đo được (xem mục trên). Giới
   hạn mới là mẫu: vế funding chỉ bắn 133 lần trên 5487 lệnh.
-- Nến dùng là **spot**, trong khi hệ khuyến nghị trên perp.
+- Nến dùng là **spot** trong khi hệ khuyến nghị trên perp — đã đo, không đổi kết
+  quả (xem mục trên). Đây là đặc điểm đã biết, không còn là ẩn số.
 - Nến 1m gỡ được tới mức phút; trong chính phút đó vẫn giữ giả định phía xấu.
