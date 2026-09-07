@@ -5,4 +5,24 @@ Thứ tự trong nến: gỡ bằng nến 1m
   ── BTCUSDT 15m ──
   mù phái sinh           n=181    win=58.0%   avgR=-0.24   tổngR=-43.2    PF=0.47   DD=43.2
   có phái sinh           n=179    win=61.5%   avgR=-0.19   tổngR=-34.5    PF=0.51   DD=34.5
-  tải phái sinh ETHUSDT 15m … 
+  tải phái sinh ETHUSDT 15m … 87 kỳ funding · 8976 ảnh OI · 2413 nến perp
+  ── ETHUSDT 15m ──
+  mù phái sinh           n=195    win=61.0%   avgR=-0.08   tổngR=-16.1    PF=0.80   DD=25.6
+  có phái sinh           n=196    win=60.2%   avgR=-0.08   tổngR=-16.2    PF=0.81   DD=25.7
+  tải phái sinh ENAUSDT 15m … 174 kỳ funding · 8976 ảnh OI · 2413 nến perp
+  ── ENAUSDT 15m ──
+  mù phái sinh           n=254    win=48.0%   avgR=-0.09   tổngR=-23.7    PF=0.81   DD=26.5
+  có phái sinh           n=264    win=48.1%   avgR=-0.09   tổngR=-24.3    PF=0.81   DD=27.1
+  tải phái sinh SOLUSDT 15m … 87 kỳ funding · 8976 ảnh OI · 2413 nến perp
+  ── SOLUSDT 15m ──
+  mù phái sinh           n=228    win=52.6%   avgR=-0.14   tổngR=-31.5    PF=0.70   DD=34.6
+  có phái sinh           n=225    win=53.8%   avgR=-0.12   tổngR=-28.1    PF=0.73   DD=31.1
+  tải phái sinh BNBUSDT 15m … 87 kỳ funding · 8976 ảnh OI · 2413 nến perp
+  ── BNBUSDT 15m ──
+  mù phái sinh           n=193    win=55.4%   avgR=-0.29   tổngR=-56.9    PF=0.40   DD=60.4
+  có phái sinh           n=194    win=55.7%   avgR=-0.29   tổngR=-56.8    PF=0.41   DD=60.3
+  tải phái sinh XRPUSDT 15m … 87 kỳ funding · 8976 ảnh OI · 2413 nến perp
+  ── XRPUSDT 15m ──
+  mù phái sinh           n=221    win=60.6%   avgR=-0.02   tổngR=-3.7     PF=0.96   DD=9.3
+  có phái sinh           n=214    win=59.3%   avgR=-0.03   tổngR=-7.2     PF=0.92   DD=9.7
+  tải phái sinh BTCUSDT 1h … 
