@@ -264,6 +264,64 @@ hơn bộ nào ở đó. Cửa lọc quá chặt để tự kiểm chứng chín
 và taker làm cửa bớt chọn lọc. Tức chính hai vế có bằng chứng là thứ đang siết
 cửa lại.
 
+## Đường /strict — lần đầu được đo, và vì sao nó trống
+
+Người dùng báo `scan.maix8.study/strict/` không có tín hiệu nào. Chẩn đoán trên
+dữ liệu thật (một snapshot duy nhất, 7 mã × 4 khung): **28/28 đều WAIT**, trong
+khi trang chính vẫn ra 28 hướng.
+
+### Nguyên nhân: một bản vá áp cho đường này nhưng bỏ quên đường kia
+
+ENA 1h và SOL 1h hôm đó đều đủ **cả bốn vế hợp lưu**:
+
+    +2    PA ở mép (breakdown)
+    +2    VP: giá ở mép value (VAH)
+    +1.5  Nến đóng xác nhận + volume ≥ median 20
+    +1.5  OI đồng hướng
+    ────  = 7.0   ← đúng bằng ngưỡng
+    -2    RR TP1 = 0.86 < 1.2
+    ────  = 5.0   → WAIT
+
+Khoản phạt `RR TP1 < 1.2` **đã bị bỏ khỏi `decideDirection`** — có test khoá việc
+bỏ (`expect(warn).not.toContain('RR TP1')`) — vì TP1 theo thiết kế là bậc GẦN
+NHẤT, nên rr1 < 1 là bình thường chứ không phải kèo tồi. Bản vá không được áp
+sang `scoreConfluence`, nên đường strict vẫn phạt.
+
+### Đo lần đầu
+
+`decideBias` **chưa từng được backtest**. Mọi con số backtest trong repo tới nay
+đều đo `decideDirection`. Nên ngưỡng score ≥ 7, các trọng số hợp lưu và cả khoản
+phạt này đều chưa qua một lần đo nào.
+
+`lib/backtestStrict.ts` + `scripts/strict.ts`, dùng **chung `simulate()`** với
+đường kia (khác bộ mô phỏng thì chênh lệch có thể đến từ luật vào lệnh):
+
+| | tín hiệu | n | avgR | PF | ngoài mẫu | sai số |
+|---|---:|---:|---:|---:|---|---:|
+| có phạt (đang chạy) | 60 (0.12%) | 39 | −0.14 | 0.80 | −0.13 · PF 0.83 | ±0.223 |
+| **bỏ phạt** | **181 (0.35%)** | 138 | **−0.07** | **0.86** | **−0.02 · PF 0.95** | **±0.088** |
+
+Bỏ phạt cho **gấp ba** số tín hiệu, avgR tốt hơn, ngoài mẫu tốt hơn, và sai số
+**giảm một nửa** vì mẫu lớn hơn. Đã chuyển mặc định sang bỏ phạt.
+
+**Nhưng cả hai đều PF < 1.** Bỏ phạt làm đường strict **lỗ ít hơn** và ra tín hiệu
+trở lại, không phải làm nó có lãi. Và nó chỉ bắn **0.35% số nến** — `/strict` sẽ
+vẫn trống phần lớn thời gian, đúng thiết kế.
+
+### Lỗi thứ hai: nhãn nói ngược sự thật (6/28 khung)
+
+Màn hình hiện `"Giá đứng GIỮA value area"` ngay cạnh câu `"giá đã rời hẳn xuống
+dưới value"`. Ví dụ BNB 15m: giá 721.49, VA 744–759.5 — **dưới VA 1.45 lần bề
+rộng VA**.
+
+Nguồn không phải chỗ tôi đoán ban đầu (`inMidValue`, vốn trả false đúng). Nó ở
+nhánh `side === null` của `decideBias`, chỗ gán CỨNG một nhãn — trong khi `side`
+null vì **hai lý do ngược nhau**: đứng giữa VA, hoặc đã rời hẳn ra ngoài > 1.2
+ATR. Đã tách bằng `noEdgeReason()`.
+
+Lỗi này không chặn tín hiệu (không có side thì điểm đằng nào cũng 0), nhưng nó
+nói với người đọc điều ngược lại sự thật.
+
 ## Giới hạn còn lại
 
 - Backtest **mù phái sinh** đã hết là giới hạn — nay đo được (xem mục trên). Giới

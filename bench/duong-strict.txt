@@ -1,0 +1,14 @@
+Đường STRICT · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến
+Thứ tự trong nến: gỡ bằng nến 1m
+
+..................
+
+══ TOÀN MẪU ══
+  CÓ phạt (đang chạy)      tín hiệu 60     (0.12%  ) n=39    win=41.0%   avgR=-0.14   tổngR=-5.5     PF=0.80   DD=7.6
+  BỎ phạt                  tín hiệu 181    (0.35%  ) n=138   win=53.6%   avgR=-0.07   tổngR=-9.8     PF=0.86   DD=12.8
+
+── ngoài mẫu (nửa sau theo thời gian) ──
+  CÓ phạt                  n=20    avgR=-0.13   PF=0.83
+  BỎ phạt                  n=69    avgR=-0.02   PF=0.95
+
+  sai số chuẩn avgR: có phạt ±0.223 · bỏ phạt ±0.088

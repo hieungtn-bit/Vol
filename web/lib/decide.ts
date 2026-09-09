@@ -70,6 +70,43 @@ export interface LevelConfig {
 
 export const DEFAULT_LEVELS: LevelConfig = { costFloorMult: 0 };
 
+/**
+ * Cấu hình đường STRICT. Mặc định giữ nguyên hành vi đang chạy.
+ */
+export interface StrictConfig {
+  /**
+   * Trừ 2 điểm khi RR TP1 < 1.2.
+   *
+   * Vế này ĐÃ BỊ BỎ khỏi `decideDirection` — có test khoá việc bỏ
+   * (`expect(warn).not.toContain('RR TP1')`) — vì TP1 theo thiết kế là bậc GẦN
+   * NHẤT, nên RR TP1 < 1 là bình thường chứ không phải kèo tồi. Bản vá đó không
+   * được áp sang `scoreConfluence`, nên đường strict vẫn phạt.
+   *
+   * Hậu quả đo được trên dữ liệu thật (10/09/2026, 7 mã × 4 khung): hai khung
+   * đạt đúng 7.0 — đủ cả bốn vế hợp lưu — rồi bị kéo xuống 5.0 và thành WAIT.
+   * Cả bảng không còn tín hiệu nào.
+   *
+   * Để thành cấu hình thay vì xoá thẳng, để đo được cả hai chiều.
+   *
+   * ĐÃ ĐO (bench/duong-strict.txt — lần đầu tiên đường strict được backtest,
+   * 6 mã × 15m/1h/4h × 3000 nến, nến 1m gỡ thứ tự):
+   *
+   *              tín hiệu        n     avgR    PF    ngoài mẫu      sai số
+   *   có phạt    60  (0.12%)    39    −0.14   0.80   −0.13 / 0.83   ±0.223
+   *   bỏ phạt    181 (0.35%)   138    −0.07   0.86   −0.02 / 0.95   ±0.088
+   *
+   * Bỏ phạt cho GẤP BA số tín hiệu, avgR tốt hơn, ngoài mẫu tốt hơn, và sai số
+   * giảm một nửa vì mẫu lớn hơn. Nên mặc định chuyển sang false.
+   *
+   * NHƯNG: cả hai cấu hình đều PF < 1. Bỏ phạt làm đường strict LỖ ÍT HƠN và ra
+   * tín hiệu trở lại, không phải làm nó có lãi. Đường này chưa từng có lợi thế
+   * đo được.
+   */
+  rr1Penalty: boolean;
+}
+
+export const DEFAULT_STRICT: StrictConfig = { rr1Penalty: false };
+
 const NEAR = 0.004;          // 0.4% coi là "chạm mép"
 const MIN_RR1 = 1.2;         // dưới ngưỡng này là kèo tồi
 const SL_WIDE_PCT = 3;       // SL > 3% giá → cảnh báo đỏ
@@ -85,6 +122,27 @@ function near(a: number, b: number, tol = NEAR): boolean {
 // ------------------------------------------------------------
 // 1. Xác định STAGE — giá đang đứng ở đâu so với value
 // ------------------------------------------------------------
+
+/**
+ * Vì sao khung này KHÔNG có mép để bám.
+ *
+ * `classifyStage` trả 'mid-range' cho HAI tình huống ngược nhau: giá đứng ở lõi
+ * value, và giá đã rời hẳn value quá xa. Cả hai đều là "không có kèo", nhưng nói
+ * với người đọc rằng chúng là một thì sai — và sai theo cách tệ nhất, vì màn
+ * hình khi đó ghi "giá đứng GIỮA value" ngay cạnh câu "giá đã rời hẳn xuống dưới
+ * value". Hàm này để chỗ hiển thị nói đúng cái nào là cái nào.
+ */
+export type NoEdgeReason = 'giua-value' | 'roi-khoi-value' | null;
+
+export function noEdgeReason(vp: VolumeProfile, pa: PriceAction, last: number): NoEdgeReason {
+  const { low: val, high: vah } = vp.va70;
+  const outside = pa.atr > 0
+    ? (last > vah ? (last - vah) / pa.atr : last < val ? (val - last) / pa.atr : 0)
+    : 0;
+  if (outside > 1.2) return 'roi-khoi-value';
+  if (inMidValue(vp, last)) return 'giua-value';
+  return null;
+}
 
 export function classifyStage(vp: VolumeProfile, pa: PriceAction, last: number): Stage {
   const { low: val, high: vah } = vp.va70;
@@ -372,6 +430,7 @@ export function scoreConfluence(
   stage: Stage,
   lv: Levels | null,
   rr1: number | null,
+  cfg: StrictConfig = DEFAULT_STRICT,
 ): Confluence {
   const lines: ScoreLine[] = [];
   const { pa, vp, deriv, delta, last } = inp;
@@ -431,7 +490,7 @@ export function scoreConfluence(
   if (pa.volMedian20 > 0 && pa.lastVol < pa.volMedian20 * 0.6) {
     lines.push({ label: 'Volume teo (< 60% median 20)', points: -1.5 });
   }
-  if (rr1 != null && rr1 < MIN_RR1) {
+  if (cfg.rr1Penalty && rr1 != null && rr1 < MIN_RR1) {
     lines.push({ label: `RR TP1 = ${rr1.toFixed(2)} < ${MIN_RR1}`, points: -2 });
   }
   if (lv) {
@@ -455,7 +514,7 @@ export function scoreConfluence(
 // 5. decideBias
 // ------------------------------------------------------------
 
-export function decideBias(inp: DecideInput): Recommendation {
+export function decideBias(inp: DecideInput, strict: StrictConfig = DEFAULT_STRICT): Recommendation {
   const { vp, pa, last, tf, symbol } = inp;
   const bs = vp.binSize;
   const P = (x: number | null) => fmtPrice(x, bs);
@@ -479,11 +538,19 @@ export function decideBias(inp: DecideInput): Recommendation {
   const rr1 = lv && entryRef != null ? rr(entryRef, lv.sl, lv.tp1) : null;
   const rr2 = lv && entryRef != null ? rr(entryRef, lv.sl, lv.tp2) : null;
 
+  // Không có side thì không có gì để chấm điểm. Nhưng phải nói ĐÚNG lý do: giá
+  // đứng giữa value và giá đã rời hẳn khỏi value là hai chuyện ngược nhau, và
+  // trước đây cả hai đều hiện ra là "đứng GIỮA value area".
   const conf = side
-    ? scoreConfluence(inp, side, stage, lv, rr1)
+    ? scoreConfluence(inp, side, stage, lv, rr1, strict)
     : {
         score: 0, raw: 0,
-        lines: [{ label: 'Giá đứng GIỮA value area — cấm vào', points: -4 }] as ScoreLine[],
+        lines: [{
+          label: noEdgeReason(vp, pa, last) === 'roi-khoi-value'
+            ? `Giá đã rời hẳn khỏi value area (${P(vp.va70.low)}–${P(vp.va70.high)}) — profile khung này không còn mép để bám`
+            : 'Giá đứng GIỮA value area — cấm vào',
+          points: -4,
+        }] as ScoreLine[],
       };
 
   // Quyết định cuối: ≥7 mới ra lệnh, và cổng TF phải mở.
@@ -495,7 +562,12 @@ export function decideBias(inp: DecideInput): Recommendation {
     if (inMidValue(vp, (lv.entry[0] + lv.entry[1]) / 2)) {
       warnings.push('Entry rơi vào GIỮA value area — không vào market ở đây.');
     }
-    if (rr1 != null && rr1 < 1) warnings.push(`RR TP1 = ${rr1.toFixed(2)} < 1 — kèo lỗ kỳ vọng.`);
+    // "lỗ kỳ vọng" là nhãn SAI: RR TP1 < 1 không phải kỳ vọng âm, nó chỉ có
+    // nghĩa mốc chốt đầu gần hơn stop — đúng thiết kế của TP1. Cùng loại nhãn
+    // sai với "R kỳ vọng" ở direct.ts đã sửa.
+    if (strict.rr1Penalty && rr1 != null && rr1 < 1) {
+      warnings.push(`RR TP1 = ${rr1.toFixed(2)} < 1 — mốc chốt đầu gần hơn stop.`);
+    }
     const slPct = (Math.abs(entryRef! - lv.sl) / last) * 100;
     if (slPct > SL_WIDE_PCT) {
       warnings.push(`SL cách entry ${slPct.toFixed(2)}% — trên isolated đòn bẩy cao là cháy.`);
