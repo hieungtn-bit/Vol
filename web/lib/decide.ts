@@ -1,3 +1,4 @@
+import { ROUND_TRIP } from './fees';
 import { fmtPrice } from './format';
 import { wickCluster } from './priceAction';
 import type {
@@ -42,6 +43,32 @@ export interface DecideInput {
   hasClosedBar: boolean;
   last: number;
 }
+
+/**
+ * Cấu hình dựng mức giá. Mặc định `costFloorMult = 0` là ĐÚNG hành vi cũ, để
+ * bản đang chạy không đổi gì khi không truyền cấu hình.
+ */
+export interface LevelConfig {
+  /**
+   * Bậc TP nhỏ nhất, tính bằng bấy nhiêu lần chi phí vòng vào-ra.
+   *
+   * Bộ dựng cũ đặt bậc = max(ATR×0.5, binSize×3), thuần tuý theo biến động và độ
+   * mịn của profile, KHÔNG có số hạng chi phí nào. Trên khung nhỏ lúc thị trường
+   * lặng, ATR bé tới mức bậc đó nhỏ hơn cả phí — và kế hoạch sinh ra không thể có
+   * lãi dù đi đúng hướng và chạm mục tiêu ngay. Đo trên 16515 tín hiệu: 2.2% rơi
+   * vào đúng trường hợp đó.
+   *
+   * Đặt sàn theo chi phí KHÔNG phải là nới lỏng tiêu chuẩn, và cũng không bịa ra
+   * mức giá: `stepAbove` vẫn chỉ chọn trong các THAM CHIẾU THẬT của profile (VAL,
+   * VAH, POC, giữa VA, HVN lớn). Nó chỉ bỏ qua những tham chiếu quá gần để không
+   * có lãi, và lấy tham chiếu thật kế tiếp.
+   *
+   * 0 = tắt (hành vi cũ).
+   */
+  costFloorMult: number;
+}
+
+export const DEFAULT_LEVELS: LevelConfig = { costFloorMult: 0 };
 
 const NEAR = 0.004;          // 0.4% coi là "chạm mép"
 const MIN_RR1 = 1.2;         // dưới ngưỡng này là kèo tồi
@@ -197,6 +224,19 @@ function vaReferences(vp: VolumeProfile): number[] {
   return [...new Set(refs.filter(inside))].sort((a, b) => a - b);
 }
 
+/**
+ * Bậc nhỏ nhất giữa hai mốc chốt.
+ *
+ * Hai số hạng đầu là của bản cũ: đủ lớn so với biến động (ATR) và so với độ mịn
+ * của profile (bin). Số hạng thứ ba là mới, và là số học chứ không phải tham số:
+ * một mục tiêu gần hơn chi phí thì không thể có lãi.
+ */
+function stepGap(inp: DecideInput, ref: number, cfg: LevelConfig): number {
+  const base = Math.max(inp.pa.atr * 0.5, inp.vp.binSize * 3);
+  if (!(cfg.costFloorMult > 0) || !(ref > 0)) return base;
+  return Math.max(base, ref * ROUND_TRIP * cfg.costFloorMult);
+}
+
 /** Bậc GẦN NHẤT phía dưới `from`. TP1 phải gần — không nhảy thẳng tới POC ở tận đáy. */
 function stepBelow(levels: number[], from: number, gap: number): number | null {
   const c = levels.filter((x) => x <= from - gap);
@@ -208,10 +248,9 @@ function stepAbove(levels: number[], from: number, gap: number): number | null {
   return c.length ? Math.min(...c) : null;
 }
 
-export function buildShortLevels(inp: DecideInput): Levels {
+export function buildShortLevels(inp: DecideInput, cfg: LevelConfig = DEFAULT_LEVELS): Levels {
   const { vp, pa, candles, last } = inp;
   const buffer = Math.max(inp.pa.atr * 0.3, vp.binSize);
-  const gap = Math.max(inp.pa.atr * 0.5, vp.binSize * 3);
   const nodeAbove = nextHVN(vp, last, 1);
 
   // Entry ở MÉP. Ba trường hợp, không trường hợp nào đặt entry xa giá một cách vô lý:
@@ -228,6 +267,8 @@ export function buildShortLevels(inp: DecideInput): Levels {
     e1 = last; e2 = Math.max(pa.range.high, last + buffer);
   }
   const entry: [number, number] = [Math.min(e1, e2), Math.max(e1, e2)];
+  // Mốc tính chi phí là MÉP SẼ KHỚP (short khớp ở mép dưới), không phải giá hiện tại.
+  const gap = stepGap(inp, entry[0], cfg);
 
   // SL = mức THESIS CHẾT: ngay trên cụm wick ở mép entry + buffer.
   // Neo vào biên vùng entry, KHÔNG neo vào đỉnh range 20 nến — đỉnh range có thể
@@ -267,10 +308,9 @@ export function buildShortLevels(inp: DecideInput): Levels {
   return { entry, sl, tp1, tp2, runner, tp1InVA, crossings };
 }
 
-export function buildLongLevels(inp: DecideInput): Levels {
+export function buildLongLevels(inp: DecideInput, cfg: LevelConfig = DEFAULT_LEVELS): Levels {
   const { vp, pa, candles, last } = inp;
   const buffer = Math.max(inp.pa.atr * 0.3, vp.binSize);
-  const gap = Math.max(inp.pa.atr * 0.5, vp.binSize * 3);
   const nodeBelow = nextHVN(vp, last, -1);
 
   let e1: number;
@@ -283,6 +323,8 @@ export function buildLongLevels(inp: DecideInput): Levels {
     e1 = last; e2 = Math.min(pa.range.low, last - buffer);
   }
   const entry: [number, number] = [Math.min(e1, e2), Math.max(e1, e2)];
+  // Mốc tính chi phí là MÉP SẼ KHỚP (long khớp ở mép trên), không phải giá hiện tại.
+  const gap = stepGap(inp, entry[1], cfg);
 
   const wick = wickCluster(candles, entry[0], 'below');
   const eqBelow = pa.equalLows

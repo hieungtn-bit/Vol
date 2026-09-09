@@ -3,6 +3,7 @@ import { derivAt } from './archiveDeriv';
 import { decideDirection, type Conviction, type DirectionalCall, type Weights } from './direct';
 import { buildFlow } from './flow';
 import type { DerivArchive } from './archiveDeriv';
+import type { LevelConfig } from './decide';
 import type { MinuteFeed } from './minute';
 import type { Candle, Derivatives, TF } from './types';
 
@@ -54,6 +55,8 @@ export interface BTOptions {
   minExpectancy: number | null;
   /** Bộ trọng số chấm điểm. null = dùng bộ đang chạy thật. */
   weights: Weights | null;
+  /** Cấu hình dựng mức giá. null = dùng bộ đang chạy thật. */
+  levelCfg: LevelConfig | null;
   /** Cắt profile tại điểm value dời chỗ. */
   valueMigration: boolean;
   /** Thu cửa sổ profile khi VA rộng quá bấy nhiêu lần ATR. null = không thu. */
@@ -78,6 +81,7 @@ export const DEFAULT_BT: BTOptions = {
   maxRewardRatio: null,
   minExpectancy: null,
   weights: null,
+  levelCfg: null,
   valueMigration: true,
   maxVAoverATR: null,
   maxSLPct: null,
@@ -200,6 +204,7 @@ export function signalAt(
   valueMigration = true,
   maxVAoverATR: number | null = null,
   derivSrc: DerivSource | null = null,
+  levelCfg: LevelConfig | null = null,
 ): DirectionalCall | null {
   const slice = sliceAsOf(candles, i, window);
 
@@ -220,7 +225,10 @@ export function signalAt(
     d?.positioning ?? { retailLongPct: null, topLongPct: null },
     deriv.funding,
   );
-  return decideDirection(prepared.input, prepared.structure, flow, weights ?? undefined);
+  return decideDirection(
+    prepared.input, prepared.structure, flow,
+    weights ?? undefined, levelCfg ?? undefined,
+  );
 }
 
 export type FillResult =
@@ -441,7 +449,7 @@ export function runBacktest(
 
   for (let i = window; i < candles.length - 2; i++) {
     if (opt.onePositionAtATime && i <= busyUntil) continue;
-    const call = signalAt(symbol, tf, candles, i, window, opt.weights, opt.valueMigration, opt.maxVAoverATR, derivSrc);
+    const call = signalAt(symbol, tf, candles, i, window, opt.weights, opt.valueMigration, opt.maxVAoverATR, derivSrc, opt.levelCfg);
     if (!call) continue;
     if (RANK[call.conviction] < RANK[opt.minConviction]) continue;
     if (opt.minNet !== null && Math.abs(call.net) < opt.minNet) continue;

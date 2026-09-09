@@ -1,5 +1,9 @@
-import { buildLongLevels, buildShortLevels, rr, type DecideInput, type Levels } from './decide';
+import {
+  DEFAULT_LEVELS, buildLongLevels, buildShortLevels, rr,
+  type DecideInput, type LevelConfig, type Levels,
+} from './decide';
 import { expectancy, type Expectancy } from './expectancy';
+import { FEES, ROUND_TRIP, feeInR } from './fees';
 import { fmtPrice } from './format';
 import { OI_READ_VI } from './derivatives';
 import { positioningSplit, type FlowInfo } from './flow';
@@ -64,13 +68,9 @@ export const GOLD = {
  * Phí giả định để quy ra R. Taker Binance perp, vào một lần ra một lần, cộng
  * trượt giá khi thoát bằng stop. Đúng bộ số backtest đang dùng.
  */
-export const FEES = { perSide: 0.0005, slip: 0.0002 };
-
-/** Phí quy ra R cho một stop rộng `risk` trên giá `entry`. */
-export function feeInR(entry: number, risk: number): number | null {
-  if (!(entry > 0) || !(risk > 0)) return null;
-  return ((FEES.perSide * 2 + FEES.slip) * entry) / risk;
-}
+// Hằng số phí nay ở lib/fees.ts để bộ dựng mức giá cũng dùng được — xem chú
+// thích ở đó. Re-export để mọi chỗ đang import từ đây không phải sửa.
+export { FEES, ROUND_TRIP, feeInR };
 
 /**
  * Mục tiêu có ĐỦ XA để bù nổi chi phí không.
@@ -248,6 +248,7 @@ export function decideDirection(
   structure: MarketStructure,
   flow: FlowInfo,
   weights: Weights = W,
+  levels: LevelConfig = DEFAULT_LEVELS,
 ): DirectionalCall {
   const { vp, pa, last, tf, symbol } = inp;
   const W = weights;   // che biến module để phần thân bên dưới không phải sửa
@@ -416,7 +417,7 @@ export function decideDirection(
   const mag = Math.abs(net);
   let conviction: Conviction = mag >= 30 ? 'A' : mag >= 15 ? 'B' : 'C';
 
-  const lv: Levels = side === 'LONG' ? buildLongLevels(inp) : buildShortLevels(inp);
+  const lv: Levels = side === 'LONG' ? buildLongLevels(inp, levels) : buildShortLevels(inp, levels);
   const entryRef = side === 'LONG' ? lv.entry[1] : lv.entry[0];
   const rr1 = rr(entryRef, lv.sl, lv.tp1);
   const rr2 = rr(entryRef, lv.sl, lv.tp2);
