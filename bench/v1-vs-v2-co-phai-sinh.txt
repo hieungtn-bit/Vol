@@ -1,0 +1,35 @@
+Đối chiếu phiên bản · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến
+Phái sinh: CÓ · thứ tự trong nến: gỡ bằng nến 1m
+
+..................
+18 cặp mã×khung.
+
+── V1 · bản đang chạy ──
+   cấu trúc 25 · taker 20 · PA 18 · VA 20 · OI 12 · funding 8 · sàn phí ×0
+  mọi lệnh · nửa đầu     n=2756   win=46.2%   avgR=-0.01   tổngR=-27.2    PF=0.98   DD=71.4
+  mọi lệnh · NỬA SAU     n=2756   win=53.2%   avgR=-0.09   tổngR=-259.2   PF=0.80   DD=273.6
+  qua cửa · nửa đầu      n=119    win=47.9%   avgR=0.07    tổngR=8.6      PF=1.16   DD=8.4
+  qua cửa · NỬA SAU      n=25     win=56.0%   avgR=0.30    tổngR=7.6      PF=2.09   DD=2.5
+
+── V2 · thu về phần có bằng chứng ──
+   cấu trúc 34 · taker 30 · PA 16 · VA 14 · OI 9 · funding 0 · sàn phí ×2
+  mọi lệnh · nửa đầu     n=2703   win=47.0%   avgR=0.01    tổngR=17.2     PF=1.01   DD=68.9
+  mọi lệnh · NỬA SAU     n=2703   win=54.0%   avgR=-0.05   tổngR=-124.6   PF=0.90   DD=146.7
+  qua cửa · nửa đầu      n=122    win=54.1%   avgR=0.25    tổngR=30.3     PF=1.68   DD=6.9
+  qua cửa · NỬA SAU      n=27     win=44.4%   avgR=0.03    tổngR=0.9      PF=1.08   DD=5.7
+
+── ĐỐI CHỨNG · giữ phần nhiễu, bỏ phần có bằng chứng ──
+   cấu trúc 0 · taker 0 · PA 32 · VA 36 · OI 21 · funding 14 · sàn phí ×0
+  mọi lệnh · nửa đầu     n=2796   win=43.7%   avgR=-0.07   tổngR=-183.5   PF=0.88   DD=196.5
+  mọi lệnh · NỬA SAU     n=2797   win=51.3%   avgR=-0.12   tổngR=-333.4   PF=0.75   DD=338.7
+  qua cửa · nửa đầu      n=227    win=44.1%   avgR=0.03    tổngR=6.2      PF=1.06   DD=15.8
+  qua cửa · NỬA SAU      n=55     win=49.1%   avgR=0.11    tổngR=5.9      PF=1.25   DD=4.3
+
+══ ĐỐI CHIẾU (cột NỬA SAU là cột quyết định) ══
+  bản            mọi lệnh sau               qua cửa sau               
+  v1             avgR -0.09 PF 0.80 n=2756  avgR 0.30 PF 2.09 n=25     ± 0.185
+  v2             avgR -0.05 PF 0.90 n=2703  avgR 0.03 PF 1.08 n=27     ± 0.187
+  đối chứng      avgR -0.12 PF 0.75 n=2797  avgR 0.11 PF 1.25 n=55     ± 0.145
+
+  Cột cuối là SAI SỐ CHUẨN của avgR ở phần qua cửa. Chênh lệch giữa hai
+  bản nhỏ hơn khoảng hai lần sai số đó thì KHÔNG phân biệt được với ngẫu nhiên.

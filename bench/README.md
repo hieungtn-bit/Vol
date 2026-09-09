@@ -203,6 +203,67 @@ nhưng **avgR thấp hơn**, tức nó làm cửa bớt chọn lọc. Ghi lại 
 
 Chỗ lệch spot/perp vì thế là một lo lắng **đã được gỡ**, không phải một lỗi cần sửa.
 
+## v1 vs v2 — đối chiếu đầu-đối-đầu
+
+`lib/versions.ts` + `scripts/versions.ts`. Cùng một code path, khác nhau bằng cấu
+hình; cùng dữ liệu, cùng nến 1m gỡ thứ tự. Chọn trên nửa đầu, xác nhận trên nửa
+sau. Có **đối chứng ngược** — giữ đúng những vế đo ra nhiễu, bỏ hai vế có bằng
+chứng.
+
+### 1. Đối chứng ngược đã làm đúng việc của nó
+
+Trên **mọi lệnh · nửa sau**, đối chứng là bản **tệ nhất** ở cả hai cấu hình
+(avgR −0.11 / −0.12, PF 0.77 / 0.75), tệ hơn cả v1. Trên n = 2795.
+
+Đây là kết luận **mạnh nhất** rút ra được từ toàn bộ mạch audit: bỏ cấu trúc và
+taker flow làm hệ tệ đi rõ rệt, nên hai vế đó **thật sự mang tín hiệu**. Không có
+đối chứng thì mọi cải thiện đều có thể chỉ là đổi tham số gặp may.
+
+### 2. v2 tốt hơn v1 trên toàn bộ tập lệnh — nhất quán, chưa đủ để gọi là đã chứng minh
+
+| nửa sau · mọi lệnh | v1 | **v2** | đối chứng |
+|---|---:|---:|---:|
+| mù phái sinh · avgR | −0.09 | **−0.06** | −0.11 |
+| mù phái sinh · PF | 0.80 | **0.88** | 0.77 |
+| mù phái sinh · sụt giảm tối đa | 263.8R | **177.0R** | 315.3R |
+| có phái sinh · avgR | −0.09 | **−0.05** | −0.12 |
+| có phái sinh · PF | 0.80 | **0.90** | 0.75 |
+| có phái sinh · sụt giảm tối đa | 273.6R | **146.7R** | 338.7R |
+
+Sụt giảm tối đa giảm **33% và 46%** — đó là cải thiện lớn nhất, và lớn hơn phần
+cải thiện ở avgR.
+
+Nhưng đọc cho đúng mức: chênh lệch avgR là **1.46 và 1.94 lần sai số chuẩn**
+(n≈2700, SE 0.021). Hai cấu hình độc lập cùng nghiêng về v2 là bằng chứng bổ
+trợ, nhưng mỗi lần một mình đều **chưa tới hai lần sai số**. Đủ để nghiêng về v2,
+chưa đủ để nói đã chứng minh.
+
+**Và cả hai vẫn PF < 1.** v2 lỗ ÍT HƠN, không phải có lãi.
+
+### 3. Trên phần thực sự giao dịch, KHÔNG phân biệt được
+
+| nửa sau · qua cửa | v1 | v2 | sai số chuẩn |
+|---|---:|---:|---:|
+| mù phái sinh | 0.27 (n=26) | 0.17 (n=28) | ±0.21 |
+| có phái sinh | 0.30 (n=25) | 0.03 (n=27) | ±0.21 |
+
+Chênh lệch 0.10 và 0.27 so với sai số ±0.21 — **dưới hai lần sai số**, tức không
+phân biệt được với ngẫu nhiên.
+
+Bằng chứng rõ nhất rằng cột đó là nhiễu: hai bản **đảo vị trí** giữa hai nửa. Có
+phái sinh, v2 dẫn ở nửa đầu (0.25 vs 0.07) rồi thua hẳn ở nửa sau (0.03 vs 0.30).
+Một cột mà thứ hạng lật ngược giữa hai nửa của cùng một mẫu thì không đọc được.
+
+### 4. Nút thắt thật không phải trọng số
+
+Sau 3000 nến × 6 mã × 3 khung, phần **ngoài mẫu qua cửa chỉ còn 25–28 lệnh**.
+Với sai số ±0.21 trên mỗi bản, không bộ trọng số nào có thể được chứng minh là
+hơn bộ nào ở đó. Cửa lọc quá chặt để tự kiểm chứng chính nó.
+
+Đối chứng cho **nhiều lệnh qua cửa hơn hẳn** (n=59/55 so với 26/28) — bỏ cấu trúc
+và taker làm cửa bớt chọn lọc. Tức chính hai vế có bằng chứng là thứ đang siết
+cửa lại.
+
 ## Giới hạn còn lại
 
 - Backtest **mù phái sinh** đã hết là giới hạn — nay đo được (xem mục trên). Giới
