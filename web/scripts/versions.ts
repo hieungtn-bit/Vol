@@ -22,6 +22,12 @@ const symbols = (arg('symbols', 'BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT
 const tfs = (arg('tf', '15m,1h,4h') as string).split(',') as TF[];
 const bars = Number(arg('bars', '3000'));
 const withDeriv = process.argv.includes('--deriv');
+/**
+ * Gỡ thứ tự trong nến bằng nến 1m. TẮT khi cần so với các bản cũ — script của
+ * chúng không có nến 1m, và so một bản có gỡ với một bản không gỡ là cộng thêm
+ * 0.041R cho bên có gỡ.
+ */
+const withMinutes = !process.argv.includes('--no-intrabar');
 
 const VERSIONS: EngineVersion[] = [V1, V2, V_CONTROL];
 
@@ -54,7 +60,7 @@ function se(t: Trade[]): number {
 
 async function main() {
   console.log(`Đối chiếu phiên bản · ${symbols.join(',')} · ${tfs.join(',')} · ${bars} nến`);
-  console.log(`Phái sinh: ${withDeriv ? 'CÓ' : 'mù'} · thứ tự trong nến: gỡ bằng nến 1m\n`);
+  console.log(`Phái sinh: ${withDeriv ? 'CÓ' : 'mù'} · thứ tự trong nến: ${withMinutes ? 'gỡ bằng nến 1m' : 'giả định thận trọng'}\n`);
   for (const v of VERSIONS) {
     if (weightTotal(v.weights) !== weightTotal(V1.weights)) {
       throw new Error(`${v.id}: tổng trọng số lệch — hạng sẽ đổi nghĩa, mọi so sánh vô nghĩa`);
@@ -69,9 +75,11 @@ async function main() {
       const candles = await fetchKlinesHistory(symbol, tf, bars);
       if (candles.length < 200) continue;
       const from = candles[0].t, to = candles[candles.length - 1].t + TF_MS[tf];
-      const m = await loadMinutes(symbol, from, to, 'spot');
+      const ctx: SimContext = withMinutes
+        ? { minutes: minuteFeed(await loadMinutes(symbol, from, to, 'spot')), tfMs: TF_MS[tf] }
+        : {};
       const src = withDeriv ? { archive: await loadDerivArchive(symbol, from, to), tfMs: TF_MS[tf] } : null;
-      cells.push({ candles, tf, symbol, ctx: { minutes: minuteFeed(m), tfMs: TF_MS[tf] }, src });
+      cells.push({ candles, tf, symbol, ctx, src });
       process.stdout.write('.');
     }
   }
