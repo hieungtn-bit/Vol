@@ -112,6 +112,12 @@ export interface Trade {
   /** Để hiệu chuẩn ngưỡng hạng vàng bằng dữ liệu thay vì bằng cảm tính. */
   warningCount: number;
   rrBlended: number | null;
+  /** Khoảng cách TP1/TP2 tính bằng R, đo từ đúng mép entry sẽ khớp. */
+  rr1: number | null;
+  rr2: number | null;
+  /** Tỷ lệ lời/lỗ mà bảng vào tiền hiển thị: 0.5×rr1 + 0.5×rr2, khớp payout
+   *  của chính hàm này (50% ở TP1, 50% ở TP2). */
+  rewardR: number | null;
   /** Khoảng cách entry→SL tính theo % giá. Stop rộng = phí nặng theo R và kèo tồi. */
   slPct: number;
   /** Vùng entry cách giá lúc ra tín hiệu bao nhiêu % — entry quá xa là mức giá rác. */
@@ -284,6 +290,8 @@ export function simulate(
       evidence: call.evidence.map((e) => ({ label: e.label, points: e.points })),
       warningCount: call.warnings.length,
       rrBlended: call.rrBlended,
+      rr1: R(call.tp1), rr2: R(call.tp2),
+      rewardR: 0.5 * R(call.tp1) + 0.5 * R(call.tp2),
       slPct: (risk / entry) * 100,
       entryDistPct: (Math.abs(entry - candles[from].c) / candles[from].c) * 100,
       unanimous: call.unanimous,

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiPath } from '@/config/site';
 import { ALWAYS_INCLUDE } from '@/config/universe';
 import { ictString } from '@/lib/format';
-import { money, planOrder, prettyQty, type OrderPlan } from '@/lib/sizing';
+import { money, planOrder, prettyQty, readRR, type OrderPlan } from '@/lib/sizing';
 import type { TF } from '@/lib/types';
 
 // ============================================================
@@ -82,11 +82,12 @@ function Line({ k, v, tone }: { k: string; v: React.ReactNode; tone?: 'good' | '
   );
 }
 
-function SetupCard({ s, riskPct }: { s: Setup; riskPct: number }) {
+function SetupCard({ s }: { s: Setup }) {
   const { call: c, plan: p } = s;
   const long = c.side === 'LONG';
   const px = (x: number) => x.toPrecision(6).replace(/\.?0+$/, '');
-  const quaDonBay = p.leverage > p.maxSafeLeverage;
+  const nguyHiem = p.vuotDonBay || p.khongDuVon;
+  const rr = readRR(p.rewardR);
 
   return (
     <article className="rounded-xl border border-line bg-panel">
@@ -127,24 +128,54 @@ function SetupCard({ s, riskPct }: { s: Setup; riskPct: number }) {
         <Line k="Sai → mất" v={`${money(p.outcomes.stopped)} USDT`} tone="bad" />
         <Line k="Chốt 1 rồi quay đầu" v={`${money(p.outcomes.tp1ThenSL)} USDT`} tone={p.outcomes.tp1ThenSL >= 0 ? 'good' : 'bad'} />
         <Line k="Chạm cả hai mốc" v={`${money(p.outcomes.bothTP)} USDT`} tone="good" />
-        <Line k="Lời/lỗ nếu chạm cả hai" v={`${p.rewardR.toFixed(2)}R`} />
+        <Line
+          k="Lời/lỗ nếu chạm cả hai"
+          v={`${p.rewardR.toFixed(2)}R`}
+          tone={rr.verdict === 'tot' ? 'good' : rr.verdict === 'kem' ? 'warn' : undefined}
+        />
+        {/* RR không phải mục tiêu để chọn — nó rơi ra từ chỗ các mốc cấu trúc
+            nằm. Nên ở đây nó là một câu ĐỌC, kèm đúng số đo, chứ không phải một
+            bộ lọc âm thầm bỏ kèo đi. */}
+        <p
+          className={`mt-1 text-2xs leading-snug ${
+            rr.verdict === 'tot' ? 'text-emerald-300/80'
+            : rr.verdict === 'kem' ? 'text-amber-300'
+            : 'text-muted'
+          }`}
+        >
+          {rr.verdict === 'kem' ? '⚠ ' : ''}{rr.text}
+        </p>
       </div>
 
       {/* Đòn bẩy — chỗ người ta cháy tài khoản, nên nó có khối riêng. */}
-      <div className={`px-3 py-2 ${quaDonBay ? 'bg-red-500/10' : ''}`}>
+      <div className={`px-3 py-2 ${nguyHiem ? 'bg-red-500/10' : ''}`}>
         <Line k="Stop cách entry" v={`${p.slPct.toFixed(2)}%`} />
-        <Line k="Đòn bẩy cần" v={`${p.leverage.toFixed(2)}×`} />
+        <Line k="Ký quỹ chiếm" v={`${p.margin.toFixed(0)} USDT · ${p.marginPct.toFixed(1)}% vốn`} tone={p.khongDuVon ? 'bad' : undefined} />
+        <Line k="Thanh lý quanh" v={px(p.liqPrice)} tone={p.chayTruocStop ? 'bad' : p.vuotDonBay ? 'warn' : undefined} />
         <Line
-          k="Tối đa còn an toàn"
+          k="Đòn bẩy tối đa an toàn"
           v={`${p.maxSafeLeverage.toFixed(1)}×`}
-          tone={quaDonBay ? 'bad' : undefined}
+          tone={p.vuotDonBay ? 'bad' : 'good'}
         />
-        {quaDonBay && (
+        {/* Hai mức độ khác nhau, phải nói đúng cái nào — ở 50× thanh lý VẪN
+            nằm ngoài stop, chỉ là đệm mỏng; nói "cháy trước stop" ở đó là sai. */}
+        {p.chayTruocStop ? (
           <p className="mt-1.5 text-2xs leading-snug text-red-300">
-            ⚠ Đòn bẩy cần {p.leverage.toFixed(2)}× vượt mức an toàn {p.maxSafeLeverage.toFixed(1)}×.
-            Với stop {p.slPct.toFixed(2)}% giá, sàn sẽ thanh lý TRƯỚC khi stop của bạn chạy —
-            và bạn mất nhiều hơn {p.riskMoney.toFixed(0)} USDT đã chọn. Hạ đòn bẩy hoặc giảm
-            {' '}{riskPct}% rủi ro xuống.
+            ⚠ Đòn bẩy {p.leverage}× quá cao cho stop {p.slPct.toFixed(2)}%. Sàn thanh lý quanh{' '}
+            {px(p.liqPrice)} — <b>nằm trong stop {px(p.sl)}, tức cháy trước khi stop kịp chạy</b>.
+            Bạn sẽ mất nhiều hơn {p.riskMoney.toFixed(0)} USDT đã chọn. Hạ xuống{' '}
+            {Math.floor(p.maxSafeLeverage)}× hoặc thấp hơn.
+          </p>
+        ) : p.vuotDonBay ? (
+          <p className="mt-1.5 text-2xs leading-snug text-amber-300">
+            ⚠ Đòn bẩy {p.leverage}× cho stop {p.slPct.toFixed(2)}%: thanh lý ({px(p.liqPrice)}) vẫn
+            nằm ngoài stop ({px(p.sl)}), nhưng đệm còn rất mỏng — phí, funding và trượt giá có thể
+            ăn hết chỗ đó. An toàn ở {Math.floor(p.maxSafeLeverage)}× trở xuống.
+          </p>
+        ) : null}
+        {p.khongDuVon && (
+          <p className="mt-1.5 text-2xs leading-snug text-red-300">
+            ⚠ Ký quỹ {p.margin.toFixed(0)} USDT vượt quá vốn. Tăng đòn bẩy hoặc giảm rủi ro mỗi lệnh.
           </p>
         )}
       </div>
@@ -169,6 +200,7 @@ function SetupCard({ s, riskPct }: { s: Setup; riskPct: number }) {
 export default function VaoTienPage() {
   const [equity, setEquity] = useState(1000);
   const [riskPct, setRiskPct] = useState(1);
+  const [leverage, setLeverage] = useState(10);
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -211,7 +243,8 @@ export default function VaoTienPage() {
         const c = r.direction?.[tf];
         if (!c?.tradeable) continue;
         const plan = planOrder({
-          side: c.side, entry: c.entry, sl: c.sl, tp1: c.tp1, tp2: c.tp2, equity, riskPct,
+          side: c.side, entry: c.entry, sl: c.sl, tp1: c.tp1, tp2: c.tp2,
+          equity, riskPct, leverage,
         });
         if (plan) out.push({ symbol: r.symbol, tf, call: c, plan });
       }
@@ -219,7 +252,7 @@ export default function VaoTienPage() {
     // Kèo mạnh trước, rồi tới khung lớn.
     const rank = (s: Setup) => (s.call.golden ? 100 : 0) + Math.abs(s.call.net);
     return out.sort((a, b) => rank(b) - rank(a));
-  }, [rows, equity, riskPct]);
+  }, [rows, equity, riskPct, leverage]);
 
   const tongRuiRo = setups.reduce((s, x) => s + x.plan.riskMoney, 0);
 
@@ -248,6 +281,7 @@ export default function VaoTienPage() {
         <div className="mb-3 flex gap-2">
           <NumField label="Vốn" value={equity} onChange={setEquity} suffix="USDT" step="100" />
           <NumField label="Rủi ro mỗi lệnh" value={riskPct} onChange={setRiskPct} suffix="%" step="0.1" />
+          <NumField label="Đòn bẩy" value={leverage} onChange={setLeverage} suffix="×" step="1" />
         </div>
 
         {err && (
@@ -266,7 +300,7 @@ export default function VaoTienPage() {
 
         <div className="grid gap-3 board:grid-cols-2">
           {setups.map((s) => (
-            <SetupCard key={`${s.symbol}-${s.tf}`} s={s} riskPct={riskPct} />
+            <SetupCard key={`${s.symbol}-${s.tf}`} s={s} />
           ))}
         </div>
 
