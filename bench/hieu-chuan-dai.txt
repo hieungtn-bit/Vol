@@ -1,0 +1,88 @@
+Hiệu chuẩn lại ngưỡng cửa · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 5 năm
+
+++++++++++++++++++
+
+══ MẪU THẬT SỰ ĐO ĐƯỢC ══
+  15m (xin 175320 nến/mã)
+    BTCUSDT   n=175319  2021-09-09 → 2026-09-10
+    ETHUSDT   n=175319  2021-09-09 → 2026-09-10
+    ENAUSDT   n=85518   2024-04-02 → 2026-09-10  ← chỉ có 49% cửa sổ
+    SOLUSDT   n=175319  2021-09-09 → 2026-09-10
+    BNBUSDT   n=175319  2021-09-09 → 2026-09-10
+    XRPUSDT   n=175319  2021-09-09 → 2026-09-10
+  1h (xin 43830 nến/mã)
+    BTCUSDT   n=43829   2021-09-09 → 2026-09-10
+    ETHUSDT   n=43829   2021-09-09 → 2026-09-10
+    ENAUSDT   n=21379   2024-04-02 → 2026-09-10  ← chỉ có 49% cửa sổ
+    SOLUSDT   n=43829   2021-09-09 → 2026-09-10
+    BNBUSDT   n=43829   2021-09-09 → 2026-09-10
+    XRPUSDT   n=43829   2021-09-09 → 2026-09-10
+  4h (xin 10958 nến/mã)
+    BTCUSDT   n=10957   2021-09-09 → 2026-09-09
+    ETHUSDT   n=10957   2021-09-09 → 2026-09-09
+    ENAUSDT   n=5344    2024-04-02 → 2026-09-09  ← chỉ có 49% cửa sổ
+    SOLUSDT   n=10957   2021-09-09 → 2026-09-09
+    BNBUSDT   n=10957   2021-09-09 → 2026-09-09
+    XRPUSDT   n=10957   2021-09-09 → 2026-09-09
+  Toàn mẫu: 2021-09-09 → 2026-09-10 · 1826 ngày
+
+Bộ đo khớp: dựng lại cửa trùng cờ tradeable trên cả 118199 lệnh.
+
+118199 lệnh · nửa đầu 59099 · nửa sau 59100
+CHỌN chỉ nhìn nửa đầu. Nửa sau chỉ nhìn một lần ở cuối.
+
+══ RỔ MÃ TỪNG NỬA (số lệnh) ══
+  nửa đầu  BTC 17%  ETH 19%  ENA 2%  SOL 24%  BNB 20%  XRP 18%   │  15m 71%  1h 23%  4h 7%
+  nửa sau  BTC 14%  ETH 16%  ENA 20%  SOL 18%  BNB 15%  XRP 16%   │  15m 71%  1h 22%  4h 7%
+
+  nửa đầu  không cửa: n=59099 avgR -0.12   PF 0.75   │ qua cửa: n=2513  avgR 0.06    PF 1.15
+  nửa sau  không cửa: n=59100 avgR -0.13   PF 0.74   │ qua cửa: n=2182  avgR 0.07    PF 1.19
+
+══ NỬA ĐẦU · tách theo độ rộng stop (không qua cửa nào) ══
+  stop 0–0.5%    n=6108  R gộp -0.05   phí 0.37    → ròng -0.42   ±0.017
+  stop 0.5–1%    n=32560 R gộp 0.03    phí 0.14    → ròng -0.12   ±0.005
+  stop 1–1.5%    n=13915 R gộp 0.03    phí 0.09    → ròng -0.06   ±0.008
+  stop 1.5–2%    n=3727  R gộp 0.05    phí 0.06    → ròng -0.01   ±0.017
+  stop 2–3%      n=2026  R gộp 0.04    phí 0.05    → ròng -0.01   ±0.023
+  stop > 3%      n=763   R gộp 0.11    phí 0.03    → ròng 0.09    ±0.035
+
+══ NỬA ĐẦU · quét từng ngưỡng một ══
+
+── điều kiện nhất trí ──
+  bỏ qua         n=5283  giữ 9%     avgR=0.02    PF=1.06   ±0.012   nhận thêm 2770 lệnh → tự chúng avgR -0.01 (±0.017)
+  bắt buộc       n=2513  giữ 4%     avgR=0.06    PF=1.15   ±0.018   (trùng cửa đang chạy)
+
+── |net| tối thiểu (đang chạy: 15) ──
+  ≥ 0            n=3026  giữ 5%     avgR=0.05    PF=1.13   ±0.016   nhận thêm 513 lệnh → tự chúng avgR 0.02 (±0.040)
+  ≥ 10           n=2815  giữ 5%     avgR=0.05    PF=1.14   ±0.017   nhận thêm 302 lệnh → tự chúng avgR 0.03 (±0.054)
+  ≥ 15           n=2513  giữ 4%     avgR=0.06    PF=1.15   ±0.018   (trùng cửa đang chạy)
+  ≥ 20           n=2223  giữ 4%     avgR=0.06    PF=1.17   ±0.019   bỏ đi 290 lệnh → tự chúng avgR 0.01 (±0.056)
+  ≥ 25           n=1936  giữ 3%     avgR=0.08    PF=1.22   ±0.020   bỏ đi 577 lệnh → tự chúng avgR -0.02 (±0.039)
+  ≥ 30           n=1663  giữ 3%     avgR=0.07    PF=1.20   ±0.022   bỏ đi 850 lệnh → tự chúng avgR 0.02 (±0.031)
+
+── Rkv tối đa (đang chạy: 1.5) ──
+  ≤ 1            n=2070  giữ 4%     avgR=0.05    PF=1.15   ±0.018   bỏ đi 443 lệnh → tự chúng avgR 0.08 (±0.057)
+  ≤ 1.2          n=2327  giữ 4%     avgR=0.06    PF=1.16   ±0.018   bỏ đi 186 lệnh → tự chúng avgR 0.04 (±0.092)
+  ≤ 1.5          n=2513  giữ 4%     avgR=0.06    PF=1.15   ±0.018   (trùng cửa đang chạy)
+  ≤ 2            n=2637  giữ 4%     avgR=0.05    PF=1.13   ±0.018   nhận thêm 124 lệnh → tự chúng avgR -0.05 (±0.123)
+  ≤ 3            n=2690  giữ 5%     avgR=0.05    PF=1.12   ±0.018   nhận thêm 177 lệnh → tự chúng avgR -0.06 (±0.110)
+  ≤ ∞            n=2706  giữ 5%     avgR=0.05    PF=1.13   ±0.018   nhận thêm 193 lệnh → tự chúng avgR -0.03 (±0.112)
+
+── phí tối đa theo 1R (đang chạy: 0.10, ứng với stop ≥ 1.2% giá) ──
+  ≤ 0.06 (2.00%) n=538   giữ 1%     avgR=0.11    PF=1.30   ±0.038   bỏ đi 1975 lệnh → tự chúng avgR 0.04 (±0.020)
+  ≤ 0.08 (1.50%) n=1317  giữ 2%     avgR=0.07    PF=1.18   ±0.025   bỏ đi 1196 lệnh → tự chúng avgR 0.04 (±0.026)
+  ≤ 0.1 (1.20%)  n=2513  giữ 4%     avgR=0.06    PF=1.15   ±0.018   (trùng cửa đang chạy)
+  ≤ 0.12 (1.00%) n=4373  giữ 7%     avgR=0.04    PF=1.09   ±0.013   nhận thêm 1860 lệnh → tự chúng avgR 0.01 (±0.020)
+  ≤ 0.15 (0.80%) n=7737  giữ 13%    avgR=0.00    PF=1.01   ±0.010   nhận thêm 5224 lệnh → tự chúng avgR -0.02 (±0.011)
+  ≤ ∞ (—)        n=12867 giữ 22%    avgR=-0.04   PF=0.90   ±0.008   nhận thêm 10354 lệnh → tự chúng avgR -0.07 (±0.008)
+
+══ NỬA SAU · xác nhận (nhìn một lần) ══
+  cửa            nửa đầu                        nửa sau                            phần chênh ở nửa sau
+  đang chạy      n=2513 avgR 0.06 PF 1.15       n=2182 avgR 0.07 PF 1.19 ±0.019    —
+  bỏ nhất trí    n=5283 avgR 0.02 PF 1.06       n=5025 avgR 0.02 PF 1.04 ±0.013    nhận thêm 2843 → avgR -0.03 (±0.017)
+  net ≥ 20       n=2223 avgR 0.06 PF 1.17       n=1935 avgR 0.08 PF 1.21 ±0.021    bỏ đi 247 → avgR 0.02 (±0.059)
+  net ≥ 25       n=1936 avgR 0.08 PF 1.22       n=1713 avgR 0.09 PF 1.23 ±0.022    bỏ đi 469 → avgR 0.03 (±0.044)
+  Rkv ≤ 1.2      n=2327 avgR 0.06 PF 1.16       n=2014 avgR 0.08 PF 1.23 ±0.019    bỏ đi 168 → avgR -0.05 (±0.097)
+  Rkv ≤ ∞        n=2706 avgR 0.05 PF 1.13       n=2344 avgR 0.07 PF 1.18 ±0.020    nhận thêm 162 → avgR 0.05 (±0.124)
+  phí ≤ 0.08     n=1317 avgR 0.07 PF 1.18       n=1100 avgR 0.08 PF 1.22 ±0.028    bỏ đi 1082 → avgR 0.06 (±0.027)
+  phí ≤ 0.15     n=7737 avgR 0.00 PF 1.01       n=6897 avgR 0.02 PF 1.07 ±0.010    nhận thêm 4715 → avgR 0.00 (±0.012)

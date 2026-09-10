@@ -15,12 +15,15 @@
  */
 import { FEES } from '../lib/direct';
 import { DEFAULT_BT, runBacktest, stats, type Trade } from '../lib/backtest';
-import { fetchKlinesHistory } from '../lib/sources';
+import { nenDai, ngay, soNenChoNam, type PhamVi } from './nendai';
 import type { TF } from '../lib/types';
 
 function arg(n: string, d?: string) { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : d; }
 const symbols = (arg('symbols', 'BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT') as string).split(',');
 const tfs = (arg('tf', '15m,1h,4h') as string).split(',') as TF[];
+// Cùng 6 mã, chỉ kéo dài thời gian. --nam đặt cửa sổ; --bars chỉ còn để chạy
+// lại y hệt lần đo cũ (3000 nến mỗi khung) khi cần đối chiếu.
+const nam = Number(arg('nam', '0'));
 const bars = Number(arg('bars', '3000'));
 
 const num = (x: number, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '∞');
@@ -85,18 +88,38 @@ function dong(nhan: string, ts: Trade[], tong: number, goc?: Trade[]) {
 }
 
 async function main() {
-  console.log(`Hiệu chuẩn lại ngưỡng cửa · ${symbols.join(',')} · ${tfs.join(',')} · ${bars} nến\n`);
+  const cuaSo = nam > 0 ? `${nam} năm` : `${bars} nến mỗi khung`;
+  console.log(`Hiệu chuẩn lại ngưỡng cửa · ${symbols.join(',')} · ${tfs.join(',')} · ${cuaSo}\n`);
 
   const all: Trade[] = [];
+  const phamVi: PhamVi[] = [];
   for (const tf of tfs) {
+    const soNen = nam > 0 ? soNenChoNam(tf, nam) : bars;
     for (const symbol of symbols) {
-      const candles = await fetchKlinesHistory(symbol, tf, bars);
-      if (candles.length < 200) continue;
-      all.push(...runBacktest(symbol, tf, candles, DEFAULT_BT));
-      process.stdout.write('.');
+      const { nen, pv } = await nenDai(symbol, tf, soNen);
+      phamVi.push(pv);
+      if (nen.length < 200) { process.stdout.write('x'); continue; }
+      all.push(...runBacktest(symbol, tf, nen, DEFAULT_BT));
+      process.stdout.write(pv.nguon === 'đĩa' ? '·' : '+');
     }
   }
-  console.log('');
+  console.log('\n');
+
+  // Phạm vi thật sự đo được, ghi ra để lần chạy sau tái lập và để thấy ngay mã
+  // nào niêm yết muộn — ENA lên sàn 2024 nên không thể có 4 năm như BTC.
+  console.log('══ MẪU THẬT SỰ ĐO ĐƯỢC ══');
+  for (const tf of tfs) {
+    const hang = phamVi.filter((p) => p.tf === tf);
+    const xin = nam > 0 ? soNenChoNam(tf, nam) : bars;
+    console.log(`  ${tf} (xin ${xin} nến/mã)`);
+    for (const p of hang) {
+      const thieu = p.soNen < xin * 0.98 ? `  ← chỉ có ${((p.soNen / xin) * 100).toFixed(0)}% cửa sổ` : '';
+      console.log(`    ${pad(p.symbol, 9)} n=${pad(p.soNen, 7)} ${ngay(p.tu)} → ${ngay(p.den)}${thieu}`);
+    }
+  }
+  const t0 = Math.min(...phamVi.filter((p) => p.tu).map((p) => p.tu));
+  const t1 = Math.max(...phamVi.map((p) => p.den));
+  console.log(`  Toàn mẫu: ${ngay(t0)} → ${ngay(t1)} · ${((t1 - t0) / 86_400_000).toFixed(0)} ngày\n`);
 
   // ---- KIỂM CHỨNG BỘ ĐO TRƯỚC KHI TIN BẤT KỲ CON SỐ NÀO ----
   // Lần chạy đầu ra n=0 ở MỌI dòng, kể cả dòng ngưỡng bằng vô cực — vì hằng số
@@ -120,6 +143,25 @@ async function main() {
   const sau = sorted.slice(cut);
   console.log(`\n${sorted.length} lệnh · nửa đầu ${dau.length} · nửa sau ${sau.length}`);
   console.log('CHỌN chỉ nhìn nửa đầu. Nửa sau chỉ nhìn một lần ở cuối.\n');
+
+  // Chia đôi theo thời gian, mà mã lại niêm yết vào các năm khác nhau, thì nửa
+  // đầu và nửa sau có thể khác nhau CẢ VỀ RỔ MÃ chứ không chỉ về giai đoạn. Nếu
+  // không in ra thì mọi chênh lệch giữa hai nửa đều dễ bị đọc nhầm thành "thị
+  // trường đổi", trong khi thật ra là "rổ mã đổi".
+  console.log('══ RỔ MÃ TỪNG NỬA (số lệnh) ══');
+  const dem = (ts: Trade[], key: (t: Trade) => string) => {
+    const m = new Map<string, number>();
+    for (const t of ts) m.set(key(t), (m.get(key(t)) ?? 0) + 1);
+    return m;
+  };
+  for (const [ten, tap] of [['nửa đầu', dau], ['nửa sau', sau]] as [string, Trade[]][]) {
+    const ms = dem(tap, (t) => t.symbol);
+    const mt = dem(tap, (t) => t.tf);
+    const p1 = symbols.map((y) => `${y.replace('USDT', '')} ${((ms.get(y) ?? 0) / tap.length * 100).toFixed(0)}%`).join('  ');
+    const p2 = tfs.map((y) => `${y} ${((mt.get(y) ?? 0) / tap.length * 100).toFixed(0)}%`).join('  ');
+    console.log(`  ${pad(ten, 8)} ${p1}   │  ${p2}`);
+  }
+  console.log('');
 
   // Mốc so sánh: KHÔNG cửa nào. Chú thích trong direct.ts trích một cặp số
   // "trước cửa → sau cửa" đo bằng bộ mô phỏng còn lỗi; in lại đây để sửa cho đúng.

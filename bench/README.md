@@ -90,7 +90,11 @@ mất 103 lệnh mà kết quả không khá hơn.
 Khối kỳ vọng trên bảng ghi *"62 ngày gần nhất của 6 mã"*. Sai — mẫu này trải
 **467 ngày**. Con số 62 đến từ một lần chạy 1h-only trước đó và bị mang sang.
 
-### Giới hạn đã nêu, nay đã gỡ: hiệu chuẩn lại ngưỡng cửa
+> **Toàn bộ mục dưới đây đo trên 467 ngày và ĐÃ BỊ THAY THẾ** bởi mục "Kéo dài
+> lên 5 năm" ở cuối tài liệu. Giữ lại vì bài học về phương pháp vẫn đúng, nhưng
+> **mọi con số trong mục này đều là nhiễu mẫu ngắn** — kể cả những con số 2,6σ.
+
+### (đã thay thế) Hiệu chuẩn ngưỡng cửa trên 467 ngày
 
 Ngưỡng của cửa vốn được chọn từ những lần đo **còn hai lỗi mô phỏng**. Đã hiệu
 chuẩn lại đi-tới: chọn trên nửa đầu, nhìn nửa sau đúng một lần để xác nhận
@@ -165,3 +169,86 @@ dừng. Không có bước đó thì bảng số rác vẫn trông như một k�
 - Vế Rkv ≤ 1,5 vẫn chưa có bằng chứng — cần mẫu dài hơn (nhiều mã, nhiều năm)
   mới đủ lệnh ở phần chênh để kết luận.
 - Cửa lọc rất gắt ở giai đoạn gần đây: 10% số tín hiệu ở nửa đầu, 3,7% ở nửa sau.
+
+
+---
+
+## Kéo dài lên 5 năm — cùng 6 mã, không thêm mã
+
+`scripts/nendai.ts` nạp lịch sử dài có đệm đĩa; `scripts/hieuchuan.ts --nam 5`.
+Nguồn: `data-api.binance.vision` spot klines. Mẫu **2021-09-09 → 2026-09-10**,
+1826 ngày, **118.199 lệnh** — gấp 21,5 lần mẫu cũ. Bộ đo tự kiểm khớp 118.199/118.199.
+
+Phạm vi thật từng mã (ENA lên sàn 2024-04 nên chỉ có 49% cửa sổ):
+
+| nửa | BTC | ETH | ENA | SOL | BNB | XRP |
+|---|---|---|---|---|---|---|
+| đầu | 17% | 19% | **2%** | 24% | 20% | 18% |
+| sau | 14% | 16% | **20%** | 18% | 15% | 16% |
+
+Rổ mã hai nửa khác nhau vì ENA niêm yết muộn — phải nhớ điều này khi đọc chênh
+lệch giữa hai nửa.
+
+### Kết quả chính: edge thật nhỏ hơn nhiều, nhưng ổn định
+
+| | không cửa | qua cửa |
+|---|---|---|
+| nửa đầu | n=59.099 · avgR **−0,12** · PF 0,75 | n=2.513 · avgR **0,06** · PF 1,15 |
+| nửa sau | n=59.100 · avgR **−0,13** · PF 0,74 | n=2.182 · avgR **0,07** · PF 1,19 |
+
+Hai nửa cho gần như cùng một con số (0,06 vs 0,07, ±0,018) — **đây là bằng chứng
+ổn định nhất hệ này có**. Nhưng nó cũng nói rằng con số 0,13 / 0,33 của mẫu 467
+ngày là **một giai đoạn thuận, không phải năng lực của hệ**: edge thật chỉ bằng
+khoảng một phần năm. Cửa chỉ cho ~4% tín hiệu đi qua.
+
+### Bốn ngưỡng: vẫn giữ cả bốn, bằng chứng nay rõ hơn nhiều
+
+| vế | nửa đầu (phần chênh) | nửa sau (phần chênh) | đọc ra |
+|---|---|---|---|
+| bỏ nhất trí | +2.770 lệnh, −0,01 | +2.843 lệnh, −0,03 | cùng dấu → **giữ** |
+| net 15→25 | −577 lệnh, −0,02 | −469 lệnh, +0,03 | đổi dấu → nhiễu, **giữ 15** |
+| phí 0,10→∞ | **+10.354 lệnh, −0,07 (±0,008)** | — | ~9σ → **giữ, vế mạnh nhất** |
+| Rkv 1,5→∞ | +193 lệnh, −0,03 (±0,112) | +162 lệnh, +0,05 (±0,124) | đổi dấu → **vô hại và vô dụng** |
+
+Siết vế phí xuống 0,08 thì bỏ đi 1.196 lệnh lãi +0,04 (nửa đầu) và 1.082 lệnh
+lãi +0,06 (nửa sau) — siết thêm là cắt vào phần lời. Vùng 0,10–0,12 phẳng.
+
+### Ba kết luận của mẫu ngắn đã bị lật
+
+1. **"Nới phí lên 0,15 lãi +0,18R, 2,6σ" — nhiễu.** Mẫu 5 năm: −0,02 (±0,011).
+2. **"Lệnh Rkv > 1,5 tự chúng lãi +0,22R, vế này đang cắt lệnh lời" — nhiễu.**
+   Mẫu 5 năm: −0,03 trên n=193, và đổi dấu ở nửa sau.
+3. **"R gộp không phẳng theo độ rộng stop, lời giải thích cũ sai" — chính tôi sai.**
+   Tôi đã sửa một chú thích đúng thành sai, dựa trên một nhóm n=78. Mẫu 5 năm:
+
+   | stop | R gộp | phí | ròng | n |
+   |---|---:|---:|---:|---:|
+   | 0–0,5% | −0,05 | 0,37 | −0,42 | 6.108 |
+   | 0,5–1% | 0,03 | 0,14 | −0,12 | 32.560 |
+   | 1–1,5% | 0,03 | 0,09 | −0,06 | 13.915 |
+   | 1,5–2% | 0,05 | 0,06 | −0,01 | 3.727 |
+   | 2–3% | 0,04 | 0,05 | −0,01 | 2.026 |
+   | > 3% | 0,11 | 0,03 | **0,09** | 763 |
+
+   R gộp **phẳng** ở bốn nhóm giữa (0,03–0,05). Gần như toàn bộ chênh lệch ròng
+   là phí — đúng như chú thích gốc nói. Đã khôi phục.
+
+**Bài học:** 2,6σ trên vài trăm lệnh vẫn có thể bốc hơi hoàn toàn khi kéo dài
+thời gian. Chia đôi trong-mẫu/ngoài-mẫu không cứu được điều đó nếu cả hai nửa
+đều nằm trong cùng một giai đoạn thị trường. Thứ duy nhất cứu được là **mẫu dài
+hơn**, không phải phép chia khéo hơn.
+
+### Tài khoản 1000 USDT, 5 năm, rủi ro 1%, trần 3 lệnh
+
+| rủi ro | cuối kỳ | sụt sâu nhất | chìm | thua liên tiếp |
+|---|---:|---:|---:|---:|
+| 0,5% | 3.538 | −10,0% | 204 ngày | 11 |
+| **1%** | **11.499** | **−19,3%** | **248 ngày** | **11** |
+| 2% | 94.196 | −35,4% | 306 ngày | 11 |
+| 5% | 6.775.992 | −71,1% | 469 ngày | 11 |
+
+Nửa sau mẫu (2,5 năm ngoài mẫu, rủi ro 1%): 2.122 lệnh, +324%, sụt −16,3%.
+
+So với bản 467 ngày (+99%, −11,3%, chìm 125 ngày, thua 6 liên tiếp): kéo dài lên
+5 năm thì **rủi ro xấu đi khoảng gấp đôi** ở mọi thước đo. Bảng vào tiền đã sửa
+theo số 5 năm.

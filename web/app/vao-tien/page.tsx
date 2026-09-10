@@ -341,29 +341,36 @@ export default function VaoTienPage() {
         {/* Con số kỳ vọng, nói đúng mức. Đặt ở CUỐI vì nó là thứ phải đọc, không
             phải thứ để liếc. */}
         <section className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-3 text-2xs leading-relaxed text-amber-100/90">
-          <p className="mb-1.5 font-semibold text-amber-200">1000 USDT sẽ ra sao — đo trên tài khoản thật</p>
+          <p className="mb-1.5 font-semibold text-amber-200">1000 USDT sẽ ra sao — đo trên 5 năm</p>
           <p>
-            Chạy lại <b>386 kèo qua cửa</b> trong <b>467 ngày</b> (6 mã × 15m/1h/4h) trên một tài
-            khoản 1000 USDT, rủi ro 1% mỗi lệnh — đúng cách bảng này tính khối lượng:
+            Chạy lại <b>4.203 kèo qua cửa</b> trong <b>1.826 ngày</b> (2021-09 → 2026-09, 6 mã ×
+            15m/1h/4h) trên tài khoản 1000 USDT, rủi ro 1% mỗi lệnh, tối đa 3 lệnh mở cùng lúc —
+            đúng cách bảng này tính khối lượng:
           </p>
           <ul className="mt-1.5 space-y-0.5">
-            <li>• Cuối kỳ <b>1.994 USDT</b> (+99%), 379 lệnh</li>
-            <li>• Sụt sâu nhất <b>−11,3%</b>, có lúc còn 966 USDT</li>
-            <li>• <b>Chìm 125 ngày</b> mới lấy lại được đỉnh cũ</li>
-            <li>• Thua <b>6 lệnh liên tiếp</b> là chuyện đã xảy ra</li>
+            <li>• Cuối kỳ <b>11.499 USDT</b> sau 5 năm</li>
+            <li>• Sụt sâu nhất <b>−19,3%</b></li>
+            <li>• <b>Chìm 248 ngày</b> — hơn tám tháng — mới lấy lại đỉnh cũ</li>
+            <li>• Thua <b>11 lệnh liên tiếp</b> là chuyện đã xảy ra</li>
           </ul>
           <p className="mt-1.5">
-            Nửa sau mẫu (phần chưa dùng để chỉnh gì): 188 lệnh, <b>+81%</b>, sụt sâu nhất −4,3%.
+            Nửa sau mẫu (2,5 năm chưa dùng để chỉnh gì): 2.122 lệnh, <b>+324%</b>, sụt sâu nhất
+            −16,3%.
           </p>
           <p className="mt-1.5 text-amber-200">
-            Con số đáng sợ không phải −11% mà là <b>125 ngày chìm</b>. Bốn tháng dưới đỉnh cũ là
-            lúc phần lớn người bỏ cuộc — và bỏ đúng lúc đó thì +99% kia chưa bao giờ tới tay.
+            Lãi trung bình mỗi lệnh chỉ <b>0,06R</b> (sai số ±0,018). Toàn bộ con số trên là 0,06R
+            đó cộng dồn qua hơn bốn nghìn lệnh trong năm năm — <b>không phải</b> mỗi lệnh một ít
+            tiền dễ thấy. Chưa qua cửa thì hệ <b>lỗ</b>: −0,12R mỗi lệnh.
+          </p>
+          <p className="mt-1.5 text-amber-200">
+            Thứ đáng sợ là <b>248 ngày chìm</b> và <b>11 lệnh thua liên tiếp</b>. Đó là lúc phần
+            lớn người bỏ cuộc — bỏ đúng lúc đó thì phần lãi kia chưa bao giờ tới tay.
           </p>
           <p className="mt-1.5 text-amber-200/70">
-            Rủi ro càng cao càng nguy: 2% cho +283% nhưng sụt −21,6%; 5% cho +2.082% nhưng sụt{' '}
-            <b>−47,8%</b>. Đo trên nến spot, mù phái sinh, 6 mã. Và ngưỡng của cửa vốn được chọn từ
-            những lần đo còn hai lỗi mô phỏng — bộ đo nay đã đúng, nhưng việc chọn ngưỡng thì chưa
-            độc lập với dữ liệu này.
+            Rủi ro càng cao càng nguy: 2% mỗi lệnh thì sụt <b>−35,4%</b>, 5% thì sụt <b>−71,1%</b>{' '}
+            và chìm 469 ngày. Đo trên nến spot, mù phái sinh, chỉ 6 mã, và giả định vào được đúng
+            giá limit ở mọi kèo. Bản trước của bảng này ghi +99% / −11,3% / 125 ngày chìm: đó là
+            một mẫu 467 ngày rơi vào giai đoạn thuận, kéo dài lên 5 năm thì rủi ro xấu đi gấp đôi.
           </p>
         </section>
 

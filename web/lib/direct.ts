@@ -91,48 +91,60 @@ export const GATE = {
   /**
    * CHƯA CHỨNG MINH ĐƯỢC — giữ nguyên số, nhưng không được coi là đã đo.
    *
-   * Chú thích cũ ghi "trên mức này backtest đo ra avgR âm". Đo lại bằng bộ mô
-   * phỏng ĐÃ SỬA (bench/hieu-chuan-cua.txt) thì điều đó không dựng lại được:
-   * trong nhóm đã qua ba điều kiện kia, những lệnh có Rkv > 1.5 tự chúng cho
-   * avgR +0.22 ở nửa đầu (n=39) — tức vế này đang cắt đi lệnh LỜI, không phải
-   * lệnh lỗ. Ở nửa sau nó chỉ cắt 3 lệnh (avgR −1.07), quá ít để nói gì.
+   * Chú thích cũ ghi "trên mức này backtest đo ra avgR âm". Đo trên 5 năm,
+   * 118199 lệnh (bench/hieu-chuan-dai.txt), điều đó KHÔNG dựng lại được — mà
+   * cũng không có gì thay thế. Phần chênh khi nới lên ∞:
    *
-   * Tổng cộng 42 lệnh ở phần chênh: không đủ để đổi ngưỡng theo hướng nào cả.
-   * Giữ 1.5 vì nới ra là THÊM LỆNH mà không có bằng chứng — đúng thứ cần tránh.
-   * Nhưng phải ghi đúng: đây là ngưỡng chưa có bằng chứng, không phải ngưỡng đã đo.
+   *   nửa đầu: +193 lệnh, tự chúng avgR −0.03 (±0.112)
+   *   nửa sau: +162 lệnh, tự chúng avgR +0.05 (±0.124)
+   *
+   * Đổi dấu giữa hai nửa, sai số gấp ba lần chính con số: vế này KHÔNG phân loại
+   * được gì. Nó gần như vô hại và cũng gần như vô dụng — chỉ chạm 4–7% số lệnh
+   * đã qua ba vế kia.
+   *
+   * Giữ 1.5 vì nới ra là THÊM LỆNH mà không có bằng chứng. Nhưng ghi đúng: đây
+   * là ngưỡng chưa chứng minh được, không phải ngưỡng đã đo.
+   *
+   * (Một lần đo trên mẫu 467 ngày từng cho +0.22 ở nửa đầu với n=39 và suýt bị
+   * đọc thành "vế này đang cắt lệnh lời". Mẫu 5 năm cho −0.03 trên n=193. Đó là
+   * nhiễu mẫu ngắn, không phải phát hiện.)
    */
   maxRRBlended: 1.5,
   /**
    * Phí không được ăn quá bấy nhiêu phần của 1R.
    *
-   * Bảng cũ ở đây đo bằng bộ mô phỏng CÒN HAI LỖI. Đo lại trên bộ đã sửa, nửa
-   * đầu mẫu, 2745 lệnh chưa qua cửa nào (bench/hieu-chuan-cua.txt):
+   * Đây là vế duy nhất trong cửa có bằng chứng mạnh. Đo trên 5 năm, nửa đầu mẫu,
+   * 59099 lệnh chưa qua cửa nào (bench/hieu-chuan-dai.txt):
    *
-   *   stop 0–0.5%  → R gộp −0.34, phí 0.29 → ròng −0.63  (n=78)
-   *   stop 0.5–1%  → R gộp  0.05, phí 0.14 → ròng −0.09  (n=726)
-   *   stop 1–1.5%  → R gộp  0.02, phí 0.09 → ròng −0.07  (n=963)
-   *   stop 1.5–2%  → R gộp −0.02, phí 0.07 → ròng −0.09  (n=463)
-   *   stop 2–3%    → R gộp  0.17, phí 0.05 → ròng  0.13  (n=388)
-   *   stop > 3%    → R gộp  0.05, phí 0.03 → ròng  0.02  (n=127)
+   *   stop 0–0.5%  → R gộp −0.05, phí 0.37 → ròng −0.42  (n=6108)
+   *   stop 0.5–1%  → R gộp  0.03, phí 0.14 → ròng −0.12  (n=32560)
+   *   stop 1–1.5%  → R gộp  0.03, phí 0.09 → ròng −0.06  (n=13915)
+   *   stop 1.5–2%  → R gộp  0.05, phí 0.06 → ròng −0.01  (n=3727)
+   *   stop 2–3%    → R gộp  0.04, phí 0.05 → ròng −0.01  (n=2026)
+   *   stop > 3%    → R gộp  0.11, phí 0.03 → ròng  0.09  (n=763)
    *
-   * Cột phí khớp gần đúng bảng cũ — nó là số học: phí theo R tỉ lệ NGHỊCH với
-   * độ rộng stop, nên stop hẹp phải thắng thêm rất nhiều chỉ để hoà. Phần đó vẫn
-   * đúng chừng nào còn trả phí taker.
+   * R GỘP gần như bằng nhau ở mọi độ rộng (0.03–0.05 ở bốn nhóm giữa) — chất
+   * lượng kèo không đổi theo độ rộng stop. Gần như toàn bộ chênh lệch ròng là
+   * phí, vì phí tính theo R tỉ lệ NGHỊCH với độ rộng stop. Đây là sự thật cơ
+   * học, không phải chế độ thị trường: còn trả phí taker thì còn đúng.
    *
-   * NHƯNG lời giải thích cũ — "R gộp gần như bằng nhau ở mọi độ rộng, toàn bộ
-   * chênh lệch là phí" — thì SAI. R gộp không phẳng: nhóm 0–0.5% gộp −0.34, còn
-   * nhóm 2–3% gộp 0.17. Stop hẹp vừa là kèo tệ hơn, vừa bị phí ăn nặng hơn; phí
-   * chỉ là một nửa câu chuyện.
+   * Phần chênh khi NỚI ngưỡng, nửa đầu 5 năm:
    *
-   * Ngưỡng 0.10 ứng với stop ≈ 1.2% giá, chọn theo lý do cơ học. Lần hiệu chuẩn
-   * đi-tới (chọn trên nửa đầu, xác nhận một lần trên nửa sau) cho thấy giữ 0.10
-   * là đúng, và cho thấy vì sao không được chọn theo đỉnh đường cong:
+   *   lên 0.12 → +1860 lệnh,  tự chúng avgR +0.01 (±0.020)
+   *   lên 0.15 → +5224 lệnh,  tự chúng avgR −0.02 (±0.011)
+   *   bỏ hẳn   → +10354 lệnh, tự chúng avgR −0.07 (±0.008)   ← ~9σ
    *
-   *   nới lên 0.15 → nửa đầu nhận thêm 206 lệnh, tự chúng avgR +0.18 (±0.069)
-   *                  nửa sau  nhận thêm 223 lệnh, tự chúng avgR −0.05 (±0.053)
+   * Bỏ hẳn vế phí là lỗ rõ ràng trên hơn mười nghìn lệnh. Vùng 0.10–0.12 thì
+   * phẳng, nên 0.10 không phải đỉnh đường cong mà là một điểm trong vùng phẳng,
+   * chọn theo lý do cơ học (10% của 1R ↔ stop ≈ 1.2% giá). Siết xuống 0.08 thì
+   * bỏ đi 1196 lệnh lãi +0.04 ở nửa đầu và 1082 lệnh lãi +0.06 ở nửa sau — siết
+   * thêm là cắt vào phần lời.
    *
-   * Cùng một cách nới, trong mẫu thì lời rõ (2.6σ), ngoài mẫu thì lỗ. Nếu chỉ
-   * nhìn nửa đầu thì đã nới ngưỡng và mang một cái đỉnh ảo vào hệ thật.
+   * CẢNH BÁO VỀ MẪU NGẮN — chép lại đây vì suýt sửa nhầm chính chú thích này:
+   * cùng phép đo trên mẫu 467 ngày cho ra bảng R gộp *không* phẳng (−0.34 ở
+   * nhóm hẹp nhất, n=78) và cho "nới lên 0.15" lãi +0.18 với 2.6σ. Cả hai đều
+   * là nhiễu: mẫu 5 năm cho −0.05 và −0.02. Một kết quả 2.6σ trên vài trăm lệnh
+   * vẫn có thể bốc hơi hoàn toàn khi kéo dài thời gian.
    */
   maxFeeShare: 0.1,
   /**
@@ -477,29 +489,32 @@ export function decideDirection(
   if (golden) conviction = 'GOLD';
 
   // ---- CỬA CHẤT LƯỢNG ----
-  // Số liệu dưới đây đo lại bằng bộ mô phỏng ĐÃ SỬA, chia đôi theo thời gian
-  // (bench/hieu-chuan-cua.txt · 5491 lệnh · BTC/ETH/SOL/BNB/XRP/ENA · 15m+1h+4h):
+  // Đo bằng bộ mô phỏng ĐÃ SỬA trên 5 NĂM (2021-09 → 2026-09, 1826 ngày,
+  // 118199 lệnh, BTC/ETH/SOL/BNB/XRP/ENA · 15m+1h+4h · bench/hieu-chuan-dai.txt),
+  // chia đôi theo thời gian, ngưỡng chỉ được chọn trên nửa đầu:
   //
-  //   nửa đầu  không cửa: n=2745 avgR −0.06 PF 0.89 │ qua cửa: n=285 avgR 0.13 PF 1.33
-  //   nửa sau  không cửa: n=2746 avgR −0.11 PF 0.77 │ qua cửa: n=101 avgR 0.33 PF 2.34
+  //   nửa đầu  không cửa: n=59099 avgR −0.12 PF 0.75 │ qua cửa: n=2513 avgR 0.06 PF 1.15
+  //   nửa sau  không cửa: n=59100 avgR −0.13 PF 0.74 │ qua cửa: n=2182 avgR 0.07 PF 1.19
   //
-  // Không qua cửa thì hệ LỖ ở cả hai nửa. Cửa là thứ duy nhất kéo nó sang dương,
-  // và nó giữ được điều đó ở nửa sau — nửa chưa từng dùng để chọn ngưỡng nào.
-  // Giá phải trả: chỉ còn 10% (nửa đầu) và 3.7% (nửa sau) số tín hiệu đi qua.
+  // Không qua cửa thì hệ LỖ, ở cả hai nửa, rõ ràng. Cửa là thứ duy nhất kéo nó
+  // sang dương, và hai nửa cho gần như cùng một con số (0.06 vs 0.07) — đó là
+  // bằng chứng ổn định nhất mà hệ này có. Giá phải trả: chỉ ~4% tín hiệu đi qua.
   //
-  // Con số cũ ở đây (0.05 → 0.18, PF 1.13 → 1.61) đo bằng bộ CÒN LỖI, đã bỏ.
+  // ĐỘ LỚN THẬT: 0.06R mỗi lệnh, sai số ±0.018. Không phải 0.13 hay 0.33 như một
+  // lần đo trên mẫu 467 ngày từng cho — con số đó là một giai đoạn thuận, không
+  // phải năng lực của hệ. Mọi thứ dựng trên nó đều phải hạ xuống theo.
   //
-  // Từng vế, đo bằng phần chênh — tức những lệnh mà đổi ngưỡng sẽ nhận thêm hay
-  // bỏ đi, chứ không so hai trung bình gộp của hai tập lồng nhau:
+  // Từng vế, đo bằng phần chênh — những lệnh mà đổi ngưỡng sẽ nhận thêm hay bỏ
+  // đi, đo riêng chúng, chứ không so hai trung bình gộp của hai tập lồng nhau:
   //
-  //   nhất trí : bỏ đi thì nhận thêm 319 lệnh avgR −0.06 (nửa đầu), 146 lệnh
-  //              avgR −0.01 (nửa sau). Cùng dấu ở cả hai nửa → giữ.
-  //   |net|≥15 : siết lên 20/25 hay nới xuống 10 đều cho phần chênh lẫn trong
-  //              sai số, và ĐỔI DẤU giữa hai nửa → nhiễu, không có cơ sở đổi.
+  //   nhất trí : bỏ đi thì nhận thêm 2770 lệnh avgR −0.01 (nửa đầu) và 2843 lệnh
+  //              avgR −0.03 (nửa sau). Cùng dấu ở cả hai nửa → giữ.
+  //   |net|≥15 : siết lên 20/25 hay nới xuống 10 đều cho phần chênh nằm trong
+  //              sai số và ĐỔI DẤU giữa hai nửa → nhiễu, không có cơ sở đổi.
   //              Giữ 15 vì đó là mốc hạng B/C có sẵn, không phải đỉnh đường cong.
-  //   phí ≤0.10: xem chú thích GATE.maxFeeShare — trong mẫu đòi nới, ngoài mẫu
-  //              bác bỏ. Giữ 0.10.
-  //   Rkv ≤1.5 : xem chú thích GATE.maxRRBlended — chưa chứng minh được.
+  //   phí ≤0.10: vế mạnh nhất — bỏ hẳn là −0.07R trên 10354 lệnh (~9σ). Vùng
+  //              0.10–0.12 phẳng. Xem chú thích GATE.maxFeeShare.
+  //   Rkv ≤1.5 : chưa chứng minh được, đổi dấu giữa hai nửa. Xem GATE.maxRRBlended.
   const unanimous = against.length === 0;
   const contestedBy = against.map((e) => e.label);
 
