@@ -209,7 +209,10 @@ export function simulate(
   let entryIdx = -1;
   for (let j = from + 1; j <= Math.min(from + opt.entryWindow, candles.length - 1); j++) {
     const b = candles[j];
-    if (long ? b.l <= entry : b.h >= entry) { entryIdx = j; break; }
+    // SỬA: chỉ khớp khi giá THẬT SỰ in ra mức đó trong nến.
+    if (entry >= b.l && entry <= b.h) { entryIdx = j; break; }
+    // Nến nhảy hẳn qua mức chờ thì bỏ kèo — mức đó không được giao dịch.
+    if (long ? b.h < entry : b.l > entry) return null;
   }
   if (entryIdx < 0) return null;   // không khớp thì không phải một lệnh
 
@@ -226,9 +229,12 @@ export function simulate(
 
   for (let j = entryIdx; j <= Math.min(entryIdx + opt.maxHold, candles.length - 1); j++) {
     const b = candles[j];
+    // SỬA: trên nến vào lệnh chỉ tính stop, không tính chốt lời — không biết
+    // lệnh khớp ở phút thứ mấy nên không biết đoạn nào xảy ra sau khi vào.
+    const afterEntryBar = j > entryIdx;
     const slHit = long ? b.l <= call.sl : b.h >= call.sl;
-    const tp1Hit = long ? b.h >= call.tp1 : b.l <= call.tp1;
-    const tp2Hit = long ? b.h >= call.tp2 : b.l <= call.tp2;
+    const tp1Hit = afterEntryBar && (long ? b.h >= call.tp1 : b.l <= call.tp1);
+    const tp2Hit = afterEntryBar && (long ? b.h >= call.tp2 : b.l <= call.tp2);
 
     // Stop đã dời về hoà vốn? Chỉ tính từ nến SAU nến chạm TP1.
     const beArmed = opt.breakevenAfterTP1 && hitTP1 && tp1Idx >= 0 && j > tp1Idx;
