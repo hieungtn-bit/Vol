@@ -88,29 +88,51 @@ export const FUNDING_HIST = {
 };
 
 export const GATE = {
-  /** Trên mức này thì TP2 xa quá, backtest đo ra avgR âm. */
+  /**
+   * CHƯA CHỨNG MINH ĐƯỢC — giữ nguyên số, nhưng không được coi là đã đo.
+   *
+   * Chú thích cũ ghi "trên mức này backtest đo ra avgR âm". Đo lại bằng bộ mô
+   * phỏng ĐÃ SỬA (bench/hieu-chuan-cua.txt) thì điều đó không dựng lại được:
+   * trong nhóm đã qua ba điều kiện kia, những lệnh có Rkv > 1.5 tự chúng cho
+   * avgR +0.22 ở nửa đầu (n=39) — tức vế này đang cắt đi lệnh LỜI, không phải
+   * lệnh lỗ. Ở nửa sau nó chỉ cắt 3 lệnh (avgR −1.07), quá ít để nói gì.
+   *
+   * Tổng cộng 42 lệnh ở phần chênh: không đủ để đổi ngưỡng theo hướng nào cả.
+   * Giữ 1.5 vì nới ra là THÊM LỆNH mà không có bằng chứng — đúng thứ cần tránh.
+   * Nhưng phải ghi đúng: đây là ngưỡng chưa có bằng chứng, không phải ngưỡng đã đo.
+   */
   maxRRBlended: 1.5,
   /**
    * Phí không được ăn quá bấy nhiêu phần của 1R.
    *
-   * Đây là điều kiện quan trọng nhất và cũng phản trực giác nhất mà backtest tìm
-   * ra. Tách gộp/ròng theo độ rộng stop trên 5661 lệnh:
+   * Bảng cũ ở đây đo bằng bộ mô phỏng CÒN HAI LỖI. Đo lại trên bộ đã sửa, nửa
+   * đầu mẫu, 2745 lệnh chưa qua cửa nào (bench/hieu-chuan-cua.txt):
    *
-   *   stop 0–0.5%  → R gộp 0.01, phí 0.394 → ròng −0.39
-   *   stop 0.5–1%  → R gộp 0.17, phí 0.141 → ròng  0.03
-   *   stop 1–1.5%  → R gộp 0.17, phí 0.092 → ròng  0.08
-   *   stop 1.5–2%  → R gộp 0.18, phí 0.065 → ròng  0.12
-   *   stop 2–3%    → R gộp 0.33, phí 0.046 → ròng  0.28
+   *   stop 0–0.5%  → R gộp −0.34, phí 0.29 → ròng −0.63  (n=78)
+   *   stop 0.5–1%  → R gộp  0.05, phí 0.14 → ròng −0.09  (n=726)
+   *   stop 1–1.5%  → R gộp  0.02, phí 0.09 → ròng −0.07  (n=963)
+   *   stop 1.5–2%  → R gộp −0.02, phí 0.07 → ròng −0.09  (n=463)
+   *   stop 2–3%    → R gộp  0.17, phí 0.05 → ròng  0.13  (n=388)
+   *   stop > 3%    → R gộp  0.05, phí 0.03 → ròng  0.02  (n=127)
    *
-   * R GỘP gần như bằng nhau ở mọi độ rộng — chất lượng kèo không đổi. Toàn bộ
-   * chênh lệch là phí, vì phí tính theo R tỉ lệ NGHỊCH với độ rộng stop. Một kèo
-   * stop 0.5% phải thắng thêm 0.39R chỉ để hoà phí, trong khi cả cái edge đo được
-   * chỉ có 0.17R. Đây là sự thật cơ học, không phải chế độ thị trường: nó còn
+   * Cột phí khớp gần đúng bảng cũ — nó là số học: phí theo R tỉ lệ NGHỊCH với
+   * độ rộng stop, nên stop hẹp phải thắng thêm rất nhiều chỉ để hoà. Phần đó vẫn
    * đúng chừng nào còn trả phí taker.
    *
-   * Ngưỡng 0.10 ứng với stop ≈ 1.2% giá. Đo được 1.5% cho kết quả ngoài mẫu tốt
-   * hơn (0.15 vs 0.11), nhưng ngồi lên đúng đỉnh của một đường cong đo trên
-   * n=599 là uốn tham số — nên lấy mức có lý do cơ học thay vì mức đẹp nhất.
+   * NHƯNG lời giải thích cũ — "R gộp gần như bằng nhau ở mọi độ rộng, toàn bộ
+   * chênh lệch là phí" — thì SAI. R gộp không phẳng: nhóm 0–0.5% gộp −0.34, còn
+   * nhóm 2–3% gộp 0.17. Stop hẹp vừa là kèo tệ hơn, vừa bị phí ăn nặng hơn; phí
+   * chỉ là một nửa câu chuyện.
+   *
+   * Ngưỡng 0.10 ứng với stop ≈ 1.2% giá, chọn theo lý do cơ học. Lần hiệu chuẩn
+   * đi-tới (chọn trên nửa đầu, xác nhận một lần trên nửa sau) cho thấy giữ 0.10
+   * là đúng, và cho thấy vì sao không được chọn theo đỉnh đường cong:
+   *
+   *   nới lên 0.15 → nửa đầu nhận thêm 206 lệnh, tự chúng avgR +0.18 (±0.069)
+   *                  nửa sau  nhận thêm 223 lệnh, tự chúng avgR −0.05 (±0.053)
+   *
+   * Cùng một cách nới, trong mẫu thì lời rõ (2.6σ), ngoài mẫu thì lỗ. Nếu chỉ
+   * nhìn nửa đầu thì đã nới ngưỡng và mang một cái đỉnh ảo vào hệ thật.
    */
   maxFeeShare: 0.1,
   /**
@@ -415,8 +437,8 @@ export function decideDirection(
   if (lv.crossings >= 3) warnings.push(`Đoạn TP1→TP2 xuyên ${lv.crossings} HVN — phần cuối chạy như runner.`);
   if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
     warnings.push(
-      `R kỳ vọng ${rrBlended.toFixed(2)} — TP2 xa tới mức backtest đo ra vùng LỖ (avgR âm). ` +
-      'Chốt sạch ở TP1 hoặc bỏ kèo.',
+      `R kỳ vọng ${rrBlended.toFixed(2)} — TP2 xa hơn mức hệ cho qua cửa (${GATE.maxRRBlended}). ` +
+      'Backtest CHƯA chứng minh được nhóm này lỗ; cân nhắc chốt sạch ở TP1.',
     );
   }
   if (inp.deriv.oi.squeezeWarning) warnings.push('OI/vol perp cao bất thường — rủi ro squeeze hai chiều.');
@@ -455,12 +477,29 @@ export function decideDirection(
   if (golden) conviction = 'GOLD';
 
   // ---- CỬA CHẤT LƯỢNG ----
-  // Ba điều kiện dưới đây không phải ý kiến, chúng là thứ backtest đo được. Trên
-  // 5521 lệnh (BTC/ETH/SOL/BNB/XRP/ENA · 15m+1h+4h), lọc bằng đúng ba điều kiện
-  // này giữ lại 22% số lệnh nhưng nâng avgR 0.05 → 0.18, PF 1.13 → 1.61, và hạ
-  // sụt giảm tối đa từ 105.9R xuống 8.7R. Nửa mẫu ngoài: 0.01 → 0.11.
-  // Nó đúng trên CẢ BA khung (15m từ âm 0.05 thành dương 0.07), cả sáu mã, và
-  // cả hai chiều — nên đây không phải uốn tham số theo một mã hay một khung.
+  // Số liệu dưới đây đo lại bằng bộ mô phỏng ĐÃ SỬA, chia đôi theo thời gian
+  // (bench/hieu-chuan-cua.txt · 5491 lệnh · BTC/ETH/SOL/BNB/XRP/ENA · 15m+1h+4h):
+  //
+  //   nửa đầu  không cửa: n=2745 avgR −0.06 PF 0.89 │ qua cửa: n=285 avgR 0.13 PF 1.33
+  //   nửa sau  không cửa: n=2746 avgR −0.11 PF 0.77 │ qua cửa: n=101 avgR 0.33 PF 2.34
+  //
+  // Không qua cửa thì hệ LỖ ở cả hai nửa. Cửa là thứ duy nhất kéo nó sang dương,
+  // và nó giữ được điều đó ở nửa sau — nửa chưa từng dùng để chọn ngưỡng nào.
+  // Giá phải trả: chỉ còn 10% (nửa đầu) và 3.7% (nửa sau) số tín hiệu đi qua.
+  //
+  // Con số cũ ở đây (0.05 → 0.18, PF 1.13 → 1.61) đo bằng bộ CÒN LỖI, đã bỏ.
+  //
+  // Từng vế, đo bằng phần chênh — tức những lệnh mà đổi ngưỡng sẽ nhận thêm hay
+  // bỏ đi, chứ không so hai trung bình gộp của hai tập lồng nhau:
+  //
+  //   nhất trí : bỏ đi thì nhận thêm 319 lệnh avgR −0.06 (nửa đầu), 146 lệnh
+  //              avgR −0.01 (nửa sau). Cùng dấu ở cả hai nửa → giữ.
+  //   |net|≥15 : siết lên 20/25 hay nới xuống 10 đều cho phần chênh lẫn trong
+  //              sai số, và ĐỔI DẤU giữa hai nửa → nhiễu, không có cơ sở đổi.
+  //              Giữ 15 vì đó là mốc hạng B/C có sẵn, không phải đỉnh đường cong.
+  //   phí ≤0.10: xem chú thích GATE.maxFeeShare — trong mẫu đòi nới, ngoài mẫu
+  //              bác bỏ. Giữ 0.10.
+  //   Rkv ≤1.5 : xem chú thích GATE.maxRRBlended — chưa chứng minh được.
   const unanimous = against.length === 0;
   const contestedBy = against.map((e) => e.label);
 
