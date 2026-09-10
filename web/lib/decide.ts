@@ -59,6 +59,31 @@ function near(a: number, b: number, tol = NEAR): boolean {
 // 1. Xác định STAGE — giá đang đứng ở đâu so với value
 // ------------------------------------------------------------
 
+/**
+ * Vì sao khung này KHÔNG có mép để bám.
+ *
+ * `classifyStage` trả 'mid-range' cho HAI tình huống ngược nhau: giá đứng ở lõi
+ * value, và giá đã rời hẳn value quá xa (> 1.2 ATR ngoài mép). Cả hai đều là
+ * "không có kèo", nhưng nói với người đọc rằng chúng là một thì sai — và sai
+ * theo cách tệ nhất, vì màn hình khi đó ghi "giá đứng GIỮA value area" ngay cạnh
+ * chính câu "giá đã rời hẳn xuống dưới value".
+ *
+ * Đo trên dữ liệu thật (một snapshot, 7 mã × 4 khung): 6 trên 28 khung hiện sai
+ * như vậy. Ví dụ BNB 15m giá 721.49 với VA 744–759.5 — nằm DƯỚI VA 1.45 lần bề
+ * rộng VA, mà màn hình ghi là đứng giữa.
+ */
+export type NoEdgeReason = 'giua-value' | 'roi-khoi-value' | null;
+
+export function noEdgeReason(vp: VolumeProfile, pa: PriceAction, last: number): NoEdgeReason {
+  const { low: val, high: vah } = vp.va70;
+  const outside = pa.atr > 0
+    ? (last > vah ? (last - vah) / pa.atr : last < val ? (val - last) / pa.atr : 0)
+    : 0;
+  if (outside > 1.2) return 'roi-khoi-value';
+  if (inMidValue(vp, last)) return 'giua-value';
+  return null;
+}
+
 export function classifyStage(vp: VolumeProfile, pa: PriceAction, last: number): Stage {
   const { low: val, high: vah } = vp.va70;
 
@@ -437,11 +462,22 @@ export function decideBias(inp: DecideInput): Recommendation {
   const rr1 = lv && entryRef != null ? rr(entryRef, lv.sl, lv.tp1) : null;
   const rr2 = lv && entryRef != null ? rr(entryRef, lv.sl, lv.tp2) : null;
 
+  // Không có side thì không có gì để chấm điểm. Nhưng phải nói ĐÚNG lý do.
+  //
+  // Chỗ này trước đây gán CỨNG nhãn "đứng GIỮA value area", trong khi `side` là
+  // null vì HAI lý do ngược nhau. Lưu ý: nguồn của nhãn sai KHÔNG phải hàm
+  // `inMidValue` (nó trả false đúng cho giá ở ngoài VA) mà chính là dòng gán
+  // cứng này — chỗ dễ nhìn nhầm khi đi tìm.
   const conf = side
     ? scoreConfluence(inp, side, stage, lv, rr1)
     : {
         score: 0, raw: 0,
-        lines: [{ label: 'Giá đứng GIỮA value area — cấm vào', points: -4 }] as ScoreLine[],
+        lines: [{
+          label: noEdgeReason(vp, pa, last) === 'roi-khoi-value'
+            ? `Giá đã rời hẳn khỏi value area (${P(vp.va70.low)}–${P(vp.va70.high)}) — profile khung này không còn mép để bám`
+            : 'Giá đứng GIỮA value area — cấm vào',
+          points: -4,
+        }] as ScoreLine[],
       };
 
   // Quyết định cuối: ≥7 mới ra lệnh, và cổng TF phải mở.
