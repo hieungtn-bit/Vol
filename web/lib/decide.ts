@@ -43,6 +43,44 @@ export interface DecideInput {
   last: number;
 }
 
+/**
+ * Cấu hình đường STRICT.
+ */
+export interface StrictConfig {
+  /**
+   * Trừ 2 điểm khi RR TP1 < 1.2.
+   *
+   * Vế này ĐÃ BỊ BỎ khỏi `decideDirection` — có test khoá việc bỏ
+   * (`expect(warn).not.toContain('RR TP1')`) — vì TP1 theo thiết kế là bậc GẦN
+   * NHẤT, nên RR TP1 < 1 là bình thường chứ không phải kèo tồi. Bản vá đó không
+   * được áp sang `scoreConfluence`, nên đường strict vẫn phạt. Đó là lý do
+   * `/strict` trống.
+   *
+   * Trên dữ liệu thật (7 mã × 4 khung), ENA 1h và SOL 1h đều đủ CẢ BỐN vế hợp
+   * lưu = đúng 7.0, bằng ngưỡng, rồi bị kéo xuống 5.0 và thành WAIT.
+   *
+   * ĐÃ ĐO ngay trên nhánh này (`npx tsx scripts/strict.ts`, 6 mã × 15m/1h/4h ×
+   * 3000 nến) — lần đầu tiên đường strict được backtest:
+   *
+   *              tín hiệu        n     avgR    PF    ngoài mẫu      sai số
+   *   có phạt    60  (0.12%)    39    −0.20   0.73   −0.13 / 0.83   ±0.222
+   *   bỏ phạt    179 (0.35%)   139    −0.10   0.80   −0.05 / 0.88   ±0.088
+   *
+   * (Nhánh audit riêng, có nến 1m gỡ thứ tự trong nến, đo ra khá hơn khoảng
+   * 0.04R mỗi lệnh ở cả hai cột — đúng bằng mức mà giả định thận trọng tính
+   * thiếu. Kết luận không đổi.)
+   *
+   * Bỏ phạt cho GẤP BA tín hiệu, avgR tốt hơn, ngoài mẫu tốt hơn, sai số giảm
+   * một nửa. Nên mặc định là false.
+   *
+   * NHƯNG cả hai đều PF < 1. Bỏ phạt làm đường strict LỖ ÍT HƠN và ra tín hiệu
+   * trở lại — không phải làm nó có lãi. Đường này chưa từng có lợi thế đo được.
+   */
+  rr1Penalty: boolean;
+}
+
+export const DEFAULT_STRICT: StrictConfig = { rr1Penalty: false };
+
 const NEAR = 0.004;          // 0.4% coi là "chạm mép"
 const MIN_RR1 = 1.2;         // dưới ngưỡng này là kèo tồi
 const SL_WIDE_PCT = 3;       // SL > 3% giá → cảnh báo đỏ
@@ -355,6 +393,7 @@ export function scoreConfluence(
   stage: Stage,
   lv: Levels | null,
   rr1: number | null,
+  cfg: StrictConfig = DEFAULT_STRICT,
 ): Confluence {
   const lines: ScoreLine[] = [];
   const { pa, vp, deriv, delta, last } = inp;
@@ -414,7 +453,7 @@ export function scoreConfluence(
   if (pa.volMedian20 > 0 && pa.lastVol < pa.volMedian20 * 0.6) {
     lines.push({ label: 'Volume teo (< 60% median 20)', points: -1.5 });
   }
-  if (rr1 != null && rr1 < MIN_RR1) {
+  if (cfg.rr1Penalty && rr1 != null && rr1 < MIN_RR1) {
     lines.push({ label: `RR TP1 = ${rr1.toFixed(2)} < ${MIN_RR1}`, points: -2 });
   }
   if (lv) {
@@ -438,7 +477,7 @@ export function scoreConfluence(
 // 5. decideBias
 // ------------------------------------------------------------
 
-export function decideBias(inp: DecideInput): Recommendation {
+export function decideBias(inp: DecideInput, strict: StrictConfig = DEFAULT_STRICT): Recommendation {
   const { vp, pa, last, tf, symbol } = inp;
   const bs = vp.binSize;
   const P = (x: number | null) => fmtPrice(x, bs);
@@ -469,7 +508,7 @@ export function decideBias(inp: DecideInput): Recommendation {
   // `inMidValue` (nó trả false đúng cho giá ở ngoài VA) mà chính là dòng gán
   // cứng này — chỗ dễ nhìn nhầm khi đi tìm.
   const conf = side
-    ? scoreConfluence(inp, side, stage, lv, rr1)
+    ? scoreConfluence(inp, side, stage, lv, rr1, strict)
     : {
         score: 0, raw: 0,
         lines: [{
@@ -489,7 +528,11 @@ export function decideBias(inp: DecideInput): Recommendation {
     if (inMidValue(vp, (lv.entry[0] + lv.entry[1]) / 2)) {
       warnings.push('Entry rơi vào GIỮA value area — không vào market ở đây.');
     }
-    if (rr1 != null && rr1 < 1) warnings.push(`RR TP1 = ${rr1.toFixed(2)} < 1 — kèo lỗ kỳ vọng.`);
+    // "lỗ kỳ vọng" là nhãn SAI: RR TP1 < 1 không phải kỳ vọng âm, nó chỉ có
+    // nghĩa mốc chốt đầu gần hơn stop — đúng thiết kế của TP1.
+    if (strict.rr1Penalty && rr1 != null && rr1 < 1) {
+      warnings.push(`RR TP1 = ${rr1.toFixed(2)} < 1 — mốc chốt đầu gần hơn stop.`);
+    }
     const slPct = (Math.abs(entryRef! - lv.sl) / last) * 100;
     if (slPct > SL_WIDE_PCT) {
       warnings.push(`SL cách entry ${slPct.toFixed(2)}% — trên isolated đòn bẩy cao là cháy.`);
