@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiPath } from '@/config/site';
-import { ALWAYS_INCLUDE } from '@/config/universe';
+import { ALWAYS_INCLUDE, DEFAULT_MIN_QUOTE_VOL } from '@/config/universe';
 import { ictString } from '@/lib/format';
 import { money, planOrder, prettyQty, readRR, type OrderPlan } from '@/lib/sizing';
 import type { TF } from '@/lib/types';
@@ -201,16 +201,38 @@ export default function VaoTienPage() {
   const [equity, setEquity] = useState(1000);
   const [riskPct, setRiskPct] = useState(1);
   const [leverage, setLeverage] = useState(10);
+  // Quét ÍT mã thì thấy ít kèo. Cửa chỉ giữ ~7%, nên 4 mã nghĩa là nhiều ngày
+  // liền bảng trống — không phải vì thị trường không có kèo mà vì mình không
+  // nhìn tới. Dùng chính universe theo volume mà /strict dùng.
+  const [soMa, setSoMa] = useState(20);
+  const [universe, setUniverse] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [updated, setUpdated] = useState<string | null>(null);
   const [clock, setClock] = useState<string | null>(null);
 
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const r = await fetch(apiPath('universe', { minVol: String(DEFAULT_MIN_QUOTE_VOL) }));
+        const j = await r.json();
+        if (alive && j.ok) setUniverse((j.symbols as { symbol: string }[]).map((u) => u.symbol));
+      } catch { /* thiếu universe thì rơi về ALWAYS_INCLUDE, không làm chết trang */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const targets = useMemo(
+    () => [...new Set([...ALWAYS_INCLUDE, ...universe])].slice(0, soMa),
+    [universe, soMa],
+  );
+
   const load = useCallback(async () => {
     setBusy(true); setErr(null);
     try {
-      const r = await fetch(apiPath('scan', { symbols: ALWAYS_INCLUDE.join(',') }));
+      const r = await fetch(apiPath('scan', { symbols: targets.join(',') }));
       const j = await r.json();
       if (!j.ok) throw new Error(j.error ?? 'quét lỗi');
       setRows(j.symbols.map((s: Row & { direction: Record<TF, Call | null> }) => ({
@@ -222,7 +244,7 @@ export default function VaoTienPage() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [targets]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -282,6 +304,7 @@ export default function VaoTienPage() {
           <NumField label="Vốn" value={equity} onChange={setEquity} suffix="USDT" step="100" />
           <NumField label="Rủi ro mỗi lệnh" value={riskPct} onChange={setRiskPct} suffix="%" step="0.1" />
           <NumField label="Đòn bẩy" value={leverage} onChange={setLeverage} suffix="×" step="1" />
+          <NumField label="Số mã quét" value={soMa} onChange={setSoMa} suffix="mã" step="1" />
         </div>
 
         {err && (
@@ -318,25 +341,34 @@ export default function VaoTienPage() {
         {/* Con số kỳ vọng, nói đúng mức. Đặt ở CUỐI vì nó là thứ phải đọc, không
             phải thứ để liếc. */}
         <section className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-3 text-2xs leading-relaxed text-amber-100/90">
-          <p className="mb-1.5 font-semibold text-amber-200">Kỳ vọng của lớp kèo này, đo được</p>
+          <p className="mb-1.5 font-semibold text-amber-200">1000 USDT sẽ ra sao — đo trên tài khoản thật</p>
           <p>
-            Cửa chất lượng này là cấu hình <b>duy nhất</b> vừa dương vừa đủ mẫu để tin: trên
-            5.476 lệnh (6 mã × 15m/1h/4h × 3000 nến, bộ mô phỏng đã sửa hai lỗi), cửa giữ lại
-            384 lệnh với <b>avgR 0,18</b>, và nửa mẫu ngoài <b>avgR 0,31 · PF 2,14</b> trên 192 lệnh.
+            Chạy lại <b>386 kèo qua cửa</b> trong <b>467 ngày</b> (6 mã × 15m/1h/4h) trên một tài
+            khoản 1000 USDT, rủi ro 1% mỗi lệnh — đúng cách bảng này tính khối lượng:
           </p>
+          <ul className="mt-1.5 space-y-0.5">
+            <li>• Cuối kỳ <b>1.994 USDT</b> (+99%), 379 lệnh</li>
+            <li>• Sụt sâu nhất <b>−11,3%</b>, có lúc còn 966 USDT</li>
+            <li>• <b>Chìm 125 ngày</b> mới lấy lại được đỉnh cũ</li>
+            <li>• Thua <b>6 lệnh liên tiếp</b> là chuyện đã xảy ra</li>
+          </ul>
           <p className="mt-1.5">
-            Nghĩa là: mỗi lệnh <b>trung bình</b> lãi khoảng 0,2–0,3 lần số tiền rủi ro — và chỉ
-            đúng khi đi <b>đủ dài</b>. Tỷ lệ thắng quanh 55–60%, nên bốn năm lệnh thua liên tiếp
-            là chuyện bình thường chứ không phải hệ hỏng.
+            Nửa sau mẫu (phần chưa dùng để chỉnh gì): 188 lệnh, <b>+81%</b>, sụt sâu nhất −4,3%.
+          </p>
+          <p className="mt-1.5 text-amber-200">
+            Con số đáng sợ không phải −11% mà là <b>125 ngày chìm</b>. Bốn tháng dưới đỉnh cũ là
+            lúc phần lớn người bỏ cuộc — và bỏ đúng lúc đó thì +99% kia chưa bao giờ tới tay.
           </p>
           <p className="mt-1.5 text-amber-200/70">
-            Con số này đo trên nến spot, mù phái sinh, và trên 62 ngày gần nhất của 6 mã. Nó
-            không phải lời hứa cho kèo đang hiện trên màn hình.
+            Rủi ro càng cao càng nguy: 2% cho +283% nhưng sụt −21,6%; 5% cho +2.082% nhưng sụt{' '}
+            <b>−47,8%</b>. Đo trên nến spot, mù phái sinh, 6 mã. Và ngưỡng của cửa vốn được chọn từ
+            những lần đo còn hai lỗi mô phỏng — bộ đo nay đã đúng, nhưng việc chọn ngưỡng thì chưa
+            độc lập với dữ liệu này.
           </p>
         </section>
 
         <p className="mt-4 text-center text-2xs text-muted">
-          Cập nhật {updated ?? '—'} · <a href="/" className="underline">bản điện</a> ·{' '}
+          Quét {targets.length} mã · cập nhật {updated ?? '—'} · <a href="/" className="underline">bản điện</a> ·{' '}
           <a href="/strict" className="underline">bảng kỷ luật</a>
         </p>
       </main>

@@ -1,0 +1,23 @@
+Tài khoản thật · BTCUSDT,ETHUSDT,ENAUSDT,SOLUSDT,BNBUSDT,XRPUSDT · 15m,1h,4h · 3000 nến
+..................
+
+386 kèo qua cửa trên 467 ngày · avgR 0.18 · PF 1.50
+
+══ VỐN 1000 USDT ══
+  rủi ro   trần   lệnh   bỏ    cuối kỳ    lãi       sụt sâu nhất   đáy       chìm     thua liên tiếp
+  0.5%     3      379    7     1419       41.9%     −5.7%          984       125ng    6
+  1%       3      379    7     1994       99.4%     −11.3%         966       125ng    6
+  2%       3      379    7     3831       283.1%    −21.6%         921       131ng    6
+  3%       3      379    7     7096       609.6%    −31.2%         867       131ng    6
+  5%       3      379    7     21819      2081.9%   −47.8%         739       133ng    6
+
+── đổi trần số lệnh mở cùng lúc (rủi ro 1%) ──
+  trần   lệnh   bỏ    cuối kỳ    lãi       sụt sâu nhất   thua liên tiếp
+  1      283    103   1604       60.4%     −8.7%          6
+  2      359    27    2021       102.1%    −9.3%          6
+  3      379    7     1994       99.4%     −11.3%         6
+  5      386    0     1994       99.4%     −11.4%         6
+  không  386    0     1994       99.4%     −11.4%         6
+
+── chỉ nửa sau mẫu (ngoài mẫu), rủi ro 1%, trần 3 ──
+  188 lệnh · cuối kỳ 1810 · lãi 81.0% · sụt sâu nhất −4.3% · thua liên tiếp 5

@@ -135,11 +135,17 @@ export default function LivePage() {
       */}
       <header className="safe-t sticky top-0 z-20 border-b border-line bg-bg/95 backdrop-blur">
         <div className="safe-x mx-auto max-w-[1400px] py-2">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
             <div className="min-w-0">
               <h1 className="truncate text-sm font-semibold leading-tight">Bản điện · Long/Short</h1>
               <p className="mono text-[10px] leading-tight text-muted">{clock ?? '—'}</p>
             </div>
+            <a
+              href="/vao-tien"
+              className="tap-sm shrink-0 rounded-full border border-emerald-500/50 bg-emerald-500/15 px-3.5 text-2xs font-semibold leading-[36px] text-emerald-200 active:brightness-125"
+            >
+              Bảng vào tiền →
+            </a>
             <button
               type="button"
               onClick={() => void load()}
