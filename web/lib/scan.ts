@@ -2,6 +2,8 @@ import { ictSessionStart } from './format';
 import { analyzePriceAction, atr } from './priceAction';
 import { buildDelta, buildDerivatives } from './derivatives';
 import { blindDerivatives } from './backtest';
+import bangCanhBao from '@/data/canh-bao.json';
+import { danhGiaCanhBao, type BangCanhBao } from './canhBao';
 import { type HTFContext } from './decide';
 import { rKyVong, type DirectionalCall } from './direct';
 import { apDungH9, evaluate as danhGiaVongDoi, type BarK, type LifecycleInput } from './lifecycle';
@@ -366,6 +368,12 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
 
   const pa15 = analyzePriceAction(k15);
 
+  // Cảnh báo sớm tính trên nến 1H ĐÃ ĐÓNG. Mã chưa hiệu chuẩn → không cảnh báo.
+  const h1Closed = k1h.filter((c) => c.closed);
+  const canhBao = h1Closed.length
+    ? danhGiaCanhBao(h1Closed, symbol, bangCanhBao as unknown as BangCanhBao)
+    : null;
+
   return {
     symbol,
     ts: Date.now(),
@@ -376,6 +384,7 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
     change24h: ticker?.priceChangePercent ?? null,
     quoteVolume24h: ticker?.quoteVolume ?? null,
     rangePos: pa15.rangePos,
+    canhBaoSom: canhBao,
     tfs,
     derivatives: deriv,
     spotTakerDelta: spotDelta,
@@ -404,7 +413,7 @@ function rong(symbol: string, errors: string[]): SymbolScanLive {
   }
   return {
     symbol, ts: Date.now(),
-    price: null, change24h: null, quoteVolume24h: null, rangePos: null,
+    price: null, change24h: null, quoteVolume24h: null, rangePos: null, canhBaoSom: null,
     tfs, derivatives: blindDerivatives(), spotTakerDelta: blindDerivatives().perpTaker,
     direction, structure, flow: null,
     composite: { sessionPoc: null, h24Poc: null, d3Poc: null, dualRead: null },

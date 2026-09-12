@@ -1,3 +1,4 @@
+import type { CanhBaoSom } from './canhBao';
 import type { LifecycleVerdict } from './lifecycle';
 // ============================================================
 // Schema trung tâm. Mọi module phân tích đều nói bằng ngôn ngữ này.
@@ -298,6 +299,11 @@ export interface SymbolScan {
   change24h: number | null;
   quoteVolume24h: number | null;
   rangePos: number | null;
+  /**
+   * Cảnh báo ĐỘ LỚN sắp tới — không phải hướng. Đo được, ngoài mẫu, và chỉ bật
+   * cho mã đã hiệu chuẩn ngưỡng. Xem lib/canhBao.ts.
+   */
+  canhBaoSom: CanhBaoSom | null;
   tfs: Record<TF, Recommendation>;
   derivatives: Derivatives;
   spotTakerDelta: DeltaInfo;
