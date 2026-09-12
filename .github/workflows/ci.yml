@@ -1,5 +1,5 @@
 # CI tối thiểu — chặn đúng thứ đã gây ra bug ENAUSDT 11–12/09/2026.
-# lifecycle.test.ts là bộ oracle T0–T24 (cả bản điện lẫn /strict); nó đỏ thì không được merge vào production.
+# lifecycle.test.ts là bộ oracle T0–T26 (cả bản điện lẫn /strict); nó đỏ thì không được merge vào production.
 name: CI
 
 on:
@@ -21,7 +21,7 @@ jobs:
       - run: npm ci
 
       # Chạy riêng và TRƯỚC để log T0–T12 nằm ngay đầu output khi đỏ.
-      - name: Vòng đời thẻ + nhịp 1H — oracle T0–T24
+      - name: Vòng đời thẻ + nhịp 1H — oracle T0–T26
         run: npx vitest run test/lifecycle.test.ts test/hourflow.test.ts --reporter=verbose
 
       - name: Toàn bộ test

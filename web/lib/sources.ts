@@ -62,7 +62,9 @@ function toCandles(raw: RawKline[], tfMs: number): Candle[] {
     c: +k[4],
     v: +k[5],
     q: +k[7],
-    // field 9 = taker buy base asset volume → taker delta THẬT, nhưng là của SPOT.
+    // field 9 = taker buy base asset volume. CHỢ NÀO thì tuỳ endpoint gọi nó:
+    // /api/v3/klines → taker SPOT; /fapi/v1/klines → taker PERP. Nhãn phải đi
+    // theo nguồn, không theo chỗ dùng.
     takerBuyBase: k[9] !== undefined ? +k[9] : null,
     closed: k[0] + tfMs <= now,
   }));
@@ -76,6 +78,47 @@ export async function fetchKlines(symbol: string, tf: TF, limit = 500): Promise<
     } catch {
       return toCandles(await getJSON<RawKline[]>(SPOT_FALLBACK + path), TF_MS[tf]);
     }
+  });
+}
+
+/** Gương của FAPI qua www.binance.com — hay sống khi fapi.binance.com bị chặn. */
+const FAPI_WWW = process.env.BINANCE_FAPI_WWW ?? 'https://www.binance.com/fapi';
+
+/**
+ * NẾN USD-M PERP. Người dùng vào lệnh trên perp, nên value area, H8, H11 và giá
+ * hiện tại đều phải đọc từ SỔ PERP. Nến spot lệch khỏi perp đúng ở những lúc
+ * quan trọng nhất (funding, squeeze, thanh lý).
+ *
+ * Ba tầng, và tầng ba PHẢI được báo ra ngoài chứ không nuốt:
+ *   1. www.binance.com/fapi — gương, thường sống khi fapi.binance.com bị chặn
+ *   2. fapi.binance.com     — sổ gốc
+ *   3. spot                 — chỉ để trang còn chạy; `nguon` trả về 'spot' để
+ *      phía gọi ghi vào degraded. Không được im lặng coi spot là perp.
+ */
+export async function fetchKlinesPerp(
+  symbol: string, tf: TF, limit = 500,
+): Promise<{ candles: Candle[]; nguon: 'perp-www' | 'perp-fapi' | 'spot'; loi: string | null }> {
+  const path = `/fapi/v1/klines?symbol=${symbol}&interval=${INTERVAL[tf]}&limit=${limit}`;
+  return cached(`klp:${symbol}:${tf}:${limit}`, DEFAULT_TTL, async () => {
+    const loi: string[] = [];
+    try {
+      const r = await getJSON<RawKline[]>(`${FAPI_WWW}${path.replace('/fapi/v1/', '/v1/')}`, 12_000);
+      if (r.length) return { candles: toCandles(r, TF_MS[tf]), nguon: 'perp-www' as const, loi: null };
+      loi.push('www rỗng');
+    } catch (e) { loi.push(`www: ${(e as Error).message}`); }
+    try {
+      const r = await getJSON<RawKline[]>(`${FAPI}${path}`, 12_000);
+      if (r.length) return { candles: toCandles(r, TF_MS[tf]), nguon: 'perp-fapi' as const, loi: null };
+      loi.push('fapi rỗng');
+    } catch (e) { loi.push(`fapi: ${(e as Error).message}`); }
+
+    const spot = await fetchKlines(symbol, tf, limit);
+    return {
+      candles: spot,
+      nguon: 'spot' as const,
+      loi: `nến perp chết (${loi.join(' · ')}) — đang dùng nến SPOT cho ${tf}, `
+        + 'value area / H8 / H11 / giá đều lệch khỏi sổ perp.',
+    };
   });
 }
 
@@ -174,6 +217,11 @@ export interface PerpSnapshot {
   oiUsd: number | null;
   /** Volume 24h của CHÍNH chợ perp này (USDT). */
   vol24hUsd: number | null;
+  /** Giá cuối 24h ticker PERP. Dùng khi markPrice thiếu. */
+  lastPrice: number | null;
+  /** Cao/thấp 24h của SỔ PERP — H11 phải đo trên sổ mà lệnh sẽ khớp. */
+  high24h: number | null;
+  low24h: number | null;
 }
 
 export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
@@ -184,6 +232,7 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
       return {
         alive: false, reason, fundingRate: null, fundingHistory: null, nextFundingTime: null,
         markPrice: null, openInterest: null, oiHist: null, oiUsd: null, vol24hUsd: null,
+        lastPrice: null, high24h: null, low24h: null,
       };
     };
     try {
@@ -224,6 +273,9 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
         oiHist,
         oiUsd,
         vol24hUsd: t24?.quoteVolume != null ? +t24.quoteVolume : null,
+        lastPrice: t24?.lastPrice != null ? +t24.lastPrice : null,
+        high24h: t24?.highPrice != null ? +t24.highPrice : null,
+        low24h: t24?.lowPrice != null ? +t24.lowPrice : null,
       };
     } catch (e) {
       if (e instanceof GeoBlocked) return dead(`Binance perp bị chặn (${e.message}) → dùng OKX.`);

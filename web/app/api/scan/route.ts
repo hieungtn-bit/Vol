@@ -1,3 +1,5 @@
+import { setKhoaHetStore } from '@/lib/lifecycle';
+import { taoKhoaHetFile } from '@/lib/khoaHetFile';
 import { NextResponse } from 'next/server';
 import { ALWAYS_INCLUDE, MAX_SCAN_SYMBOLS } from '@/config/universe';
 import { ictString } from '@/lib/format';
@@ -5,6 +7,11 @@ import { scanSymbol, sourcesInfo } from '@/lib/scan';
 import { saveSnapshot, SNAPSHOT_NOTE } from '@/lib/snapshot';
 import { venueState } from '@/lib/sources';
 import type { ScanSnapshot, SymbolScan } from '@/lib/types';
+
+// Khoá HẾT dựng MỘT LẦN cho cả module: `evaluate()` đọc qua store này, và nếu
+// nền không có chỗ ghi thì `canhBao` đi thẳng vào `degraded` thay vì im lặng.
+const KHOA_HET = taoKhoaHetFile();
+setKhoaHetStore(KHOA_HET.store);
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,6 +62,8 @@ export async function GET(req: Request) {
     degraded.push(`Perp Binance không truy cập được — ${venueState.perpReason} Taker perp = N/A, funding/OI lấy từ OKX.`);
   }
   if (SNAPSHOT_NOTE) degraded.push(SNAPSHOT_NOTE);
+  // Khoá HẾT: nói thẳng khi nó chỉ sống trong một tiến trình.
+  if (KHOA_HET.canhBao) degraded.push(KHOA_HET.canhBao);
   for (const r of ok) for (const e of r.errors) degraded.push(`${r.symbol}: ${e}`);
 
   const snap: ScanSnapshot = {

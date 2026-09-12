@@ -134,11 +134,52 @@ export function cardId(i: Pick<LifecycleInput,
 type KieuHet = 'sl-last' | 'sl-cay' | 'toi-chot' | 'het-han' | 'trigger-hong';
 
 /**
- * Khoá lưu KIỂU và giá lúc hết, KHÔNG lưu câu chữ. Lần quét sau dựng lại câu từ
- * `last` hiện tại — nếu cache chuỗi thì thẻ 22:42 vẫn in "last 0.154" trong khi
- * giá đã là 0.15362.
+ * Một dòng khoá. Lưu KIỂU và giá lúc hết, KHÔNG lưu câu chữ — lần quét sau dựng
+ * lại câu từ `last` hiện tại; cache nguyên chuỗi thì thẻ 22:42 vẫn in
+ * "last 0.154" trong khi giá đã là 0.15362.
  */
-const khoaHet = new Map<string, { ts: number; kieu: KieuHet; giaLucHet: number; slHitTs: number | null }>();
+export interface KhoaHetRow {
+  ts: number;
+  kieu: KieuHet;
+  giaLucHet: number;
+  slHitTs: number | null;
+}
+
+/**
+ * Nơi cất khoá HẾT.
+ *
+ * `get` PHẢI đồng bộ vì `evaluate()` là hàm thuần đồng bộ; bản ghi ra đĩa vì
+ * thế nạp sẵn vào bộ nhớ lúc dựng store, còn `set` ghi xuống nền.
+ *
+ * VÌ SAO CẦN: Map trong RAM chết theo tiến trình. Trên nền serverless mỗi cold
+ * start là một RAM mới, nên thẻ 22:34 đã HẾT sẽ SỐNG LẠI ở lần quét sau — đúng
+ * loại bug mà cả bộ cổng này sinh ra để chặn.
+ */
+export interface KhoaHetStore {
+  get(id: string): KhoaHetRow | null;
+  set(id: string, row: KhoaHetRow): void | Promise<void>;
+}
+
+export interface KhoaHetRam extends KhoaHetStore {
+  entries(): [string, KhoaHetRow][];
+  clear(): void;
+}
+
+/** Store mặc định: RAM. Đủ cho test và cho tiến trình chạy liên tục. */
+export function taoKhoaHetRam(seed?: Iterable<[string, KhoaHetRow]>): KhoaHetRam {
+  const m = new Map<string, KhoaHetRow>(seed ?? []);
+  return {
+    get: (id) => m.get(id) ?? null,
+    set: (id, row) => { m.set(id, row); },
+    entries: () => [...m.entries()],
+    clear: () => m.clear(),
+  };
+}
+
+let khoaHet: KhoaHetStore = taoKhoaHetRam();
+
+/** Đổi nơi cất khoá. Gọi một lần lúc khởi động, hoặc trong test để tiêm store. */
+export function setKhoaHetStore(store: KhoaHetStore) { khoaHet = store; }
 
 function lyDoHet(kieu: KieuHet, i: LifecycleInput, giaLucHet: number, tsHet: number): string {
   const gio = new Date(tsHet).toISOString().slice(11, 16);
@@ -165,8 +206,9 @@ function lyDoKhoa(kieu: KieuHet, i: LifecycleInput, giaLucHet: number, tsHet: nu
   return `${lyDoHet(kieu, i, giaLucHet, tsHet)} (HẾT lúc ${gio}); last hiện tại ${i.last}, id đã khoá`;
 }
 
-export function resetKhoaHet() { khoaHet.clear(); }
-export function daKhoaHet(id: string) { return khoaHet.get(id) ?? null; }
+/** Xoá khoá bằng cách thay hẳn bằng RAM rỗng. Chỉ dùng trong test. */
+export function resetKhoaHet() { khoaHet = taoKhoaHetRam(); }
+export function daKhoaHet(id: string) { return khoaHet.get(id); }
 
 const trong = (x: number, lo: number, hi: number) => x >= Math.min(lo, hi) && x <= Math.max(lo, hi);
 
@@ -355,7 +397,7 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
     const tsHet = khoa ? khoa.ts : i.ts;
     slHitTs = khoa ? khoa.slHitTs : (kieuHet === 'sl-last' || kieuHet === 'sl-cay' ? i.ts : null);
     reason = khoa ? lyDoKhoa(kieuHet, i, giaLucHet, tsHet) : lyDoHet(kieuHet, i, i.last, i.ts);
-    if (!khoa) khoaHet.set(id, { ts: i.ts, kieu: kieuHet, giaLucHet: i.last, slHitTs });
+    if (!khoa) void khoaHet.set(id, { ts: i.ts, kieu: kieuHet, giaLucHet: i.last, slHitTs });
   } else if (failed.filter((g) => g !== 'H1' && g !== 'H4').length > 0) {
     state = 'CAM';
     reason = `trượt cổng cứng ${failed.filter((g) => g !== 'H1' && g !== 'H4').join(', ')}`;

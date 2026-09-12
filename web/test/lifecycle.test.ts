@@ -3,7 +3,10 @@
  * CI đỏ nếu bất kỳ thẻ nào trong số này quay lại trạng thái cũ.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { apDungH9, daToiTP, evaluate, resetKhoaHet, tpHitTol, type BarK, type LifecycleInput } from '../lib/lifecycle';
+import {
+  apDungH9, daToiTP, evaluate, resetKhoaHet, setKhoaHetStore, taoKhoaHetRam,
+  tpHitTol, type BarK, type LifecycleInput,
+} from '../lib/lifecycle';
 import { buildFundingHistory } from '../lib/derivatives';
 import { pocTuNenVol, sessionTb, type HFBar } from '../lib/hourflow';
 
@@ -640,6 +643,79 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
     expect(v.state).not.toBe('SONG');
   });
 
+  // ==========================================================================
+  // T25 — khoá HẾT phải sống qua TIẾN TRÌNH MỚI.
+  // Map RAM chết theo tiến trình; trên nền serverless mỗi cold start là một RAM
+  // mới, nên thẻ 22:34 đã HẾT sẽ sống lại. Đây là bài kiểm tra đúng chỗ đó:
+  // tiến trình B không thừa hưởng gì ngoài DỮ LIỆU đã ghi ra của A.
+  // ==========================================================================
+  it('T25 thẻ HẾT ở tiến trình A vẫn HẾT ở tiến trình B', () => {
+    // ---- Tiến trình A ----
+    const storeA = taoKhoaHetRam();
+    setKhoaHetStore(storeA);
+    const iA = co({ ...THE_2234, ...CHO_2234 });
+    const vA = evaluate(iA);
+    ghi('T25 A', iA, vA);
+    expect(vA.state).toBe('HET');
+    expect(vA.id).toBe('ENAUSDT-4h-SHORT-etb5vc');
+    expect(vA.slHitTs).not.toBeNull();
+
+    // ---- Qua đĩa: chỉ JSON đi tiếp, không object nào ----
+    const tren_dia = JSON.stringify(Object.fromEntries(storeA.entries()));
+
+    // ---- Tiến trình B: RAM mới hoàn toàn ----
+    resetKhoaHet();
+    expect(evaluate(co({
+      ...THE_2234, tf: THE_2234.tf,
+      last: 0.1485, ts: Date.parse('2026-09-11T23:10:00Z'),
+      openK: null, lastClosedK: bar(0.1520, 0.1525, 0.1460, 0.1465, 3e8, true),
+    })).state).not.toBe('HET');   // chứng minh RAM đã thật sự trống
+
+    const storeB = taoKhoaHetRam(Object.entries(JSON.parse(tren_dia)));
+    setKhoaHetStore(storeB);
+    const iB = co({
+      ...THE_2234, tf: THE_2234.tf,
+      last: 0.1485, ts: Date.parse('2026-09-11T23:10:00Z'),
+      openK: null, lastClosedK: bar(0.1520, 0.1525, 0.1460, 0.1465, 3e8, true),
+    });
+    const vB = evaluate(iB);
+    ghi('T25 B', iB, vB);
+    expect(vB.id).toBe(vA.id);
+    expect(vB.state).toBe('HET');
+    expect(vB.slHitTs).toBe(vA.slHitTs);
+    expect(vB.reason).toContain('id đã khoá');
+    resetKhoaHet();
+  });
+
+  // ==========================================================================
+  // T26 — sổ USD-M. Thẻ đọc nến perp và giá mark, không phụ thuộc ticker spot.
+  // ==========================================================================
+  it('T26 nến perp 4H 19:00 vol BASE 827m + mark 0.154 → HẾT, không đụng spot', () => {
+    // Nến fapi: volume ở field 5 là BASE. `toBar` phải lấy đúng cột đó.
+    const nenPerp = { t: Date.parse('2026-09-11T19:00:00Z'), o: 0.1558, h: 0.15764,
+      l: 0.13980, c: 0.154, v: 827e6, q: 121e6, takerBuyBase: 380e6, closed: false };
+    expect(nenPerp.v).toBe(827e6);
+    expect(nenPerp.v).not.toBe(nenPerp.q);   // base ≠ quote, không được lấy nhầm
+
+    const i = co({
+      ...THE_2234,
+      last: 0.154,                   // = markPrice perp, KHÔNG phải ticker spot
+      ts: Date.parse('2026-09-11T21:30:00Z'),
+      openK: { t: nenPerp.t, o: nenPerp.o, h: nenPerp.h, l: nenPerp.l, c: nenPerp.c,
+        v: nenPerp.v, closed: nenPerp.closed },
+      lastClosedK: bar(0.1500, 0.1560, 0.1500, 0.1540, 200e6, true),
+      low24h: 0.13980, high24h: 0.15764,     // cao/thấp 24h của SỔ PERP
+      cum1h: CHO_2234.cum1h,
+    });
+    const v = evaluate(i);
+    ghi('T26', i, v);
+    expect(i.openK!.v).toBe(827e6);
+    expect(v.state).toBe('HET');
+    expect(v.failedGates).toContain('H2');   // last 0.154 ≥ sl 0.15254
+    expect(v.failedGates).toContain('H10');  // cây perp đang mở cũng xuyên SL
+    expect(v.id).toBe('ENAUSDT-4h-SHORT-etb5vc');
+  });
+
   it('H9 hạ hạng A khi khung khác cùng hướng đang TRƯỢT', () => {
     const song = evaluate(co({
       tf: '1h', last: 0.1480, entryLow: 0.1470, entryHigh: 0.1490, sl: 0.1520,
@@ -658,6 +734,6 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
   it('in log T0–T9', () => {
     // eslint-disable-next-line no-console
     console.log('\n' + log.join('\n') + '\n');
-    expect(log.length).toBeGreaterThanOrEqual(33);
+    expect(log.length).toBeGreaterThanOrEqual(36);
   });
 });
