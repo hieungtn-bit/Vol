@@ -3,7 +3,7 @@ import { ALWAYS_INCLUDE, MAX_SCAN_SYMBOLS } from '@/config/universe';
 import { ictString } from '@/lib/format';
 import { scanSymbol, sourcesInfo } from '@/lib/scan';
 import { saveSnapshot, SNAPSHOT_NOTE } from '@/lib/snapshot';
-import { venueState } from '@/lib/sources';
+import { duLieuCu, trangThaiHost, venueState } from '@/lib/sources';
 import type { ScanSnapshot, SymbolScan } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -55,6 +55,20 @@ export async function GET(req: Request) {
     degraded.push(`Perp Binance không truy cập được — ${venueState.perpReason} Taker perp = N/A, funding/OI lấy từ OKX.`);
   }
   if (SNAPSHOT_NOTE) degraded.push(SNAPSHOT_NOTE);
+  // Khoá HẾT nằm trong RAM của tiến trình: nói thẳng, đừng để người đọc tưởng
+  // một thẻ đã HẾT thì mãi mãi HẾT sau khi server khởi động lại.
+  degraded.push('Khoá HẾT nằm trong bộ nhớ tiến trình — sau khi server khởi động '
+    + 'lại, một thẻ đã HẾT có thể hiện lại ở trạng thái khác. Đọc lại trạng thái trước khi vào tiền.');
+  // Host đang bị sàn phạt — nói ra thay vì để người dùng đoán vì sao trang trống.
+  for (const h of trangThaiHost()) {
+    degraded.push(`${h.host} đang bị Binance phạt, nghỉ thêm ${h.conNghiGiay}s — `
+      + 'hệ đã chuyển sang gương khác và dùng bản cũ nếu cần.');
+  }
+  // Số nào đang là bản CŨ thì ghi rõ cũ bao nhiêu giây. Không có dòng này thì
+  // một cái giá 8 phút trước trông y hệt giá live.
+  for (const [ten, tuoi] of duLieuCu) {
+    degraded.push(`${ten}: đang dùng BẢN CŨ ${Math.round(tuoi / 1000)}s trước (nguồn vừa chết).`);
+  }
   for (const r of ok) for (const e of r.errors) degraded.push(`${r.symbol}: ${e}`);
 
   const snap: ScanSnapshot = {

@@ -20,9 +20,23 @@ const EXTREME_FR = 0.0005;   // 0.05% / 8h — mới đáng gọi là lệch
  * long trả short rồi đảo thành short trả long là một sự kiện; một kỳ dương lẻ
  * loi thì không. Hệ này trước đây chỉ đọc rate hiện tại và vứt hẳn phần đó đi.
  */
-export function buildFundingHistory(rates: number[] | null): FundingHistory | null {
-  if (!rates || rates.length < 2) return null;
+/** Cửa sổ lịch sử funding: rate live + 6–8 kỳ đã chốt. Dài hơn là kể chuyện cũ. */
+const CUA_SO_FUNDING = 8;
+
+export function buildFundingHistory(all: number[] | null): FundingHistory | null {
+  if (!all || all.length < 2) return null;
+  const rates = all.slice(-CUA_SO_FUNDING);
   const sign = (x: number) => (Math.abs(x) < FLAT_FR ? 0 : x > 0 ? 1 : -1) as 0 | 1 | -1;
+
+  // Dấu THÔ — không qua ngưỡng phẳng. Ngày 12/09 ENA có 23:00 short trả long và
+  // 07:00 long trả short ở mức 0.005%; cả hai nằm dưới ngưỡng phẳng nên bị gộp
+  // thành 0 và màn hình in "phẳng 12 kỳ" trong khi sổ funding đã đảo dấu.
+  const tho = (x: number) => (x > 0 ? 1 : x < 0 ? -1 : 0);
+  let rawFlips = 0;
+  for (let i = 1; i < rates.length; i++) {
+    const a = tho(rates[i - 1]), b = tho(rates[i]);
+    if (a !== 0 && b !== 0 && a !== b) rawFlips++;
+  }
 
   const last = rates[rates.length - 1];
   const streakSign = sign(last);
@@ -38,13 +52,18 @@ export function buildFundingHistory(rates: number[] | null): FundingHistory | nu
   }
 
   const who = (sg: 0 | 1 | -1) => (sg === 1 ? 'long trả short' : sg === -1 ? 'short trả long' : 'phẳng');
+  const pct = (x: number) => `${(x * 100).toFixed(4)}%`;
   const text = flipped
     ? `Funding vừa ĐẢO: ${brokeStreak} kỳ ${who(prevSign)} rồi lật sang ${who(streakSign)}.`
     : streakSign === 0
-      ? `Funding phẳng ${streak} kỳ liên tiếp — không bên nào bị ép.`
-      : `${streak} kỳ liên tiếp ${who(streakSign)}.`;
+      ? (rawFlips > 0
+          // CẤM in "phẳng N kỳ" khi sổ có đảo dấu, dù biên độ nhỏ.
+          ? `Funding quanh 0 nhưng đã ĐỔI DẤU ${rawFlips} lần trong ${rates.length} kỳ `
+            + `(mới nhất ${pct(last)}) — nhỏ nên không làm lý do, nhưng không phải phẳng.`
+          : `Funding phẳng ${streak}/${rates.length} kỳ — không bên nào bị ép.`)
+      : `${streak}/${rates.length} kỳ liên tiếp ${who(streakSign)}.`;
 
-  return { rates, streak, streakSign, flipped, brokeStreak, text };
+  return { rates, streak, streakSign, flipped, brokeStreak, rawFlips, text };
 }
 
 export function buildFunding(perp: PerpSnapshot, okx: OkxSnapshot): FundingInfo {
@@ -288,7 +307,10 @@ export function buildDerivatives(
     perpDelta = {
       quality: 'REAL', venue: null, lastBar: perBar[perBar.length - 1], cvd: acc,
       cvdSeries: series, deltaAtPrice: [], divergence: 'none',
-      note: 'Taker perp (Binance USDT-M).',
+      // Số này đến từ futures/data/takerlongshortRatio — TỶ LỆ mua/bán của chợ
+      // perp, KHÔNG phải field 9 của kline. Repo không gọi kline USD-M ở đâu
+      // cả, nên mọi delta tính từ field 9 đều là SPOT và phải ghi là spot.
+      note: 'Taker perp (Binance USDT-M, từ tỷ lệ taker — không phải delta kline).',
     };
   } else {
     perpDelta = {

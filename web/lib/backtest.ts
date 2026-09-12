@@ -112,6 +112,12 @@ export interface Trade {
   /** Để hiệu chuẩn ngưỡng hạng vàng bằng dữ liệu thay vì bằng cảm tính. */
   warningCount: number;
   rrBlended: number | null;
+  /** Khoảng cách TP1/TP2 tính bằng R, đo từ đúng mép entry sẽ khớp. */
+  rr1: number | null;
+  rr2: number | null;
+  /** Tỷ lệ lời/lỗ mà bảng vào tiền hiển thị: 0.5×rr1 + 0.5×rr2, khớp payout
+   *  của chính hàm này (50% ở TP1, 50% ở TP2). */
+  rewardR: number | null;
   /** Khoảng cách entry→SL tính theo % giá. Stop rộng = phí nặng theo R và kèo tồi. */
   slPct: number;
   /** Vùng entry cách giá lúc ra tín hiệu bao nhiêu % — entry quá xa là mức giá rác. */
@@ -209,7 +215,10 @@ export function simulate(
   let entryIdx = -1;
   for (let j = from + 1; j <= Math.min(from + opt.entryWindow, candles.length - 1); j++) {
     const b = candles[j];
-    if (long ? b.l <= entry : b.h >= entry) { entryIdx = j; break; }
+    // SỬA: chỉ khớp khi giá THẬT SỰ in ra mức đó trong nến.
+    if (entry >= b.l && entry <= b.h) { entryIdx = j; break; }
+    // Nến nhảy hẳn qua mức chờ thì bỏ kèo — mức đó không được giao dịch.
+    if (long ? b.h < entry : b.l > entry) return null;
   }
   if (entryIdx < 0) return null;   // không khớp thì không phải một lệnh
 
@@ -226,9 +235,12 @@ export function simulate(
 
   for (let j = entryIdx; j <= Math.min(entryIdx + opt.maxHold, candles.length - 1); j++) {
     const b = candles[j];
+    // SỬA: trên nến vào lệnh chỉ tính stop, không tính chốt lời — không biết
+    // lệnh khớp ở phút thứ mấy nên không biết đoạn nào xảy ra sau khi vào.
+    const afterEntryBar = j > entryIdx;
     const slHit = long ? b.l <= call.sl : b.h >= call.sl;
-    const tp1Hit = long ? b.h >= call.tp1 : b.l <= call.tp1;
-    const tp2Hit = long ? b.h >= call.tp2 : b.l <= call.tp2;
+    const tp1Hit = afterEntryBar && (long ? b.h >= call.tp1 : b.l <= call.tp1);
+    const tp2Hit = afterEntryBar && (long ? b.h >= call.tp2 : b.l <= call.tp2);
 
     // Stop đã dời về hoà vốn? Chỉ tính từ nến SAU nến chạm TP1.
     const beArmed = opt.breakevenAfterTP1 && hitTP1 && tp1Idx >= 0 && j > tp1Idx;
@@ -278,6 +290,8 @@ export function simulate(
       evidence: call.evidence.map((e) => ({ label: e.label, points: e.points })),
       warningCount: call.warnings.length,
       rrBlended: call.rrBlended,
+      rr1: R(call.tp1), rr2: R(call.tp2),
+      rewardR: 0.5 * R(call.tp1) + 0.5 * R(call.tp2),
       slPct: (risk / entry) * 100,
       entryDistPct: (Math.abs(entry - candles[from].c) / candles[from].c) * 100,
       unanimous: call.unanimous,

@@ -45,18 +45,40 @@ const P4 = fmtTick;
  * biến mất — người dùng chỉ thấy một badge mờ đi mà không biết vì sao. Bây giờ
  * nó là chữ thật, đọc được bằng ngón tay lẫn bằng trình đọc màn hình.
  */
+const STATE_CLS: Record<string, string> = {
+  SONG: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200',
+  CHO_GIA: 'border-sky-400/40 bg-sky-400/10 text-sky-200',
+  CHO_NEN: 'border-amber-400/40 bg-amber-400/10 text-amber-200',
+  CAM: 'border-slate-500/40 bg-slate-500/10 text-slate-300',
+  HET: 'border-red-500/40 bg-red-500/10 text-red-300',
+};
+
+/**
+ * Một dòng chữ nói TRẠNG THÁI THẺ — và chỉ đọc từ `lifecycle`, không đọc cờ nào
+ * khác. Thẻ ENA 4H ngày 11/09 in "ĐỦ ĐIỀU KIỆN" trong khi nến 4H còn mở và last
+ * đã xuyên SL, vì banner đọc một cờ tính lúc chấm điểm thay vì đọc trạng thái
+ * lúc quét. Thiếu `lifecycle` = coi như KHÔNG MỞ, không đoán.
+ */
 export function GateLine({ c, className = '' }: { c: DirectionalCall; className?: string }) {
-  return c.tradeable ? (
-    <p className={`rounded-md border border-emerald-400/40 bg-emerald-400/10 px-2 py-1.5 text-2xs leading-snug text-emerald-200 ${className}`}>
-      <b>Qua cửa chất lượng.</b> Mọi vế cùng hướng · hạng {c.conviction} · R kỳ vọng{' '}
-      {c.rrBlended?.toFixed(2) ?? 'N/A'} ≤ 1.5 · stop đủ rộng để phí không ăn quá 10% của 1R.
-    </p>
-  ) : (
-    <p className={`rounded-md border border-slate-500/40 bg-slate-500/10 px-2 py-1.5 text-2xs leading-snug text-slate-300 ${className}`}>
-      <b>Trượt cửa — chỉ theo dõi, không vào tiền.</b> Hướng vẫn là {c.side}, nhưng:
-      <span className="mt-1 block space-y-0.5">
-        {c.gateBlockers.map((b, i) => <span key={i} className="block">– {b}</span>)}
-      </span>
+  const lc = c.lifecycle;
+  if (!lc) {
+    return (
+      <p className={`rounded-md border border-slate-500/40 bg-slate-500/10 px-2 py-1.5 text-2xs leading-snug text-slate-300 ${className}`}>
+        <b>CHƯA ĐÁNH GIÁ ĐƯỢC — KHÔNG MỞ.</b> Thiếu giá live hoặc nến khung này.
+      </p>
+    );
+  }
+  return (
+    <p className={`rounded-md border px-2 py-1.5 text-2xs leading-snug ${STATE_CLS[lc.state]} ${className}`}>
+      <b>{lc.banner}</b>
+      {lc.noiDuocHuong ? ` · thiên hướng ${c.side} · hạng ${lc.grade}` : ` · hạng ${lc.grade}`}
+      <span className="mt-1 block">– {lc.reason}</span>
+      {lc.failedGates.length > 0 && (
+        <span className="mt-0.5 block opacity-80">– cổng hỏng: {lc.failedGates.join(', ')}</span>
+      )}
+      {lc.softFlags.length > 0 && (
+        <span className="mt-0.5 block opacity-80">– trừ hạng: {lc.softFlags.join(', ')}</span>
+      )}
     </p>
   );
 }
@@ -164,13 +186,13 @@ function TFCell({
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      aria-label={`${tf}: ${c.side}, hạng ${c.conviction}, ${c.tradeable ? 'qua cửa' : 'trượt cửa'}. Bấm để xem kế hoạch.`}
+      aria-label={`${tf}: ${c.side}, hạng ${c.lifecycle?.grade ?? c.conviction}, ${c.lifecycle?.banner ?? 'chưa đánh giá'}. Bấm để xem kế hoạch.`}
       className={[
         'tap flex w-full flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1.5 leading-none transition',
         stacked ? 'min-h-tap' : 'min-h-[38px]',
         SIDE_CLS[c.side],
         c.golden ? GOLD_RING : '',
-        c.tradeable ? '' : 'opacity-50',
+        c.lifecycle?.state === 'SONG' ? '' : 'opacity-50',
         open ? 'brightness-125 ring-1 ring-sky-400/70' : '',
         'active:brightness-125 hover:brightness-125',
       ].join(' ')}
@@ -178,17 +200,17 @@ function TFCell({
       {stacked && <span className="mono text-[10px] uppercase tracking-wide opacity-70">{tf}</span>}
       <span className="flex items-center gap-1 whitespace-nowrap">
         <span className="text-[11px] font-bold tracking-tight">{c.side}</span>
-        <span className={`rounded px-1 text-[9px] font-bold leading-4 ${CONV_CLS[c.conviction]}`}>
-          {CONV_LABEL[c.conviction]}
+        <span className={`rounded px-1 text-[9px] font-bold leading-4 ${CONV_CLS[c.lifecycle?.grade ?? c.conviction]}`}>
+          {CONV_LABEL[c.lifecycle?.grade ?? c.conviction]}
         </span>
       </span>
       {/*
-        Chữ ở đây KHÔNG được phép xuống dòng. "qua cửa" bị ngắt giữa chừng thì dấu
-        tiếng Việt vỡ ra thành "cưả" — nên dấu qua cửa chỉ còn một ký tự, còn tỷ số
-        long/short thì luôn hiện vì nó mới là số người ta so giữa các khung.
+        Chữ ở đây KHÔNG được phép xuống dòng: chữ tiếng Việt bị ngắt giữa chừng thì
+        dấu vỡ ra. Nên dấu ĐỦ ĐIỀU KIỆN chỉ còn một ký tự ✓, còn tỷ số long/short
+        thì luôn hiện vì nó mới là số người ta so giữa các khung.
       */}
       <span className="mono flex items-center gap-1 whitespace-nowrap text-[10px] opacity-75">
-        {c.tradeable && <span className="text-emerald-300" aria-hidden>✓</span>}
+        {c.lifecycle?.state === 'SONG' && <span className="text-emerald-300" aria-hidden>✓</span>}
         {c.longScore}/{c.shortScore}
       </span>
     </button>
@@ -215,10 +237,10 @@ export function Detail({ c }: { c: DirectionalCall }) {
         <span className="mono rounded bg-white/10 px-1.5 py-0.5 text-xs font-semibold">{c.tf}</span>
         <span className={`rounded border px-2 py-0.5 text-2xs font-bold ${SIDE_CLS[c.side]}`}>{c.side}</span>
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${CONV_CLS[c.conviction]}`}>
-          {c.golden ? '★ TÍN HIỆU VÀNG' : `hạng ${c.conviction}`}
+          {c.golden && c.lifecycle?.state === 'SONG' ? '★ TÍN HIỆU VÀNG' : `hạng ${c.lifecycle?.grade ?? c.conviction}`}
         </span>
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${c.tradeable ? 'bg-emerald-400/20 text-emerald-300' : 'bg-slate-500/20 text-slate-400'}`}>
-          {c.tradeable ? 'QUA CỬA' : 'CHỈ THEO DÕI'}
+        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${STATE_CLS[c.lifecycle?.state ?? 'CAM']}`}>
+          {c.lifecycle?.banner ?? 'CHƯA ĐÁNH GIÁ — KHÔNG MỞ'}
         </span>
         <span className="text-2xs text-muted">size {c.size}</span>
       </div>

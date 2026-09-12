@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { BiasBadge, Field, SizePill, STAGE_VI, VPMini, Warn } from './ui';
+import { BiasBadge, Field, SizePill, STAGE_VI, STATE_O, VPMini, Warn } from './ui';
 import { fmtPct, fmtPrice, fmtUsd } from '@/lib/format';
 import type { Recommendation, SymbolScan, TF } from '@/lib/types';
 
@@ -93,9 +93,25 @@ function TFCard({ r }: { r: Recommendation }) {
         <Field label="Hủy" value={<span className="whitespace-normal text-right">{r.invalidation}</span>} mono={false} />
       </div>
 
+      {/* Banner CHỈ từ lifecycle.state. Thiếu vòng đời = không mở, không đoán. */}
+      <p className={`mt-2 rounded-md border px-2 py-1.5 text-2xs leading-snug ${
+        STATE_O[r.lifecycle?.state ?? 'CAM']}`}>
+        <b>{r.lifecycle?.banner ?? (r.bias === 'WAIT'
+          ? 'CHƯA CÓ THẺ — KHÔNG MỞ'
+          : 'CHƯA ĐÁNH GIÁ ĐƯỢC — KHÔNG MỞ')}</b>
+        {r.lifecycle && <span className="mt-1 block">– {r.lifecycle.reason}</span>}
+        {r.lifecycle && r.lifecycle.failedGates.length > 0 && (
+          <span className="mt-0.5 block opacity-80">– cổng hỏng: {r.lifecycle.failedGates.join(', ')}</span>
+        )}
+        {r.lifecycle && r.lifecycle.softFlags.length > 0 && (
+          <span className="mt-0.5 block opacity-80">– trừ hạng: {r.lifecycle.softFlags.join(', ')}</span>
+        )}
+      </p>
+
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <SizePill size={r.size} counter={r.counterTrend} />
         <span className="text-2xs text-muted">Confidence {r.confidence}/10</span>
+        {r.lifecycle && <span className="text-2xs text-muted">hạng {r.lifecycle.grade}</span>}
       </div>
 
       {r.warnings.length > 0 && (
@@ -149,11 +165,14 @@ export default function SymbolDrawer({ scan, onClose }: { scan: SymbolScan; onCl
             <div className="flex items-center gap-2">
               <h2 className="mono text-lg font-semibold">{scan.symbol}</h2>
               <span className="mono text-sm">{fmtPrice(scan.price, bs)}</span>
-              <span className={`mono text-xs ${scan.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <span className={`mono text-xs ${(scan.change24h ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {fmtPct(scan.change24h)}
               </span>
             </div>
-            <div className="text-2xs text-muted">Vol 24h {fmtUsd(scan.quoteVolume24h)} · Range pos {scan.rangePos.toFixed(0)}%</div>
+            <div className="text-2xs text-muted">
+              Vol 24h {fmtUsd(scan.quoteVolume24h)} · Range pos{' '}
+              {scan.rangePos == null ? '—' : `${scan.rangePos.toFixed(0)}%`}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <CopyBtn text={allPlans} />

@@ -16,20 +16,43 @@ export const STAGE_VI: Record<Stage, string> = {
   'mid-range': 'không có mép',
 };
 
+/** Nhãn trạng thái vòng đời — cùng chữ với bản điện. */
+export const STATE_NHAN: Record<string, string> = {
+  CHO_NEN: 'CHƯA ĐÓNG NẾN — KHÔNG MỞ',
+  CHO_GIA: 'CHỜ GIÁ VÀO — KHÔNG MỞ',
+  SONG: 'ĐỦ ĐIỀU KIỆN',
+  HET: 'TÍN HIỆU HẾT — KHÔNG MỞ',
+  CAM: 'TRƯỢT ĐIỀU KIỆN — KHÔNG MỞ',
+};
+
+export const STATE_O: Record<string, string> = {
+  CHO_NEN: 'border-amber-400/40 bg-amber-400/10 text-amber-200',
+  CHO_GIA: 'border-sky-400/40 bg-sky-400/10 text-sky-200',
+  SONG: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200',
+  HET: 'border-red-500/40 bg-red-500/10 text-red-300',
+  CAM: 'border-slate-500/40 bg-slate-500/10 text-slate-300',
+};
+
 export function BiasBadge({ r, onClick }: { r: Recommendation; onClick?: () => void }) {
   const lean =
     r.bias === 'WAIT' && r.confluence.score >= 4
       ? r.stage === 'edge-fail' || r.stage === 'breakdown' ? '↓' : r.stage === 'mid-range' ? '' : '↑'
       : '';
+  // Chỉ ô nào state === 'SONG' mới được sáng. Điểm hợp lưu KHÔNG còn là cổng.
+  const st = r.lifecycle?.state ?? null;
   return (
     <button
       onClick={onClick}
-      className={`w-full rounded border px-1.5 py-1 text-2xs leading-tight ${BIAS_CLASS[r.bias]} ${onClick ? 'cursor-pointer hover:brightness-125' : ''}`}
-      title={`${STAGE_VI[r.stage]} · score ${r.confluence.score.toFixed(1)}/10`}
+      className={`w-full rounded border px-1.5 py-1 text-2xs leading-tight ${BIAS_CLASS[r.bias]} ${
+        st != null && st !== 'SONG' ? 'opacity-50' : ''
+      } ${onClick ? 'cursor-pointer hover:brightness-125' : ''}`}
+      title={`${STAGE_VI[r.stage]} · score ${r.confluence.score.toFixed(1)}/10${
+        r.lifecycle ? ` · ${r.lifecycle.banner} — ${r.lifecycle.reason}` : ''}`}
     >
       <div className="font-semibold">
         {r.bias === 'WAIT' ? `WAIT${lean}` : r.bias}
         {r.counterTrend && r.bias !== 'WAIT' ? '*' : ''}
+        {st === 'SONG' ? <span className="text-emerald-300"> ✓</span> : null}
       </div>
       <div className="mono opacity-70">{r.confluence.score.toFixed(1)}</div>
     </button>

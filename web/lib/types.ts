@@ -1,3 +1,4 @@
+import type { LifecycleVerdict } from './lifecycle';
 // ============================================================
 // Schema trung tâm. Mọi module phân tích đều nói bằng ngôn ngữ này.
 // ============================================================
@@ -172,6 +173,12 @@ export interface FundingHistory {
   flipped: boolean;
   /** Số kỳ cùng dấu NGAY TRƯỚC cú đảo. 0 khi không đảo. */
   brokeStreak: number;
+  /**
+   * Số lần ĐỔI DẤU THẬT trong cửa sổ, đếm trên rate thô, KHÔNG qua ngưỡng phẳng.
+   * Ngưỡng phẳng tồn tại để cấm lấy funding nhỏ làm lý do vào lệnh — nhưng nó
+   * không được phép biến một chuỗi có đảo dấu thành "phẳng N kỳ" trên màn hình.
+   */
+  rawFlips: number;
   text: string;
 }
 
@@ -242,6 +249,8 @@ export interface Recommendation {
   /** 2 mức entry. null khi WAIT không có kèo chờ. */
   entry: [number, number] | null;
   trigger: string;
+  /** Mức giá nến khung phải ĐÓNG qua thì trigger mới kích hoạt. Không parse chuỗi. */
+  triggerLevel: number | null;
   sl: number | null;
   /** BẮT BUỘC nằm trong VA / tại POC. */
   tp1: number | null;
@@ -270,15 +279,25 @@ export interface Recommendation {
   };
   rangePos: number;
   planText: string;
+  /**
+   * Trạng thái vòng đời — CÙNG một hàm `evaluate()` mà bản điện dùng. Đường
+   * strict không được có máy trạng thái riêng: hai não trên cùng một trang là
+   * cách bug ENA quay lại. null = WAIT hoặc thiếu mức giá → không mở.
+   */
+  lifecycle: LifecycleVerdict | null;
 }
 
 export interface SymbolScan {
   symbol: string;
   ts: number;
-  price: number;
-  change24h: number;
-  quoteVolume24h: number;
-  rangePos: number;
+  /**
+   * null = KHÔNG lấy được dữ liệu cho mã này. Trước đây chỗ này là `0`, và số 0
+   * hiện lên màn hình trông y hệt một cái giá thật.
+   */
+  price: number | null;
+  change24h: number | null;
+  quoteVolume24h: number | null;
+  rangePos: number | null;
   tfs: Record<TF, Recommendation>;
   derivatives: Derivatives;
   spotTakerDelta: DeltaInfo;

@@ -16,6 +16,7 @@ export default function Page() {
   const [minVol, setMinVol] = useState(DEFAULT_MIN_QUOTE_VOL);
   const [limit, setLimit] = useState(12);
   const [auto, setAuto] = useState(false);
+  const [chiDuDieuKien, setChiDuDieuKien] = useState(false);
   const [extra, setExtra] = useState('');
   const [universe, setUniverse] = useState<UniverseRow[]>([]);
   const [snap, setSnap] = useState<ScanSnapshot | null>(null);
@@ -77,7 +78,14 @@ export default function Page() {
     return () => { if (timer.current) clearInterval(timer.current); };
   }, [auto, scan]);
 
-  const rows = snap?.symbols ?? [];
+  const tatCa = snap?.symbols ?? [];
+  // Đếm và lọc CHỈ theo lifecycle.state — cùng máy trạng thái với bản điện.
+  // Điểm hợp lưu và bias không còn là cổng ở đây nữa.
+  const soSong = tatCa.reduce(
+    (n, r) => n + TFS.filter((tf) => r.tfs[tf]?.lifecycle?.state === 'SONG').length, 0);
+  const rows = chiDuDieuKien
+    ? tatCa.filter((r) => TFS.some((tf) => r.tfs[tf]?.lifecycle?.state === 'SONG'))
+    : tatCa;
   const active = open ? rows.find((r) => r.symbol === open) ?? null : null;
 
   return (
@@ -103,9 +111,14 @@ export default function Page() {
           <p className="text-2xs text-muted">
             Price Action + Volume Profile + OI + Funding. Mỗi khung 15m / 1h / 4h / 1D quyết định độc lập.
           </p>
-          <a href="../" className="text-2xs text-sky-300 underline hover:brightness-125">
-            ← Về bản điện (Long/Short liên tục, không WAIT)
-          </a>
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <a href="../" className="text-2xs text-sky-300 underline hover:brightness-125">
+              ← Về bản điện (Long/Short liên tục, không WAIT)
+            </a>
+            <a href="../vao-tien/" className="text-2xs text-emerald-300 underline hover:brightness-125">
+              Bảng vào tiền (chỉ thẻ ĐỦ ĐIỀU KIỆN, kèm khối lượng) →
+            </a>
+          </span>
         </div>
         <div className="mono text-xs text-muted">{clock ?? '—'}</div>
       </header>
@@ -152,8 +165,20 @@ export default function Page() {
         >
           Auto 60s
         </button>
+        <button
+          type="button" role="switch" aria-checked={chiDuDieuKien}
+          onClick={() => setChiDuDieuKien((v) => !v)}
+          className={`tap-sm rounded-full border px-4 text-2xs font-semibold transition active:brightness-125 ${
+            chiDuDieuKien ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-200' : 'border-line bg-panel2 text-muted'
+          }`}
+        >
+          {chiDuDieuKien ? '✓ ' : ''}Chỉ ĐỦ ĐIỀU KIỆN
+        </button>
         <div className="ml-auto text-2xs text-muted">
-          {snap ? `Cập nhật ${snap.ictTime} · ${snap.symbols.length} symbol` : `${targets.length} symbol sẵn sàng`}
+          {snap
+            ? <>Cập nhật {snap.ictTime} · {snap.symbols.length} symbol ·{' '}
+                <b className={soSong > 0 ? 'text-emerald-300' : ''}>{soSong} thẻ ĐỦ ĐIỀU KIỆN</b></>
+            : `${targets.length} symbol sẵn sàng`}
         </div>
       </div>
 
@@ -187,7 +212,9 @@ export default function Page() {
           <tbody>
             {rows.length === 0 && (
               <tr><td colSpan={10} className="px-3 py-6 text-center text-2xs text-muted">
-                Bấm <b>Quét ngay</b> để chạy. Mặc định watchlist gồm {ALWAYS_INCLUDE.join(', ')}.
+                {chiDuDieuKien && tatCa.length > 0
+                  ? 'Không thẻ nào ĐỦ ĐIỀU KIỆN lúc này. Tắt bộ lọc để xem thiên hướng — thiên hướng là để theo dõi, không phải để vào tiền.'
+                  : <>Bấm <b>Quét ngay</b> để chạy. Mặc định watchlist gồm {ALWAYS_INCLUDE.join(', ')}.</>}
               </td></tr>
             )}
             {rows.map((s) => <Row key={s.symbol} s={s} onOpen={() => setOpen(s.symbol)} />)}
@@ -220,12 +247,14 @@ function Row({ s, onOpen }: { s: SymbolScan; onOpen: () => void }) {
         <button onClick={onOpen} className="mono font-semibold text-sky-300 hover:underline">{s.symbol}</button>
       </td>
       <td className="mono text-right">{fmtPrice(s.price, bs)}</td>
-      <td className={`mono text-right ${s.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtPct(s.change24h)}</td>
+      <td className={`mono text-right ${(s.change24h ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtPct(s.change24h)}</td>
       <td className="mono text-right text-muted">{fmtUsd(s.quoteVolume24h)}</td>
       <td className="mono text-right">
-        <span className={s.rangePos > 80 ? 'text-red-300' : s.rangePos < 20 ? 'text-emerald-300' : ''}>
-          {s.rangePos.toFixed(0)}%
-        </span>
+        {s.rangePos == null ? <span className="text-muted">—</span> : (
+          <span className={s.rangePos > 80 ? 'text-red-300' : s.rangePos < 20 ? 'text-emerald-300' : ''}>
+            {s.rangePos.toFixed(0)}%
+          </span>
+        )}
       </td>
       {TFS.map((tf) => (
         <td key={tf} className="w-16"><BiasBadge r={s.tfs[tf]} onClick={onOpen} /></td>

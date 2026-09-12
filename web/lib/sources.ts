@@ -1,4 +1,4 @@
-import { cached, DEFAULT_TTL } from './cache';
+import { cached, cachedCoTuoi, DEFAULT_TTL } from './cache';
 import type { Candle, TF } from './types';
 
 // ============================================================
@@ -11,12 +11,52 @@ import type { Candle, TF } from './types';
 
 const SPOT = process.env.BINANCE_SPOT_BASE ?? 'https://data-api.binance.vision';
 const SPOT_FALLBACK = process.env.BINANCE_SPOT_FALLBACK ?? 'https://api.binance.com';
+
+/**
+ * Chuỗi gương cho dữ liệu thị trường spot, theo đúng thứ tự thử.
+ *
+ * `data-api.binance.vision` đứng đầu vì nó là endpoint CHỈ ĐỌC dữ liệu thị
+ * trường: không dính hạn mức của tài khoản giao dịch, và không bị 451 ở những
+ * vùng mà api.binance.com bị chặn. Các gương api1–api4 chỉ để đỡ khi cái đầu
+ * hỏng theo vùng.
+ */
+const SPOT_MIRRORS = (process.env.BINANCE_SPOT_MIRRORS
+  ?? [SPOT, SPOT_FALLBACK, 'https://api1.binance.com', 'https://api2.binance.com',
+      'https://api3.binance.com'].join(','))
+  .split(',').map((x) => x.trim()).filter(Boolean);
 const FAPI = process.env.BINANCE_FAPI_BASE ?? 'https://fapi.binance.com';
 const OKX = process.env.OKX_BASE ?? 'https://www.okx.com';
 
 const UA = { 'User-Agent': 'market-scan-multi-tf/1.0' };
 
 export class GeoBlocked extends Error {}
+
+/** Sàn bảo nghỉ (418 = đang bị cấm IP, 429 = vượt hạn mức). */
+export class BiChanTam extends Error {
+  constructor(msg: string, public readonly nghiToiMs: number) { super(msg); }
+}
+
+/**
+ * Host nào đang bị phạt thì nghỉ tới lúc nào. Gọi tiếp một host vừa trả 418 là
+ * tự gia hạn lệnh cấm của chính mình — đó là lý do một lần quá tay biến thành
+ * cả buổi trang trắng.
+ */
+const nghiToi = new Map<string, number>();
+
+const dangNghi = (host: string) => (nghiToi.get(host) ?? 0) > Date.now();
+
+/**
+ * Khoá cache nào đang phải dùng BẢN CŨ vì nguồn chết, và cũ bao nhiêu ms.
+ * Xoá khỏi đây ngay khi lấy được bản mới — nên cái gì còn ở đây là đang cũ thật.
+ */
+export const duLieuCu = new Map<string, number>();
+
+export function trangThaiHost() {
+  const now = Date.now();
+  return [...nghiToi.entries()]
+    .filter(([, t]) => t > now)
+    .map(([host, t]) => ({ host, conNghiGiay: Math.ceil((t - now) / 1000) }));
+}
 
 /** Trạng thái các venue trong lần scan hiện tại — hiển thị ra UI, không giấu. */
 export const venueState = {
@@ -25,18 +65,51 @@ export const venueState = {
 };
 
 async function getJSON<T>(url: string, timeoutMs = 9000): Promise<T> {
+  const host = new URL(url).host;
+  if (dangNghi(url.startsWith(FAPI) ? host : host)) {
+    throw new BiChanTam(
+      `${host} đang nghỉ phạt thêm ${Math.ceil(((nghiToi.get(host) ?? 0) - Date.now()) / 1000)}s`,
+      nghiToi.get(host) ?? 0,
+    );
+  }
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     const r = await fetch(url, { headers: UA, signal: ctl.signal, cache: 'no-store' });
     if (r.status === 451 || r.status === 403) {
-      throw new GeoBlocked(`HTTP ${r.status} từ ${new URL(url).host}`);
+      throw new GeoBlocked(`HTTP ${r.status} từ ${host}`);
     }
-    if (!r.ok) throw new Error(`HTTP ${r.status} từ ${new URL(url).host}`);
+    if (r.status === 418 || r.status === 429) {
+      // Binance gửi Retry-After khi phạt. Tôn trọng nó; thiếu thì nghỉ 2 phút.
+      const ra = Number(r.headers.get('retry-after'));
+      const nghi = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 120_000;
+      nghiToi.set(host, Date.now() + nghi);
+      throw new BiChanTam(`HTTP ${r.status} từ ${host} — nghỉ ${Math.round(nghi / 1000)}s`, Date.now() + nghi);
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status} từ ${host}`);
     return (await r.json()) as T;
   } finally {
     clearTimeout(t);
   }
+}
+
+/**
+ * Thử lần lượt các gương, GOM MỌI lỗi rồi mới ném.
+ *
+ * Bản cũ chỉ ném lỗi của gương CUỐI, nên production báo "HTTP 418 từ
+ * api.binance.com" trong khi thứ thật sự hỏng là gương đầu — người đọc đi sửa
+ * nhầm chỗ.
+ */
+async function getJSONMirrors<T>(paths: string[], timeoutMs = 9000): Promise<T> {
+  const loi: string[] = [];
+  for (const url of paths) {
+    try {
+      return await getJSON<T>(url, timeoutMs);
+    } catch (e) {
+      loi.push(`${new URL(url).host}: ${(e as Error).message.replace(/^HTTP \d+ từ \S+ — /, '')}`);
+    }
+  }
+  throw new Error(loi.join(' · '));
 }
 
 // ---------------- Spot klines ----------------
@@ -62,7 +135,9 @@ function toCandles(raw: RawKline[], tfMs: number): Candle[] {
     c: +k[4],
     v: +k[5],
     q: +k[7],
-    // field 9 = taker buy base asset volume → taker delta THẬT, nhưng là của SPOT.
+    // field 9 = taker buy base asset volume. CHỢ NÀO thì tuỳ endpoint gọi nó:
+    // /api/v3/klines → taker SPOT; /fapi/v1/klines → taker PERP. Nhãn phải đi
+    // theo nguồn, không theo chỗ dùng.
     takerBuyBase: k[9] !== undefined ? +k[9] : null,
     closed: k[0] + tfMs <= now,
   }));
@@ -70,13 +145,11 @@ function toCandles(raw: RawKline[], tfMs: number): Candle[] {
 
 export async function fetchKlines(symbol: string, tf: TF, limit = 500): Promise<Candle[]> {
   const path = `/api/v3/klines?symbol=${symbol}&interval=${INTERVAL[tf]}&limit=${limit}`;
-  return cached(`kl:${symbol}:${tf}:${limit}`, DEFAULT_TTL, async () => {
-    try {
-      return toCandles(await getJSON<RawKline[]>(SPOT + path), TF_MS[tf]);
-    } catch {
-      return toCandles(await getJSON<RawKline[]>(SPOT_FALLBACK + path), TF_MS[tf]);
-    }
-  });
+  const key = `kl:${symbol}:${tf}:${limit}`;
+  const r = await cachedCoTuoi(key, DEFAULT_TTL, async () =>
+    toCandles(await getJSONMirrors<RawKline[]>(SPOT_MIRRORS.map((m) => m + path)), TF_MS[tf]));
+  if (r.cu) duLieuCu.set(`${symbol} ${tf}`, r.tuoiMs); else duLieuCu.delete(`${symbol} ${tf}`);
+  return r.value;
 }
 
 /**
@@ -143,19 +216,25 @@ export async function fetchAllTickers(): Promise<Ticker24h[]> {
   });
 }
 
-export async function fetchTicker(symbol: string): Promise<Ticker24h | null> {
-  return cached(`t24:${symbol}`, DEFAULT_TTL, async () => {
-    const url = `/api/v3/ticker/24hr?symbol=${symbol}`;
-    try {
-      const t = await getJSON<any>(SPOT + url);
-      return {
-        symbol: t.symbol, lastPrice: +t.lastPrice, priceChangePercent: +t.priceChangePercent,
-        quoteVolume: +t.quoteVolume, highPrice: +t.highPrice, lowPrice: +t.lowPrice,
-      };
-    } catch {
-      return null;
-    }
+/**
+ * Ticker 24h. NÉM khi hỏng thay vì trả null.
+ *
+ * Bản cũ nuốt lỗi rồi `return null` — mà nó nằm TRONG `cached`, nên `null` được
+ * ghi vào cache như một giá trị tốt và đè mất bản cũ còn dùng được. Kết quả:
+ * một lần 418 là `lastLive` rơi về close của nến đã đóng, đúng cái làm thẻ 4H
+ * hôm 11/09 không thấy giá đã xuyên SL. Ném lên để lớp cache đưa bản cũ ra.
+ */
+export async function fetchTicker(symbol: string): Promise<Ticker24h> {
+  const url = `/api/v3/ticker/24hr?symbol=${symbol}`;
+  const r = await cachedCoTuoi(`t24:${symbol}`, DEFAULT_TTL, async () => {
+    const t = await getJSONMirrors<any>(SPOT_MIRRORS.map((m) => m + url));
+    return {
+      symbol: t.symbol, lastPrice: +t.lastPrice, priceChangePercent: +t.priceChangePercent,
+      quoteVolume: +t.quoteVolume, highPrice: +t.highPrice, lowPrice: +t.lowPrice,
+    };
   });
+  if (r.cu) duLieuCu.set(`${symbol} giá live`, r.tuoiMs); else duLieuCu.delete(`${symbol} giá live`);
+  return r.value;
 }
 
 // ---------------- Perp: Binance fapi (hay bị chặn) ----------------

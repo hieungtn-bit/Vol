@@ -9,3 +9,11 @@ data/snapshots/*.json
 
 # giữ thư mục, bỏ nội dung
 !data/snapshots/.gitkeep
+
+# Kho nen 1m / phai sinh tai ve — hang tram MB, tai lai duoc, khong vao git
+.cache
+
+# CSDL SQLite chay local
+data/*.db
+data/*.db-shm
+data/*.db-wal

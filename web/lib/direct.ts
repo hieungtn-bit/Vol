@@ -1,5 +1,6 @@
 import { buildLongLevels, buildShortLevels, rr, type DecideInput, type Levels } from './decide';
 import { fmtPrice } from './format';
+import type { LifecycleVerdict } from './lifecycle';
 import { OI_READ_VI } from './derivatives';
 import { positioningSplit, type FlowInfo } from './flow';
 import type { MarketStructure } from './structure';
@@ -87,30 +88,73 @@ export const FUNDING_HIST = {
   tiredShare: 0.25,
 };
 
+/**
+ * R kỳ vọng nếu cả hai mốc chốt đều chạm: 0.5×RR1 + 0.3×RR2 (bỏ runner cho thận
+ * trọng). MỘT chỗ duy nhất — bản điện và /strict đều gọi hàm này, nên trọng số
+ * không thể trôi lệch giữa hai đường rồi làm H5 bắt khác nhau.
+ */
+export function rKyVong(rr1: number | null, rr2: number | null): number | null {
+  return rr1 != null && rr2 != null ? 0.5 * rr1 + 0.3 * rr2 : null;
+}
+
 export const GATE = {
-  /** Trên mức này thì TP2 xa quá, backtest đo ra avgR âm. */
+  /**
+   * CHƯA CHỨNG MINH ĐƯỢC — giữ nguyên số, nhưng không được coi là đã đo.
+   *
+   * Chú thích cũ ghi "trên mức này backtest đo ra avgR âm". Đo trên 5 năm,
+   * 118199 lệnh (bench/hieu-chuan-dai.txt), điều đó KHÔNG dựng lại được — mà
+   * cũng không có gì thay thế. Phần chênh khi nới lên ∞:
+   *
+   *   nửa đầu: +193 lệnh, tự chúng avgR −0.03 (±0.112)
+   *   nửa sau: +162 lệnh, tự chúng avgR +0.05 (±0.124)
+   *
+   * Đổi dấu giữa hai nửa, sai số gấp ba lần chính con số: vế này KHÔNG phân loại
+   * được gì. Nó gần như vô hại và cũng gần như vô dụng — chỉ chạm 4–7% số lệnh
+   * đã qua ba vế kia.
+   *
+   * Giữ 1.5 vì nới ra là THÊM LỆNH mà không có bằng chứng. Nhưng ghi đúng: đây
+   * là ngưỡng chưa chứng minh được, không phải ngưỡng đã đo.
+   *
+   * (Một lần đo trên mẫu 467 ngày từng cho +0.22 ở nửa đầu với n=39 và suýt bị
+   * đọc thành "vế này đang cắt lệnh lời". Mẫu 5 năm cho −0.03 trên n=193. Đó là
+   * nhiễu mẫu ngắn, không phải phát hiện.)
+   */
   maxRRBlended: 1.5,
   /**
    * Phí không được ăn quá bấy nhiêu phần của 1R.
    *
-   * Đây là điều kiện quan trọng nhất và cũng phản trực giác nhất mà backtest tìm
-   * ra. Tách gộp/ròng theo độ rộng stop trên 5661 lệnh:
+   * Đây là vế duy nhất trong cửa có bằng chứng mạnh. Đo trên 5 năm, nửa đầu mẫu,
+   * 59099 lệnh chưa qua cửa nào (bench/hieu-chuan-dai.txt):
    *
-   *   stop 0–0.5%  → R gộp 0.01, phí 0.394 → ròng −0.39
-   *   stop 0.5–1%  → R gộp 0.17, phí 0.141 → ròng  0.03
-   *   stop 1–1.5%  → R gộp 0.17, phí 0.092 → ròng  0.08
-   *   stop 1.5–2%  → R gộp 0.18, phí 0.065 → ròng  0.12
-   *   stop 2–3%    → R gộp 0.33, phí 0.046 → ròng  0.28
+   *   stop 0–0.5%  → R gộp −0.05, phí 0.37 → ròng −0.42  (n=6108)
+   *   stop 0.5–1%  → R gộp  0.03, phí 0.14 → ròng −0.12  (n=32560)
+   *   stop 1–1.5%  → R gộp  0.03, phí 0.09 → ròng −0.06  (n=13915)
+   *   stop 1.5–2%  → R gộp  0.05, phí 0.06 → ròng −0.01  (n=3727)
+   *   stop 2–3%    → R gộp  0.04, phí 0.05 → ròng −0.01  (n=2026)
+   *   stop > 3%    → R gộp  0.11, phí 0.03 → ròng  0.09  (n=763)
    *
-   * R GỘP gần như bằng nhau ở mọi độ rộng — chất lượng kèo không đổi. Toàn bộ
-   * chênh lệch là phí, vì phí tính theo R tỉ lệ NGHỊCH với độ rộng stop. Một kèo
-   * stop 0.5% phải thắng thêm 0.39R chỉ để hoà phí, trong khi cả cái edge đo được
-   * chỉ có 0.17R. Đây là sự thật cơ học, không phải chế độ thị trường: nó còn
-   * đúng chừng nào còn trả phí taker.
+   * R GỘP gần như bằng nhau ở mọi độ rộng (0.03–0.05 ở bốn nhóm giữa) — chất
+   * lượng kèo không đổi theo độ rộng stop. Gần như toàn bộ chênh lệch ròng là
+   * phí, vì phí tính theo R tỉ lệ NGHỊCH với độ rộng stop. Đây là sự thật cơ
+   * học, không phải chế độ thị trường: còn trả phí taker thì còn đúng.
    *
-   * Ngưỡng 0.10 ứng với stop ≈ 1.2% giá. Đo được 1.5% cho kết quả ngoài mẫu tốt
-   * hơn (0.15 vs 0.11), nhưng ngồi lên đúng đỉnh của một đường cong đo trên
-   * n=599 là uốn tham số — nên lấy mức có lý do cơ học thay vì mức đẹp nhất.
+   * Phần chênh khi NỚI ngưỡng, nửa đầu 5 năm:
+   *
+   *   lên 0.12 → +1860 lệnh,  tự chúng avgR +0.01 (±0.020)
+   *   lên 0.15 → +5224 lệnh,  tự chúng avgR −0.02 (±0.011)
+   *   bỏ hẳn   → +10354 lệnh, tự chúng avgR −0.07 (±0.008)   ← ~9σ
+   *
+   * Bỏ hẳn vế phí là lỗ rõ ràng trên hơn mười nghìn lệnh. Vùng 0.10–0.12 thì
+   * phẳng, nên 0.10 không phải đỉnh đường cong mà là một điểm trong vùng phẳng,
+   * chọn theo lý do cơ học (10% của 1R ↔ stop ≈ 1.2% giá). Siết xuống 0.08 thì
+   * bỏ đi 1196 lệnh lãi +0.04 ở nửa đầu và 1082 lệnh lãi +0.06 ở nửa sau — siết
+   * thêm là cắt vào phần lời.
+   *
+   * CẢNH BÁO VỀ MẪU NGẮN — chép lại đây vì suýt sửa nhầm chính chú thích này:
+   * cùng phép đo trên mẫu 467 ngày cho ra bảng R gộp *không* phẳng (−0.34 ở
+   * nhóm hẹp nhất, n=78) và cho "nới lên 0.15" lãi +0.18 với 2.6σ. Cả hai đều
+   * là nhiễu: mẫu 5 năm cho −0.05 và −0.02. Một kết quả 2.6σ trên vài trăm lệnh
+   * vẫn có thể bốc hơi hoàn toàn khi kéo dài thời gian.
    */
   maxFeeShare: 0.1,
   /**
@@ -164,7 +208,14 @@ export interface DirectionalCall {
   runner: string | null;
   size: SizeHint;
   trigger: string;
+  /** Mức giá mà nến khung này phải ĐÓNG qua thì trigger mới kích hoạt. */
+  triggerLevel: number | null;
   invalidation: string;
+  /**
+   * Trạng thái vòng đời, do scan.ts gắn vào sau khi có giá live + nến đang mở.
+   * null = chưa đánh giá được (thiếu dữ liệu live) → UI phải coi như KHÔNG MỞ.
+   */
+  lifecycle: LifecycleVerdict | null;
   evidence: Evidence[];
   structureNote: string;
   flowNote: string;
@@ -319,7 +370,10 @@ export function decideDirection(
     };
     oiPts = (map[oi.read] ?? 0) * W.openInterest;
   }
-  push('Open Interest', oiPts, oi.read === 'na' ? 'N/A — không tính điểm' : OI_READ_VI[oi.read]);
+  push('Open Interest', oiPts,
+    oi.read === 'na' ? 'N/A — không tính điểm'
+      : oi.read === 'flat' ? `${OI_READ_VI[oi.read]} — 0 điểm, KHÔNG phải lý do giữ hướng`
+        : OI_READ_VI[oi.read]);
 
   // 6. Volume đã được tính vào PA ở trên dưới dạng hệ số nhân. Vẫn in ra thành một
   //    dòng để người đọc thấy vì sao PA nặng hay nhẹ, nhưng điểm riêng của nó là 0.
@@ -377,7 +431,7 @@ export function decideDirection(
   const rr1 = rr(entryRef, lv.sl, lv.tp1);
   const rr2 = rr(entryRef, lv.sl, lv.tp2);
   // Kế hoạch là 50% ở TP1, 30% ở TP2, 20% runner. R kỳ vọng bỏ qua runner cho thận trọng.
-  const rrBlended = rr1 != null && rr2 != null ? 0.5 * rr1 + 0.3 * rr2 : null;
+  const rrBlended = rKyVong(rr1, rr2);
 
   const warnings: string[] = [];
   if (conviction === 'C') {
@@ -415,8 +469,8 @@ export function decideDirection(
   if (lv.crossings >= 3) warnings.push(`Đoạn TP1→TP2 xuyên ${lv.crossings} HVN — phần cuối chạy như runner.`);
   if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
     warnings.push(
-      `R kỳ vọng ${rrBlended.toFixed(2)} — TP2 xa tới mức backtest đo ra vùng LỖ (avgR âm). ` +
-      'Chốt sạch ở TP1 hoặc bỏ kèo.',
+      `R kỳ vọng ${rrBlended.toFixed(2)} — TP2 xa hơn mức hệ cho ĐỦ ĐIỀU KIỆN (${GATE.maxRRBlended}). ` +
+      'Backtest CHƯA chứng minh được nhóm này lỗ; cân nhắc chốt sạch ở TP1.',
     );
   }
   if (inp.deriv.oi.squeezeWarning) warnings.push('OI/vol perp cao bất thường — rủi ro squeeze hai chiều.');
@@ -455,12 +509,32 @@ export function decideDirection(
   if (golden) conviction = 'GOLD';
 
   // ---- CỬA CHẤT LƯỢNG ----
-  // Ba điều kiện dưới đây không phải ý kiến, chúng là thứ backtest đo được. Trên
-  // 5521 lệnh (BTC/ETH/SOL/BNB/XRP/ENA · 15m+1h+4h), lọc bằng đúng ba điều kiện
-  // này giữ lại 22% số lệnh nhưng nâng avgR 0.05 → 0.18, PF 1.13 → 1.61, và hạ
-  // sụt giảm tối đa từ 105.9R xuống 8.7R. Nửa mẫu ngoài: 0.01 → 0.11.
-  // Nó đúng trên CẢ BA khung (15m từ âm 0.05 thành dương 0.07), cả sáu mã, và
-  // cả hai chiều — nên đây không phải uốn tham số theo một mã hay một khung.
+  // Đo bằng bộ mô phỏng ĐÃ SỬA trên 5 NĂM (2021-09 → 2026-09, 1826 ngày,
+  // 118199 lệnh, BTC/ETH/SOL/BNB/XRP/ENA · 15m+1h+4h · bench/hieu-chuan-dai.txt),
+  // chia đôi theo thời gian, ngưỡng chỉ được chọn trên nửa đầu:
+  //
+  //   nửa đầu  không cửa: n=59099 avgR −0.12 PF 0.75 │ qua cửa: n=2513 avgR 0.06 PF 1.15
+  //   nửa sau  không cửa: n=59100 avgR −0.13 PF 0.74 │ qua cửa: n=2182 avgR 0.07 PF 1.19
+  //
+  // Không qua cửa thì hệ LỖ, ở cả hai nửa, rõ ràng. Cửa là thứ duy nhất kéo nó
+  // sang dương, và hai nửa cho gần như cùng một con số (0.06 vs 0.07) — đó là
+  // bằng chứng ổn định nhất mà hệ này có. Giá phải trả: chỉ ~4% tín hiệu đi qua.
+  //
+  // ĐỘ LỚN THẬT: 0.06R mỗi lệnh, sai số ±0.018. Không phải 0.13 hay 0.33 như một
+  // lần đo trên mẫu 467 ngày từng cho — con số đó là một giai đoạn thuận, không
+  // phải năng lực của hệ. Mọi thứ dựng trên nó đều phải hạ xuống theo.
+  //
+  // Từng vế, đo bằng phần chênh — những lệnh mà đổi ngưỡng sẽ nhận thêm hay bỏ
+  // đi, đo riêng chúng, chứ không so hai trung bình gộp của hai tập lồng nhau:
+  //
+  //   nhất trí : bỏ đi thì nhận thêm 2770 lệnh avgR −0.01 (nửa đầu) và 2843 lệnh
+  //              avgR −0.03 (nửa sau). Cùng dấu ở cả hai nửa → giữ.
+  //   |net|≥15 : siết lên 20/25 hay nới xuống 10 đều cho phần chênh nằm trong
+  //              sai số và ĐỔI DẤU giữa hai nửa → nhiễu, không có cơ sở đổi.
+  //              Giữ 15 vì đó là mốc hạng B/C có sẵn, không phải đỉnh đường cong.
+  //   phí ≤0.10: vế mạnh nhất — bỏ hẳn là −0.07R trên 10354 lệnh (~9σ). Vùng
+  //              0.10–0.12 phẳng. Xem chú thích GATE.maxFeeShare.
+  //   Rkv ≤1.5 : chưa chứng minh được, đổi dấu giữa hai nửa. Xem GATE.maxRRBlended.
   const unanimous = against.length === 0;
   const contestedBy = against.map((e) => e.label);
 
@@ -483,9 +557,12 @@ export function decideDirection(
   // 0.05 — không đơn điệu), còn cửa thì phân loại rất rõ.
   const size: SizeHint = !tradeable ? 'Small' : conviction === 'GOLD' || conviction === 'A' ? 'Normal' : 'Small';
 
+  const triggerLevel = side === 'LONG'
+    ? Math.max(vp.va70.low, lv.entry[1])
+    : Math.min(vp.va70.high, lv.entry[0]);
   const trigger = side === 'LONG'
-    ? `${TRIG[tf]} đóng trên ${P(Math.max(vp.va70.low, lv.entry[1]))} sau khi giữ ${P(lv.entry[0])}`
-    : `${TRIG[tf]} đóng dưới ${P(Math.min(vp.va70.high, lv.entry[0]))} sau khi test ${P(lv.entry[1])}`;
+    ? `${TRIG[tf]} đóng trên ${P(triggerLevel)} sau khi giữ ${P(lv.entry[0])}`
+    : `${TRIG[tf]} đóng dưới ${P(triggerLevel)} sau khi test ${P(lv.entry[1])}`;
 
   const invalidation = structure.breakLevel != null
     ? `đóng nến ${TRIG[tf]} ${side === 'LONG' ? 'dưới' : 'trên'} ${P(lv.sl)} thì hủy; cấu trúc gãy hẳn khi đóng ${structure.state === 'uptrend' ? 'dưới' : 'trên'} ${P(structure.breakLevel)}`
@@ -496,7 +573,8 @@ export function decideDirection(
     unanimous, contestedBy, tradeable, gateBlockers,
     longScore, shortScore,
     entry: lv.entry, sl: lv.sl, tp1: lv.tp1, tp2: lv.tp2,
-    rr1, rr2, rrBlended, runner: lv.runner, size, trigger, invalidation,
+    rr1, rr2, rrBlended, runner: lv.runner, size, trigger, triggerLevel, invalidation,
+    lifecycle: null,
     evidence: ev,
     structureNote: structure.note,
     flowNote: flow.note,
