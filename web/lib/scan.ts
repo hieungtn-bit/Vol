@@ -9,7 +9,7 @@ import { decideBoth, prepareTF } from './analyze';
 import { type MarketStructure } from './structure';
 import { buildFlow, type FlowInfo } from './flow';
 import {
-  fetchBinancePerp, fetchKlines, fetchOkx, fetchPerpPositioning, fetchPerpTakerRatio,
+  fetchBinancePerp, fetchKlines, fetchKlinesPerp, fetchOkx, fetchPerpPositioning, fetchPerpTakerRatio,
   fetchTicker, SOURCES, TF_MS, venueState,
 } from './sources';
 import { computeVolumeProfile } from './volumeProfile';
@@ -184,6 +184,13 @@ export function dungVongDoi(
   const cum = cumVol1h(byTf['1h']);
   const cay4h = cayVolMax(byTf['4h'], 42);
   const pa = analyzePriceAction(candles);
+
+  // Chỗ đóng của cây 4H đã đóng gần nhất — H14 đọc số này. Chỉ cây ĐÃ ĐÓNG.
+  const k4hClosed = byTf['4h'].filter((c) => c.closed);
+  const c4 = k4hClosed.length ? k4hClosed[k4hClosed.length - 1] : null;
+  const span4 = c4 ? c4.h - c4.l : 0;
+  const viTri4 = c4 && span4 > 0 ? (c4.c - c4.l) / span4 : null;
+  const k4hLastPos = viTri4 == null ? null : viTri4 >= 0.66 ? 'tren' : viTri4 <= 0.33 ? 'duoi' : 'giua';
   const d1 = byTf['1d'].filter((c) => c.closed).slice(-30);
 
   return {
@@ -209,6 +216,7 @@ export function dungVongDoi(
       ? the.tp2 < Math.min(...d1.map((c) => c.l))
       : the.tp2 > Math.max(...d1.map((c) => c.h))),
     barsSinceIssued: 0,
+    k4hLastPos,
     // Cửa sổ nến đã đóng để suy lại HẾT sau cold start. Lấy dư vài cây so với
     // hạn sống của thẻ; `evaluate()` tự cắt đúng cửa sổ của khung đó.
     nenGanDay: closedK.slice(-10).map(toBar),
@@ -218,15 +226,20 @@ export function dungVongDoi(
 export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const errors: string[] = [];
 
-  const nen = async (tf: TF) => fetchKlines(symbol, tf, LIMIT[tf])
+  // NẾN PERP cho mọi phân tích. Nến SPOT vẫn tải riêng nhưng CHỈ để dựng taker
+  // delta spot — field 9 của kline perp là taker PERP, gắn nhãn spot lên nó là
+  // nói sai chợ.
+  const nen = async (tf: TF) => fetchKlinesPerp(symbol, tf, LIMIT[tf])
+    .then((r) => { if (r.loi) errors.push(r.loi); return r.candles; })
     .catch((e) => { errors.push(`nến ${tf}: ${(e as Error).message}`); return [] as Candle[]; });
 
-  const [k15, k1h, k4h, k1d, ticker] = await Promise.all([
+  const [k15, k1h, k4h, k1d, ticker, k15spot] = await Promise.all([
     nen('15m'), nen('1h'), nen('4h'), nen('1d'),
     fetchTicker(symbol).catch((e) => {
       errors.push(`ticker 24h: ${(e as Error).message}`);
       return null;
     }),
+    fetchKlines(symbol, '15m', LIMIT['15m']).catch(() => [] as Candle[]),
   ]);
 
   const byTf: Record<TF, Candle[]> = { '15m': k15, '1h': k1h, '4h': k4h, '1d': k1d };
@@ -265,7 +278,7 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const atr15 = atr(closed15);
   const composite = buildComposite(k15, last, atr15);
   const vp15Full = computeVolumeProfile(closed15, { mode: 'close', atr: atr15 });
-  const spotDelta = buildDelta(k15, vp15Full, 'binance-spot');
+  const spotDelta = buildDelta(k15spot.length ? k15spot : k15, vp15Full, 'binance-spot');
 
   // Tính từ TF LỚN xuống nhỏ để mỗi TF có context cha, nhưng bias vẫn tính độc lập.
   const tfs = {} as Record<TF, Recommendation>;
@@ -314,12 +327,18 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   }
 
   // ---- VÒNG ĐỜI: tính lại từ đầu mỗi lần quét, từ giá LIVE + nến đã đóng ----
-  // Giá LIVE = ticker 24h hiện tại, KHÔNG phải close của nến 15m đã đóng. Thẻ
-  // 4H ngày 11/09 sống sót vì `last` là close nến cũ nên không thấy giá đã
-  // xuyên SL.
-  const lastLive = ticker?.lastPrice ?? last;
-  const lo = ticker?.lowPrice ?? null;
-  const hi = ticker?.highPrice ?? null;
+  // Giá LIVE theo thứ tự SỔ PERP trước: markPrice là giá mà chính chợ sẽ khớp
+  // và thanh lý. Ticker spot chỉ là chốt chặn cuối, và khi rơi tới đó thì nói ra.
+  // (Vẫn KHÔNG bao giờ là close của nến 15m đã đóng — đó là lý do thẻ 4H ngày
+  // 11/09 không thấy giá đã xuyên SL.)
+  const lastLive = perp.markPrice ?? perp.lastPrice ?? ticker?.lastPrice ?? last;
+  if (perp.markPrice == null && perp.lastPrice == null) {
+    errors.push('Không lấy được giá perp (mark/ticker 24h) — đang dùng giá SPOT làm giá live.');
+  }
+  // Cao/thấp 24h của SỔ PERP: H11 đo khoảng cách tới đáy trên đúng sổ mà lệnh
+  // sẽ khớp; đáy spot lệch khỏi đáy perp đúng lúc có squeeze.
+  const lo = perp.low24h ?? ticker?.lowPrice ?? null;
+  const hi = perp.high24h ?? ticker?.highPrice ?? null;
   const atr1h = atr(k1h.filter((c) => c.closed));
   type Cham = { side: 'LONG' | 'SHORT'; v: NonNullable<DirectionalCall['lifecycle']> };
 

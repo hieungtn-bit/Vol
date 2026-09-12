@@ -24,7 +24,7 @@ function co(p: Partial<LifecycleInput>): LifecycleInput {
     low4hMaxVol: 0.1300, high4hMaxVol: 0.1600,
     cum1h: null, rejected1h: true,
     tp1OutsideVa: false, volRatio: 1.2, opposingLegs: 0,
-    tpBreaksUnbackedLevel: false, barsSinceIssued: 1, nenGanDay: [],
+    tpBreaksUnbackedLevel: false, barsSinceIssued: 1, nenGanDay: [], k4hLastPos: null,
     ...p,
   };
 }
@@ -602,6 +602,52 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
     resetKhoaHet();
   });
 
+  // ==========================================================================
+  // T28 — H14: thẻ 15m không đi ngược cây 4H ĐÃ ĐÓNG.
+  // ==========================================================================
+  it('T28 15m SHORT khi cây 4H đóng nửa TRÊN → H14; LONG cùng lúc thì không', () => {
+    const nen = { ...CHO_0900, openK: null, lastClosedK: K15_0845, rejected1h: true };
+    const the = {
+      tf: '15m' as const, entryLow: 0.1412, entryHigh: 0.1418,
+      triggerText: '15m', rr: 1.2,
+    };
+    const vShort = evaluate(co({
+      ...the, side: 'SHORT', sl: 0.1428, tp1: 0.1380, tp2: 0.1360, triggerLevel: 0.1418,
+      ...nen, k4hLastPos: 'tren',
+    }));
+    ghi('T28 SHORT', co({ ...the, side: 'SHORT', sl: 0.1428, tp1: 0.138, tp2: 0.136, triggerLevel: 0.1418, ...nen, k4hLastPos: 'tren' }), vShort);
+    expect(vShort.failedGates).toContain('H14');
+    expect(vShort.state).not.toBe('SONG');
+
+    const vLong = evaluate(co({
+      ...the, side: 'LONG', sl: 0.1400, tp1: 0.1450, tp2: 0.1480, triggerLevel: 0.1412,
+      ...nen, k4hLastPos: 'tren', high24h: 0.1576, high4hMaxVol: 0.1576,
+    }));
+    expect(vLong.failedGates).not.toContain('H14');
+  });
+
+  it('T28b cây 4H đóng GIỮA hoặc chưa đóng thì H14 không bắt', () => {
+    const base = {
+      tf: '15m' as const, side: 'SHORT' as const, entryLow: 0.1412, entryHigh: 0.1418,
+      sl: 0.1428, tp1: 0.1380, tp2: 0.1360, triggerText: '15m', triggerLevel: 0.1418, rr: 1.2,
+      ...CHO_0900, openK: null, lastClosedK: K15_0845, rejected1h: true,
+    };
+    expect(evaluate(co({ ...base, k4hLastPos: 'giua' })).failedGates).not.toContain('H14');
+    // null = chưa có cây 4H đã đóng → không đoán.
+    expect(evaluate(co({ ...base, k4hLastPos: null })).failedGates).not.toContain('H14');
+  });
+
+  it('T28c H14 chỉ áp cho 15m, không áp cho 1h/4h', () => {
+    for (const tf of ['1h', '4h'] as const) {
+      const v = evaluate(co({
+        tf, side: 'SHORT', entryLow: 0.1412, entryHigh: 0.1418, sl: 0.1428,
+        tp1: 0.1380, tp2: 0.1360, triggerText: 'x', triggerLevel: 0.1418, rr: 1.2,
+        ...CHO_0900, openK: null, lastClosedK: K1H_0800, rejected1h: true, k4hLastPos: 'tren',
+      }));
+      expect(v.failedGates).not.toContain('H14');
+    }
+  });
+
   it('H9 hạ hạng A khi khung khác cùng hướng đang TRƯỢT', () => {
     const song = evaluate(co({
       tf: '1h', last: 0.1480, entryLow: 0.1470, entryHigh: 0.1490, sl: 0.1520,
@@ -620,6 +666,6 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
   it('in log T0–T9', () => {
     // eslint-disable-next-line no-console
     console.log('\n' + log.join('\n') + '\n');
-    expect(log.length).toBeGreaterThanOrEqual(26);
+    expect(log.length).toBeGreaterThanOrEqual(27);
   });
 });

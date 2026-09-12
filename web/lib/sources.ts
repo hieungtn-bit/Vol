@@ -25,6 +25,23 @@ const SPOT_MIRRORS = (process.env.BINANCE_SPOT_MIRRORS
       'https://api3.binance.com'].join(','))
   .split(',').map((x) => x.trim()).filter(Boolean);
 const FAPI = process.env.BINANCE_FAPI_BASE ?? 'https://fapi.binance.com';
+
+/**
+ * Gương cho SỔ USD-M. `fapi.binance.com` đứng đầu vì đó là sổ gốc và nó sống
+ * trên production; `www.binance.com/fapi` là cùng dữ liệu qua tên miền web, và
+ * nó sống ở những vùng mà fapi trả 451. Đã gọi thử cả năm endpoint qua gương
+ * này (klines · premiumIndex · ticker/24hr · openInterest · fundingRate ·
+ * futures/data) — tất cả 200, kline vẫn đủ 12 cột.
+ *
+ * Mỗi phần tử là GỐC + tiền tố, vì www đặt fapi dưới một đường dẫn khác:
+ *   fapi.binance.com/fapi/v1/klines   ↔   www.binance.com/fapi/v1/klines
+ *   fapi.binance.com/futures/data/... ↔   www.binance.com/futures/data/...
+ */
+const FAPI_MIRRORS = (process.env.BINANCE_FAPI_MIRRORS ?? [FAPI, 'https://www.binance.com'].join(','))
+  .split(',').map((x) => x.trim()).filter(Boolean);
+
+/** Dựng danh sách URL cho một đường dẫn perp trên mọi gương. */
+const perpUrls = (path: string) => FAPI_MIRRORS.map((m) => m + path);
 const OKX = process.env.OKX_BASE ?? 'https://www.okx.com';
 
 const UA = { 'User-Agent': 'market-scan-multi-tf/1.0' };
@@ -66,7 +83,7 @@ export const venueState = {
 
 async function getJSON<T>(url: string, timeoutMs = 9000): Promise<T> {
   const host = new URL(url).host;
-  if (dangNghi(url.startsWith(FAPI) ? host : host)) {
+  if (dangNghi(host)) {
     throw new BiChanTam(
       `${host} đang nghỉ phạt thêm ${Math.ceil(((nghiToi.get(host) ?? 0) - Date.now()) / 1000)}s`,
       nghiToi.get(host) ?? 0,
@@ -150,6 +167,34 @@ export async function fetchKlines(symbol: string, tf: TF, limit = 500): Promise<
     toCandles(await getJSONMirrors<RawKline[]>(SPOT_MIRRORS.map((m) => m + path)), TF_MS[tf]));
   if (r.cu) duLieuCu.set(`${symbol} ${tf}`, r.tuoiMs); else duLieuCu.delete(`${symbol} ${tf}`);
   return r.value;
+}
+
+/**
+ * NẾN USD-M PERP. Người dùng vào lệnh trên perp, nên value area, H8, H11 và giá
+ * đều phải đọc từ SỔ PERP. Nến spot lệch khỏi perp đúng vào những lúc quan
+ * trọng nhất — funding, squeeze, thanh lý.
+ *
+ * Hết gương perp thì rơi về SPOT, và tầng đó PHẢI được báo ra ngoài: `nguon`
+ * trả 'spot' để phía gọi ghi vào `degraded`. Không được im lặng coi spot là perp.
+ */
+export async function fetchKlinesPerp(
+  symbol: string, tf: TF, limit = 500,
+): Promise<{ candles: Candle[]; nguon: 'perp' | 'spot'; loi: string | null }> {
+  const path = `/fapi/v1/klines?symbol=${symbol}&interval=${INTERVAL[tf]}&limit=${limit}`;
+  return cached(`klp:${symbol}:${tf}:${limit}`, DEFAULT_TTL, async () => {
+    try {
+      const raw = await getJSONMirrors<RawKline[]>(perpUrls(path), 12_000);
+      return { candles: toCandles(raw, TF_MS[tf]), nguon: 'perp' as const, loi: null };
+    } catch (e) {
+      const spot = await fetchKlines(symbol, tf, limit);
+      return {
+        candles: spot,
+        nguon: 'spot' as const,
+        loi: `nến perp ${tf} chết (${(e as Error).message}) — đang dùng nến SPOT, `
+          + 'value area / H8 / H11 / giá đều lệch khỏi sổ perp.',
+      };
+    }
+  });
 }
 
 /**
@@ -253,6 +298,11 @@ export interface PerpSnapshot {
   oiUsd: number | null;
   /** Volume 24h của CHÍNH chợ perp này (USDT). */
   vol24hUsd: number | null;
+  /** Giá cuối trên ticker 24h PERP. Dùng khi markPrice thiếu. */
+  lastPrice: number | null;
+  /** Cao/thấp 24h của SỔ PERP — H11 phải đo trên sổ mà lệnh sẽ khớp. */
+  high24h: number | null;
+  low24h: number | null;
 }
 
 export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
@@ -263,16 +313,17 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
       return {
         alive: false, reason, fundingRate: null, fundingHistory: null, nextFundingTime: null,
         markPrice: null, openInterest: null, oiHist: null, oiUsd: null, vol24hUsd: null,
+        lastPrice: null, high24h: null, low24h: null,
       };
     };
     try {
       const [pi, oi, t24, fh] = await Promise.all([
-        getJSON<any>(`${FAPI}/fapi/v1/premiumIndex?symbol=${symbol}`),
-        getJSON<any>(`${FAPI}/fapi/v1/openInterest?symbol=${symbol}`).catch(() => null),
+        getJSONMirrors<any>(perpUrls(`/fapi/v1/premiumIndex?symbol=${symbol}`)),
+        getJSONMirrors<any>(perpUrls(`/fapi/v1/openInterest?symbol=${symbol}`)).catch(() => null),
         // Volume 24h của chính chợ perp — mẫu số duy nhất hợp lệ cho tỷ lệ OI/vol.
-        getJSON<any>(`${FAPI}/fapi/v1/ticker/24hr?symbol=${symbol}`).catch(() => null),
+        getJSONMirrors<any>(perpUrls(`/fapi/v1/ticker/24hr?symbol=${symbol}`)).catch(() => null),
         // Lịch sử funding: rate hiện tại không nói được "đã kéo dài bao lâu".
-        getJSON<any[]>(`${FAPI}/fapi/v1/fundingRate?symbol=${symbol}&limit=12`).catch(() => null),
+        getJSONMirrors<any[]>(perpUrls(`/fapi/v1/fundingRate?symbol=${symbol}&limit=12`)).catch(() => null),
       ]);
       const fundingHistory = Array.isArray(fh)
         ? fh.map((x) => Number(x.fundingRate)).filter((x) => Number.isFinite(x))
@@ -280,8 +331,8 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
       let oiHist: { t: number; oi: number }[] | null = null;
       let oiUsd: number | null = null;
       try {
-        const h = await getJSON<any[]>(
-          `${FAPI}/futures/data/openInterestHist?symbol=${symbol}&period=1h&limit=25`,
+        const h = await getJSONMirrors<any[]>(
+          perpUrls(`/futures/data/openInterestHist?symbol=${symbol}&period=1h&limit=25`),
         );
         oiHist = h.map((x) => ({ t: +x.timestamp, oi: +x.sumOpenInterest }));
         const lastVal = h[h.length - 1]?.sumOpenInterestValue;
@@ -303,6 +354,9 @@ export async function fetchBinancePerp(symbol: string): Promise<PerpSnapshot> {
         oiHist,
         oiUsd,
         vol24hUsd: t24?.quoteVolume != null ? +t24.quoteVolume : null,
+        lastPrice: t24?.lastPrice != null ? +t24.lastPrice : null,
+        high24h: t24?.highPrice != null ? +t24.highPrice : null,
+        low24h: t24?.lowPrice != null ? +t24.lowPrice : null,
       };
     } catch (e) {
       if (e instanceof GeoBlocked) return dead(`Binance perp bị chặn (${e.message}) → dùng OKX.`);
@@ -319,8 +373,8 @@ export async function fetchPerpTakerRatio(
   if (venueState.perpAlive === false) return null;
   return cached(`perptaker:${symbol}:${period}`, DEFAULT_TTL, async () => {
     try {
-      const r = await getJSON<any[]>(
-        `${FAPI}/futures/data/takerlongshortRatio?symbol=${symbol}&period=${period}&limit=48`,
+      const r = await getJSONMirrors<any[]>(
+        perpUrls(`/futures/data/takerlongshortRatio?symbol=${symbol}&period=${period}&limit=48`),
       );
       return r.map((x) => ({ buy: +x.buyVol, sell: +x.sellVol }));
     } catch {
@@ -414,7 +468,7 @@ export async function fetchPerpPositioning(
     // `longAccount`; không có vế nào thì trả null chứ không đoán.
     const pick = async (path: string, keys: string[]): Promise<number | null> => {
       try {
-        const r = await getJSON<any[]>(`${FAPI}${path}?symbol=${symbol}&period=${period}&limit=1`);
+        const r = await getJSONMirrors<any[]>(perpUrls(`${path}?symbol=${symbol}&period=${period}&limit=1`));
         const row = r?.[r.length - 1];
         if (!row) return null;
         for (const k of keys) {
@@ -438,4 +492,4 @@ export async function fetchPerpPositioning(
   });
 }
 
-export const SOURCES = { SPOT, SPOT_FALLBACK, FAPI, OKX };
+export const SOURCES = { SPOT, SPOT_FALLBACK, FAPI, FAPI_MIRRORS, OKX };
