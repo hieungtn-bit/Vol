@@ -109,3 +109,13 @@ describe('bảng hiệu chuẩn đã đo', () => {
     expect(Math.max(...ng) / Math.min(...ng)).toBeGreaterThan(2);
   });
 });
+
+describe('cửa sổ tối thiểu — lỗi đã gặp trên production', () => {
+  it('ĐÚNG 168 nến đã đóng là CHƯA đủ; phải có 169', () => {
+    // LIMIT['1h'] = 168 nên chuỗi giao cho `danhGiaCanhBao` chỉ có 168 cây đã
+    // đóng, mà `dacTrungTai(c, c.length-1)` cần chỉ số ≥ 168 — tức 169 cây.
+    // Production vì thế in "Chưa đủ 168 nến 1H" cho MỌI mã.
+    expect(danhGiaCanhBao(phang(NEN_TANG), 'BTCUSDT', B).muc).toBe('chua-hieu-chuan');
+    expect(danhGiaCanhBao(phang(NEN_TANG + 1), 'BTCUSDT', B).muc).not.toBe('chua-hieu-chuan');
+  });
+});
