@@ -20,7 +20,7 @@ import type { TF } from '@/lib/types';
 // hiện 28 dòng WAIT thì người dùng phải tự lọc bằng mắt, và lọc bằng mắt lúc
 // đang cầm tiền là lúc dễ tự thuyết phục mình nhất.
 //
-// VÌ SAO CHỌN ĐÚNG CỬA NÀY: `tradeable` là cấu hình DUY NHẤT vừa dương vừa đủ
+// VÌ SAO CHỌN ĐÚNG BỘ ĐIỀU KIỆN NÀY: nó là cấu hình DUY NHẤT vừa dương vừa đủ
 // mẫu để tin — đo lại bằng bộ mô phỏng đã sửa: n=384 lệnh, avgR 0.18, và ngoài
 // mẫu avgR 0.31 / PF 2.14 trên n=192. Mọi cấu hình khác hoặc âm, hoặc chỉ có
 // hai ba chục lệnh ngoài mẫu nên không nói được gì.
@@ -33,7 +33,6 @@ interface Call {
   side: 'LONG' | 'SHORT';
   conviction: string;
   golden: boolean;
-  tradeable: boolean;
   lifecycle: { state: string; grade: string; banner: string; reason: string } | null;
   net: number;
   entry: [number, number];

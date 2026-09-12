@@ -44,7 +44,7 @@ export default function LivePage() {
   const [goldOnly, setGoldOnly] = useState(false);
   // Mặc định BẬT: backtest đo được là chỉ giữ thẻ ĐỦ ĐIỀU KIỆN còn 7% số lệnh
   // nhưng nâng avgR 0.05 → 0.31 và hạ sụt giảm tối đa từ 116.9R xuống 6.3R.
-  const [tradeableOnly, setTradeableOnly] = useState(true);
+  const [chiDuDieuKien, setChiDuDieuKien] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [degraded, setDegraded] = useState<string[]>([]);
@@ -111,10 +111,10 @@ export default function LivePage() {
 
   const shown = useMemo(() => {
     let out = rows;
-    if (tradeableOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.lifecycle?.state === 'SONG'));
+    if (chiDuDieuKien) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.lifecycle?.state === 'SONG'));
     if (goldOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.golden && r.direction?.[tf]?.lifecycle?.state === 'SONG'));
     return out;
-  }, [rows, goldOnly, tradeableOnly]);
+  }, [rows, goldOnly, chiDuDieuKien]);
 
   const longShare = tally.total > 0 ? (tally.long / tally.total) * 100 : 50;
 
@@ -122,7 +122,7 @@ export default function LivePage() {
     ? 'Đang quét…'
     : goldOnly
       ? 'Không có tín hiệu vàng nào lúc này — và đó là kết quả bình thường, nó vốn phải hiếm.'
-      : tradeableOnly
+      : chiDuDieuKien
         ? 'Không thẻ nào ĐỦ ĐIỀU KIỆN lúc này. Tắt "Đủ điều kiện" để xem thiên hướng của mọi mã — thiên hướng là để theo dõi, không phải để vào tiền.'
         : 'Chưa có dữ liệu.';
 
@@ -194,8 +194,8 @@ export default function LivePage() {
       <main className="safe-x safe-b mx-auto max-w-[1400px] pt-3">
         {/* Bộ lọc: pill cuộn ngang được, không bao giờ làm vỡ hàng trên máy hẹp. */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Pill tone="emerald" on={tradeableOnly} onClick={() => setTradeableOnly((v) => !v)}>
-            {tradeableOnly ? '✓ ' : ''}Đủ điều kiện
+          <Pill tone="emerald" on={chiDuDieuKien} onClick={() => setChiDuDieuKien((v) => !v)}>
+            {chiDuDieuKien ? '✓ ' : ''}Đủ điều kiện
           </Pill>
           <Pill tone="amber" on={goldOnly} onClick={() => setGoldOnly((v) => !v)}>
             ★ Vàng

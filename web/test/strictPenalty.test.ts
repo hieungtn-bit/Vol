@@ -68,7 +68,8 @@ describe('phạt RR TP1 — vế đã bỏ ở decideDirection nhưng sót lại
 describe('backtest strict dùng CHUNG bộ mô phỏng với đường kia', () => {
   const rec = (over: Partial<import('@/lib/types').Recommendation> = {}) => ({
     symbol: 'T', tf: '1h' as const, bias: 'LONG' as const, stage: 'edge-hold' as const,
-    entry: [99, 100] as [number, number], trigger: '', sl: 98, tp1: 102, tp2: 106,
+    entry: [99, 100] as [number, number], trigger: '', triggerLevel: null, lifecycle: null,
+    sl: 98, tp1: 102, tp2: 106,
     runner: null, rr1: 2, rr2: 4, size: 'Normal' as const, invalidation: '',
     reasons: [], confidence: 7,
     confluence: { score: 7, raw: 7, lines: [{ label: 'x', points: 7 }] },

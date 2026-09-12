@@ -1,3 +1,4 @@
+import type { LifecycleVerdict } from './lifecycle';
 // ============================================================
 // Schema trung tâm. Mọi module phân tích đều nói bằng ngôn ngữ này.
 // ============================================================
@@ -248,6 +249,8 @@ export interface Recommendation {
   /** 2 mức entry. null khi WAIT không có kèo chờ. */
   entry: [number, number] | null;
   trigger: string;
+  /** Mức giá nến khung phải ĐÓNG qua thì trigger mới kích hoạt. Không parse chuỗi. */
+  triggerLevel: number | null;
   sl: number | null;
   /** BẮT BUỘC nằm trong VA / tại POC. */
   tp1: number | null;
@@ -276,6 +279,12 @@ export interface Recommendation {
   };
   rangePos: number;
   planText: string;
+  /**
+   * Trạng thái vòng đời — CÙNG một hàm `evaluate()` mà bản điện dùng. Đường
+   * strict không được có máy trạng thái riêng: hai não trên cùng một trang là
+   * cách bug ENA quay lại. null = WAIT hoặc thiếu mức giá → không mở.
+   */
+  lifecycle: LifecycleVerdict | null;
 }
 
 export interface SymbolScan {

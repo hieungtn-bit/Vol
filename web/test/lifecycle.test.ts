@@ -279,6 +279,134 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
     expect(v.khoaHuong).toBeNull();
   });
 
+  // ==========================================================================
+  // T13–T16 — ĐƯỜNG /strict (Recommendation). Cùng evaluate(), cùng cardId().
+  // Dựng thẻ strict qua đúng bộ chuyển `strictSangThe` mà scan.ts dùng, để test
+  // gãy nếu ai đó cho /strict một máy trạng thái riêng.
+  // ==========================================================================
+
+  /** Bản rút gọn của `tuStrict()` trong scan.ts: Recommendation → thẻ có mức. */
+  function strictSangThe(r: {
+    symbol: string; bias: 'LONG' | 'SHORT' | 'WAIT';
+    entry: [number, number] | null; sl: number | null; tp1: number | null; tp2: number | null;
+    trigger: string; triggerLevel: number | null; rr1: number | null; rr2: number | null;
+    warnings: string[]; lines: { label: string; points: number }[];
+  }) {
+    if (r.bias === 'WAIT' || !r.entry || r.sl == null || r.tp1 == null || r.tp2 == null) return null;
+    return {
+      side: r.bias, entryLow: r.entry[0], entryHigh: r.entry[1],
+      sl: r.sl, tp1: r.tp1, tp2: r.tp2,
+      triggerText: r.trigger, triggerLevel: r.triggerLevel,
+      rr: r.rr1 != null && r.rr2 != null ? 0.5 * r.rr1 + 0.3 * r.rr2 : null,
+      tp1OutsideVa: r.warnings.some((w) => w.includes('TP1') && w.includes('VA')),
+      opposingLegs: r.lines.filter((l) => l.points < 0
+        && ['Taker', 'Price Action', 'Delta'].some((t) => l.label.includes(t))).length,
+    };
+  }
+
+  const strict = (r: Parameters<typeof strictSangThe>[0], p: Partial<LifecycleInput>) => {
+    const the = strictSangThe(r)!;
+    return co({ ...the, ...p });
+  };
+
+  it('T13 /strict 22:34 ENA 4H SHORT — nến 4H chưa đóng, last đã xuyên SL', () => {
+    const i = strict({
+      symbol: 'ENAUSDT', bias: 'SHORT', entry: [0.147, 0.150], sl: 0.15254,
+      tp1: 0.140, tp2: 0.133, trigger: '4H đóng dưới 0.1470', triggerLevel: 0.147,
+      rr1: 1.0, rr2: 1.6, warnings: [], lines: [],
+    }, {
+      tf: '4h', last: 0.154, ts: Date.parse('2026-09-11T22:34:00Z'),
+      openK: bar(0.154, 0.15764, 0.1398, 0.154, 7.3e8, false),
+      lastClosedK: bar(0.150, 0.156, 0.150, 0.154, 2.0e8, true),
+    });
+    const v = evaluate(i);
+    ghi('T13', i, v);
+    expect(v.state).toBe('HET');
+    expect(v.banner).toBe('TÍN HIỆU HẾT — KHÔNG MỞ');
+    expect(v.banner).not.toBe('ĐỦ ĐIỀU KIỆN');
+    expect(v.grade).not.toBe('A');
+    // Cùng entry/sl/trigger ⇒ CÙNG id với thẻ bản điện T0. Một id, một vòng đời.
+    expect(v.id).toBe('ENAUSDT-4h-SHORT-etb5vc');
+    expect(v.id).toBe(idT0);
+  });
+
+  it('T14 /strict 07:32 ENA 4H SHORT — entry nằm trên giá, chờ kéo lại', () => {
+    const i = strict({
+      symbol: 'ENAUSDT', bias: 'SHORT', entry: [0.142, 0.143], sl: 0.1465,
+      tp1: 0.133, tp2: 0.128, trigger: '4H đóng dưới 0.1420', triggerLevel: 0.142,
+      rr1: 1.0, rr2: 1.6, warnings: [], lines: [],
+    }, {
+      tf: '4h', last: 0.14050, ts: Date.parse('2026-09-12T07:32:00Z'),
+      openK: null, lastClosedK: bar(0.143, 0.1432, 0.140, 0.1405, 3e8, true),
+      low24h: 0.1300, low4hMaxVol: 0.1300,
+    });
+    const v = evaluate(i);
+    ghi('T14', i, v);
+    expect(v.state).toBe('CHO_GIA');
+    expect(v.banner).toBe('CHỜ GIÁ VÀO — KHÔNG MỞ');
+    expect(v.state).not.toBe('SONG');
+  });
+
+  it('T15 /strict 07:32 ENA 1D SHORT TP=0.111 — ngày không được mở lệnh', () => {
+    const i = strict({
+      symbol: 'ENAUSDT', bias: 'SHORT', entry: [0.1400, 0.1410], sl: 0.1500,
+      tp1: 0.111, tp2: 0.096, trigger: '1D đóng dưới 0.1400', triggerLevel: 0.140,
+      rr1: 1.0, rr2: 1.6, warnings: [], lines: [],
+    }, {
+      tf: '1d', last: 0.14050, ts: Date.parse('2026-09-12T07:32:00Z'),
+      openK: null, lastClosedK: bar(0.145, 0.146, 0.139, 0.1405, 9e8, true),
+      low24h: 0.1300, low4hMaxVol: 0.1300, tpBreaksUnbackedLevel: true,
+    });
+    const v = evaluate(i);
+    ghi('T15', i, v);
+    expect(v.state).not.toBe('SONG');
+    expect(['CAM', 'HET', 'CHO_GIA']).toContain(v.state);
+    expect(v.failedGates).toContain('H13');
+  });
+
+  it('T16 /strict 22:59 — 15m LONG HẾT thì 4H SHORT không SONG hạng A', () => {
+    const ts = Date.parse('2026-09-11T22:59:00Z');
+    const i15 = strict({
+      symbol: 'ENAUSDT', bias: 'LONG', entry: [0.151, 0.15150], sl: 0.14984,
+      tp1: 0.156, tp2: 0.160, trigger: '15m đóng trên 0.15150', triggerLevel: 0.15150,
+      rr1: 1.0, rr2: 1.6, warnings: [], lines: [],
+    }, {
+      tf: '15m', last: 0.14890, ts,
+      openK: null, lastClosedK: bar(0.150, 0.1502, 0.1485, 0.1487, 1e7, true),
+      high24h: 0.1600, high4hMaxVol: 0.1600,
+    });
+    const i4h = strict({
+      symbol: 'ENAUSDT', bias: 'SHORT', entry: [0.1470, 0.1490], sl: 0.1520,
+      tp1: 0.1400, tp2: 0.1350, trigger: '4H đóng dưới 0.1490', triggerLevel: 0.1490,
+      rr1: 1.4, rr2: 2.0, warnings: [], lines: [],
+    }, {
+      tf: '4h', last: 0.1480, ts,
+      openK: null, lastClosedK: bar(0.1500, 0.1502, 0.1470, 0.1475, 3e8, true),
+    });
+    const v15 = evaluate(i15);
+    const v4h = evaluate(i4h);
+    expect(v15.state).toBe('HET');
+    expect(v4h.state).toBe('SONG');
+    apDungH9([{ side: 'LONG', v: v15 }, { side: 'SHORT', v: v4h }]);
+    // Ngược hướng thì H9 không chạm — nhưng hai thẻ SONG ngược chiều là cấm.
+    expect([v15.state, v4h.state].filter((x) => x === 'SONG')).toHaveLength(1);
+    // Cùng hướng thì phải hạ hạng.
+    const vCung = evaluate(strict({
+      symbol: 'ENAUSDT', bias: 'SHORT', entry: [0.147, 0.150], sl: 0.15254,
+      tp1: 0.140, tp2: 0.133, trigger: '4H đóng dưới 0.1470', triggerLevel: 0.147,
+      rr1: 1.0, rr2: 1.6, warnings: [], lines: [],
+    }, {
+      tf: '15m', last: 0.154, ts,
+      openK: bar(0.154, 0.15764, 0.1398, 0.154, 7.3e8, false),
+      lastClosedK: bar(0.150, 0.156, 0.150, 0.154, 2e8, true),
+    }));
+    apDungH9([{ side: 'SHORT', v: vCung }, { side: 'SHORT', v: v4h }]);
+    ghi('T16', i4h, v4h);
+    expect(vCung.state).toBe('HET');
+    expect(v4h.grade).not.toBe('A');
+    expect(v4h.failedGates).toContain('H9');
+  });
+
   it('H9 hạ hạng A khi khung khác cùng hướng đang TRƯỢT', () => {
     const song = evaluate(co({
       tf: '1h', last: 0.1480, entryLow: 0.1470, entryHigh: 0.1490, sl: 0.1520,
@@ -297,6 +425,6 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
   it('in log T0–T9', () => {
     // eslint-disable-next-line no-console
     console.log('\n' + log.join('\n') + '\n');
-    expect(log.length).toBeGreaterThanOrEqual(13);
+    expect(log.length).toBeGreaterThanOrEqual(17);
   });
 });

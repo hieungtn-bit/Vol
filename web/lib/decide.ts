@@ -559,10 +559,17 @@ export function decideBias(inp: DecideInput, strict: StrictConfig = DEFAULT_STRI
 
   // ---- Trigger / Invalidation ----
   const trigTf = TRIGGER_TF[tf];
-  const trigger = side === 'SHORT' && lv
-    ? `${trigTf} đóng dưới ${P(Math.min(vp.va70.high, lv.entry[0]))} sau khi test ${P(lv.entry[1])}`
+  // Mức trigger là SỐ, tính cùng công thức với bản điện. Vòng đời đọc số này,
+  // không bao giờ đọc lại câu chữ bên dưới.
+  const triggerLevel = side === 'SHORT' && lv
+    ? Math.min(vp.va70.high, lv.entry[0])
     : side === 'LONG' && lv
-      ? `${trigTf} đóng trên ${P(Math.max(vp.va70.low, lv.entry[1]))} sau khi giữ ${P(lv.entry[0])}`
+      ? Math.max(vp.va70.low, lv.entry[1])
+      : null;
+  const trigger = side === 'SHORT' && lv
+    ? `${trigTf} đóng dưới ${P(triggerLevel)} sau khi test ${P(lv.entry[1])}`
+    : side === 'LONG' && lv
+      ? `${trigTf} đóng trên ${P(triggerLevel)} sau khi giữ ${P(lv.entry[0])}`
       : `chờ giá rời lõi VA (${P(vp.va70.low)}–${P(vp.va70.high)}) và về một trong hai mép`;
 
   const invalidation = side === 'SHORT' && lv
@@ -574,7 +581,7 @@ export function decideBias(inp: DecideInput, strict: StrictConfig = DEFAULT_STRI
   const rec: Recommendation = {
     symbol, tf, bias, stage,
     entry: lv ? lv.entry : null,
-    trigger,
+    trigger, triggerLevel,
     sl: lv ? lv.sl : null,
     tp1: lv ? lv.tp1 : null,
     tp2: lv ? lv.tp2 : null,
@@ -592,6 +599,7 @@ export function decideBias(inp: DecideInput, strict: StrictConfig = DEFAULT_STRI
     },
     rangePos: pa.rangePos,
     planText: '',
+    lifecycle: null,
   };
   rec.planText = buildPlanText(rec);
   return rec;

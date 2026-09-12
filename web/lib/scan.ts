@@ -116,17 +116,63 @@ function daTuChoiMep1h(k1h: Candle[], cum: { low: number; high: number } | null,
     : c.l <= cum.high && c.c > cum.high));
 }
 
-/** Số vế taker / spot / PA đang NGƯỢC hướng thẻ. */
+const VE_DOI_HUONG = ['Taker', 'Price Action', 'Delta'];
+
+/** Số vế taker / spot / PA đang NGƯỢC hướng thẻ — bản điện. */
 function veNguocHuong(call: DirectionalCall): number {
-  const ten = ['Taker', 'Price Action', 'Delta'];
   return call.evidence.filter((e) =>
-    ten.some((t) => e.label.includes(t))
+    VE_DOI_HUONG.some((t) => e.label.includes(t))
     && e.side !== 'neutral'
     && e.side !== call.side.toLowerCase()).length;
 }
 
-function dungVongDoi(
-  call: DirectionalCall, tf: TF, byTf: Record<TF, Candle[]>,
+/** Cùng câu hỏi, đọc từ dòng chấm điểm của đường strict (điểm âm = chống lại). */
+function veNguocHuongStrict(rec: Recommendation): number {
+  return rec.confluence.lines.filter((l) =>
+    l.points < 0 && VE_DOI_HUONG.some((t) => l.label.includes(t))).length;
+}
+
+/**
+ * Hình dạng tối thiểu mà vòng đời cần. Cả `DirectionalCall` (bản điện) lẫn
+ * `Recommendation` (/strict) đều quy về đây, nên chỉ có MỘT bộ dựng đầu vào và
+ * MỘT máy trạng thái. Hai não trên cùng một trang là cách bug ENA quay lại.
+ */
+interface TheCoMuc {
+  symbol: string;
+  side: 'LONG' | 'SHORT';
+  entry: [number, number];
+  sl: number;
+  tp1: number;
+  tp2: number;
+  trigger: string;
+  triggerLevel: number | null;
+  rr: number | null;
+  warnings: string[];
+  opposingLegs: number;
+}
+
+function tuBanDien(c: DirectionalCall): TheCoMuc {
+  return {
+    symbol: c.symbol, side: c.side, entry: c.entry, sl: c.sl, tp1: c.tp1, tp2: c.tp2,
+    trigger: c.trigger, triggerLevel: c.triggerLevel, rr: c.rrBlended,
+    warnings: c.warnings, opposingLegs: veNguocHuong(c),
+  };
+}
+
+/** null khi WAIT hoặc chưa dựng được mức giá — không mức giá thì không có thẻ. */
+function tuStrict(r: Recommendation): TheCoMuc | null {
+  if (r.bias === 'WAIT' || !r.entry || r.sl == null || r.tp1 == null || r.tp2 == null) return null;
+  return {
+    symbol: r.symbol, side: r.bias, entry: r.entry, sl: r.sl, tp1: r.tp1, tp2: r.tp2,
+    trigger: r.trigger, triggerLevel: r.triggerLevel,
+    // R kỳ vọng cùng công thức bản điện: 0.5×RR1 + 0.3×RR2 (bỏ runner cho thận trọng).
+    rr: r.rr1 != null && r.rr2 != null ? 0.5 * r.rr1 + 0.3 * r.rr2 : null,
+    warnings: r.warnings, opposingLegs: veNguocHuongStrict(r),
+  };
+}
+
+export function dungVongDoi(
+  the: TheCoMuc, tf: TF, byTf: Record<TF, Candle[]>,
   lastLive: number, atr1h: number, low24h: number | null, high24h: number | null,
 ): LifecycleInput {
   const candles = byTf[tf];
@@ -138,27 +184,27 @@ function dungVongDoi(
   const d1 = byTf['1d'].filter((c) => c.closed).slice(-30);
 
   return {
-    symbol: call.symbol, tf, side: call.side,
-    entryLow: call.entry[0], entryHigh: call.entry[1],
-    sl: call.sl, tp1: call.tp1, tp2: call.tp2,
-    triggerText: call.trigger, triggerLevel: call.triggerLevel,
+    symbol: the.symbol, tf, side: the.side,
+    entryLow: the.entry[0], entryHigh: the.entry[1],
+    sl: the.sl, tp1: the.tp1, tp2: the.tp2,
+    triggerText: the.trigger, triggerLevel: the.triggerLevel,
     last: lastLive, ts: Date.now(),
     openK: openK ? toBar(openK) : null,
     lastClosedK: closedK.length ? toBar(closedK[closedK.length - 1]) : null,
-    rr: call.rrBlended,
+    rr: the.rr,
     atr1h: atr1h > 0 ? atr1h : null,
     low24h, high24h,
     low4hMaxVol: cay4h?.l ?? null,
     high4hMaxVol: cay4h?.h ?? null,
     cum1h: cum,
-    rejected1h: daTuChoiMep1h(byTf['1h'], cum, call.side),
-    tp1OutsideVa: call.warnings.some((w) => w.includes('TP1') && w.includes('VA')),
+    rejected1h: daTuChoiMep1h(byTf['1h'], cum, the.side),
+    tp1OutsideVa: the.warnings.some((w) => w.includes('TP1') && w.includes('VA')),
     volRatio: pa.volMedian20 > 0 ? pa.lastVol / pa.volMedian20 : null,
-    opposingLegs: veNguocHuong(call),
+    opposingLegs: the.opposingLegs,
     // TP xuyên đáy/đỉnh 30 ngày mà ngoài đó không còn cụm vol nào đỡ.
-    tpBreaksUnbackedLevel: d1.length >= 10 && (call.side === 'SHORT'
-      ? call.tp2 < Math.min(...d1.map((c) => c.l))
-      : call.tp2 > Math.max(...d1.map((c) => c.h))),
+    tpBreaksUnbackedLevel: d1.length >= 10 && (the.side === 'SHORT'
+      ? the.tp2 < Math.min(...d1.map((c) => c.l))
+      : the.tp2 > Math.max(...d1.map((c) => c.h))),
     barsSinceIssued: 0,
   };
 }
@@ -254,17 +300,31 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   // ---- VÒNG ĐỜI: tính lại từ đầu mỗi lần quét, từ giá LIVE + nến đã đóng ----
   const lastLive = ticker?.lastPrice ?? last;
   const atr1h = atr(k1h.filter((c) => c.closed));
-  const verdicts: { side: 'LONG' | 'SHORT'; v: NonNullable<DirectionalCall['lifecycle']> }[] = [];
+  const lo = ticker?.lowPrice ?? null;
+  const hi = ticker?.highPrice ?? null;
+  type Cham = { side: 'LONG' | 'SHORT'; v: NonNullable<DirectionalCall['lifecycle']> };
+
+  // Bản điện và /strict là hai bộ THẺ khác nhau nhưng đi qua CÙNG evaluate().
+  // H9 áp trong từng bộ — ghép chéo hai đường sẽ làm một não khoá não kia.
+  const vBanDien: Cham[] = [];
+  const vStrict: Cham[] = [];
   for (const tf of TFS) {
     const call = direction[tf];
-    if (!call) continue;
-    const v = danhGiaVongDoi(
-      dungVongDoi(call, tf, byTf, lastLive, atr1h, ticker?.lowPrice ?? null, ticker?.highPrice ?? null),
-    );
-    call.lifecycle = v;
-    verdicts.push({ side: call.side, v });
+    if (call) {
+      const v = danhGiaVongDoi(dungVongDoi(tuBanDien(call), tf, byTf, lastLive, atr1h, lo, hi));
+      call.lifecycle = v;
+      vBanDien.push({ side: call.side, v });
+    }
+    const rec = tfs[tf];
+    const the = rec ? tuStrict(rec) : null;
+    if (rec && the) {
+      const v = danhGiaVongDoi(dungVongDoi(the, tf, byTf, lastLive, atr1h, lo, hi));
+      rec.lifecycle = v;
+      vStrict.push({ side: the.side, v });
+    }
   }
-  apDungH9(verdicts);
+  apDungH9(vBanDien);
+  apDungH9(vStrict);
 
   const pa15 = analyzePriceAction(k15);
 
@@ -294,7 +354,7 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
 function emptyRec(symbol: string, tf: TF, last: number, why: string): Recommendation {
   return {
     symbol, tf, bias: 'WAIT', stage: 'mid-range', entry: null,
-    trigger: 'không có — thiếu dữ liệu',
+    trigger: 'không có — thiếu dữ liệu', triggerLevel: null, lifecycle: null,
     sl: null, tp1: null, tp2: null, runner: null, rr1: null, rr2: null,
     size: 'Small',
     invalidation: 'không áp dụng',

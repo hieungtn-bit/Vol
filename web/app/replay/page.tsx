@@ -5,7 +5,10 @@
  * ĐÚNG hàm vòng đời và ĐÚNG component mà bản điện dùng. Không phải ảnh chụp
  * tĩnh: nếu ai đó làm hỏng lại cổng, trang này đổi theo ngay.
  */
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Detail } from '@/components/LiveBoard';
+import { STATE_NHAN, STATE_O } from '@/components/ui';
 import { evaluate, resetKhoaHet, type BarK, type LifecycleInput } from '@/lib/lifecycle';
 import type { DirectionalCall } from '@/lib/direct';
 
@@ -131,6 +134,86 @@ function canh0815() {
   ];
 }
 
+/**
+ * Đường /strict — dựng thẻ từ Recommendation (bias + mức giá) qua ĐÚNG
+ * `evaluate()` của bản điện. Không có máy trạng thái thứ hai; ở đây chỉ in ra
+ * banner để đối chiếu với T13/T14.
+ */
+function theStrict(p: {
+  tf: LifecycleInput['tf']; side: 'LONG' | 'SHORT';
+  entry: [number, number]; sl: number; tp1: number; tp2: number;
+  trigger: string; triggerLevel: number; rr1: number; rr2: number;
+  over: Partial<LifecycleInput>; truoc: string;
+}) {
+  const li: LifecycleInput = {
+    ...chung, tf: p.tf, side: p.side,
+    entryLow: p.entry[0], entryHigh: p.entry[1], sl: p.sl, tp1: p.tp1, tp2: p.tp2,
+    triggerText: p.trigger, triggerLevel: p.triggerLevel,
+    rr: 0.5 * p.rr1 + 0.3 * p.rr2,
+    last: 0, ts: 0, openK: null, lastClosedK: null,
+    ...p.over,
+  };
+  return { li, v: evaluate(li), truoc: p.truoc };
+}
+
+function canhStrict() {
+  resetKhoaHet();
+  return [
+    theStrict({
+      tf: '4h', side: 'SHORT', entry: [0.147, 0.15], sl: 0.15254, tp1: 0.14, tp2: 0.133,
+      trigger: '4H đóng dưới 0.1470', triggerLevel: 0.147, rr1: 1.0, rr2: 1.6,
+      over: {
+        last: 0.154, ts: Date.parse('2026-09-11T22:34:00Z'),
+        openK: bar(0.154, 0.15764, 0.1398, 0.154, 7.3e8, false),
+        lastClosedK: bar(0.15, 0.156, 0.15, 0.154, 2e8, true),
+      },
+      truoc: '22:34 — /strict trước đây chỉ đọc điểm hợp lưu, không biết nến 4H còn mở hay last đã xuyên SL.',
+    }),
+    theStrict({
+      tf: '4h', side: 'SHORT', entry: [0.142, 0.143], sl: 0.1465, tp1: 0.133, tp2: 0.128,
+      trigger: '4H đóng dưới 0.1420', triggerLevel: 0.142, rr1: 1.0, rr2: 1.6,
+      over: {
+        last: 0.1405, ts: Date.parse('2026-09-12T07:32:00Z'),
+        openK: null, lastClosedK: bar(0.143, 0.1432, 0.14, 0.1405, 3e8, true),
+        low24h: 0.13, low4hMaxVol: 0.13,
+      },
+      truoc: '07:32 — entry 0.142–0.143 nằm TRÊN giá 0.14050: chờ kéo lại, không phải short ngay.',
+    }),
+  ];
+}
+
+function CanhStrict() {
+  const thes = canhStrict();
+  return (
+    <section className="mb-6">
+      <h2 className="mb-2 text-sm font-semibold text-white">Đường /strict — cùng evaluate()</h2>
+      <div className="space-y-3">
+        {thes.map(({ li, v, truoc }, i) => (
+          <div key={i}>
+            <p className="mb-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs leading-snug text-red-300/90">
+              {truoc}
+            </p>
+            <div className="rounded-xl border border-line bg-panel2 p-3">
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                <span className="mono rounded bg-white/10 px-1.5 py-0.5 text-xs font-semibold">{li.tf}</span>
+                <span className="mono text-2xs text-muted">{li.side} · last {li.last} · SL {li.sl}</span>
+              </div>
+              <p className={`rounded-md border px-2 py-1.5 text-2xs leading-snug ${STATE_O[v.state]}`}>
+                <b>{STATE_NHAN[v.state]}</b> · hạng {v.grade}
+                <span className="mt-1 block">– {v.reason}</span>
+                {v.failedGates.length > 0 && (
+                  <span className="mt-0.5 block opacity-80">– cổng hỏng: {v.failedGates.join(', ')}</span>
+                )}
+              </p>
+              <p className="mono mt-1.5 text-2xs text-muted">id {v.id}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Canh({ ten, thes }: { ten: string; thes: ReturnType<typeof canh2234> }) {
   return (
     <section className="mb-6">
@@ -149,17 +232,29 @@ function Canh({ ten, thes }: { ten: string; thes: ReturnType<typeof canh2234> })
   );
 }
 
-export default function Page() {
+function Noi() {
+  // ?mode=strict để xem riêng đường /strict; mặc định xem cả hai.
+  const strictOnly = useSearchParams().get('mode') === 'strict';
   return (
     <main className="safe-x safe-b mx-auto max-w-[900px] pt-4">
       <h1 className="mb-1 text-base font-semibold">Replay ENAUSDT · 11–12/09/2026</h1>
       <p className="mb-4 text-2xs text-muted">
         Cùng dữ liệu đã làm thẻ in sai, chạy qua hàm vòng đời và component hiện tại.
+        {strictOnly ? ' Đang xem riêng đường /strict.' : ''}
       </p>
-      <Canh ten="11/09 22:34 — 22:59" thes={canh2234()} />
-      <Canh ten="12/09 03:44 — sát đáy 24h" thes={canh0344()} />
-      <Canh ten="12/09 07:32 — cả bốn khung" thes={canh0732()} />
-      <Canh ten="12/09 08:15 — nến 15m đóng ngược hướng" thes={canh0815()} />
+      {!strictOnly && (
+        <>
+          <Canh ten="11/09 22:34 — 22:59" thes={canh2234()} />
+          <Canh ten="12/09 03:44 — sát đáy 24h" thes={canh0344()} />
+          <Canh ten="12/09 07:32 — cả bốn khung" thes={canh0732()} />
+          <Canh ten="12/09 08:15 — nến 15m đóng ngược hướng" thes={canh0815()} />
+        </>
+      )}
+      <CanhStrict />
     </main>
   );
+}
+
+export default function Page() {
+  return <Suspense fallback={null}><Noi /></Suspense>;
 }
