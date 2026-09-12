@@ -26,6 +26,13 @@ import { TFS } from './types';
 //   15m ≈ 2 ngày · 1h ≈ 7 ngày · 4h ≈ 3 tuần · 1D ≈ 3 tháng
 const LIMIT: Record<TF, number> = { '15m': 192, '1h': 168, '4h': 126, '1d': 90 };
 
+/**
+ * Chuỗi 1H DÀI chỉ dành cho cảnh báo sớm: nó cần 168 nến đã đóng cộng một cây
+ * nữa để có đủ cửa sổ. Lấy dư để còn chỗ cho cây chưa đóng và vài cây thiếu.
+ * Phân tích vẫn cắt về đúng `LIMIT['1h']`, nên volume profile không đổi.
+ */
+const DAI_1H = 240;
+
 /** TF lớn hơn liền kề — dùng làm context, KHÔNG dùng để ghi đè bias TF nhỏ. */
 const PARENT: Record<TF, TF | null> = { '15m': '1h', '1h': '4h', '4h': '1d', '1d': null };
 
@@ -231,12 +238,15 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   // NẾN PERP cho mọi phân tích. Nến SPOT vẫn tải riêng nhưng CHỈ để dựng taker
   // delta spot — field 9 của kline perp là taker PERP, gắn nhãn spot lên nó là
   // nói sai chợ.
-  const nen = async (tf: TF) => fetchKlinesPerp(symbol, tf, LIMIT[tf])
+  const nen = async (tf: TF, soNen = LIMIT[tf]) => fetchKlinesPerp(symbol, tf, soNen)
     .then((r) => { if (r.loi) errors.push(r.loi); return r.candles; })
     .catch((e) => { errors.push(`nến ${tf}: ${(e as Error).message}`); return [] as Candle[]; });
 
-  const [k15, k1h, k4h, k1d, ticker, k15spot] = await Promise.all([
-    nen('15m'), nen('1h'), nen('4h'), nen('1d'),
+  // Cảnh báo sớm cần 168 nến 1H ĐÃ ĐÓNG + 1; `LIMIT['1h']` chỉ có đúng 168 và
+  // nó định nghĩa cửa sổ volume profile 1H nên KHÔNG được nâng. Nạp một chuỗi
+  // dài hơn rồi CẮT lại đúng cửa sổ cũ cho phần phân tích — profile không đổi.
+  const [k15, k1hDai, k4h, k1d, ticker, k15spot] = await Promise.all([
+    nen('15m'), nen('1h', DAI_1H), nen('4h'), nen('1d'),
     fetchTicker(symbol).catch((e) => {
       errors.push(`ticker 24h: ${(e as Error).message}`);
       return null;
@@ -244,6 +254,7 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
     fetchKlines(symbol, '15m', LIMIT['15m']).catch(() => [] as Candle[]),
   ]);
 
+  const k1h = k1hDai.slice(-LIMIT['1h']);
   const byTf: Record<TF, Candle[]> = { '15m': k15, '1h': k1h, '4h': k4h, '1d': k1d };
   const closed15 = k15.filter((c) => c.closed);
   const last = closed15.length ? closed15[closed15.length - 1].c : (ticker?.lastPrice ?? 0);
@@ -369,7 +380,7 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const pa15 = analyzePriceAction(k15);
 
   // Cảnh báo sớm tính trên nến 1H ĐÃ ĐÓNG. Mã chưa hiệu chuẩn → không cảnh báo.
-  const h1Closed = k1h.filter((c) => c.closed);
+  const h1Closed = k1hDai.filter((c) => c.closed);
   const canhBao = h1Closed.length
     ? danhGiaCanhBao(h1Closed, symbol, bangCanhBao as unknown as BangCanhBao)
     : null;
