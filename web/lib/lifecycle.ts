@@ -314,15 +314,20 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
   } else if (failed.filter((g) => g !== 'H1' && g !== 'H4').length > 0) {
     state = 'CAM';
     reason = `trượt cổng cứng ${failed.filter((g) => g !== 'H1' && g !== 'H4').join(', ')}`;
+  } else if (!trongVung) {
+    // GIÁ đứng trước NẾN. Khi giá còn chưa vào vùng thì thứ đang chặn là giá,
+    // không phải cây đang chạy — và trong dữ liệu sống thì LÚC NÀO cũng có một
+    // cây đang chạy, nên xếp CHO_NEN lên trước sẽ làm CHO_GIA không bao giờ
+    // xuất hiện. H1 vẫn nằm nguyên trong failedGates và vẫn cấm SONG.
+    state = 'CHO_GIA';
+    reason = `last ${i.last} chưa vào vùng ${entryLo}–${entryHi}`
+      + (nenConMo ? ` (nến ${i.tf} cũng chưa đóng)` : '');
   } else if (nenConMo) {
     state = 'CHO_NEN';
-    reason = `nến ${i.tf} chưa đóng`;
+    reason = `giá đã vào vùng nhưng nến ${i.tf} chưa đóng`;
   } else if (failed.includes('H4')) {
     state = 'CHO_GIA';
     reason = `trigger chưa kích hoạt: ${i.triggerText}`;
-  } else if (!trongVung) {
-    state = 'CHO_GIA';
-    reason = `last ${i.last} chưa vào vùng ${entryLo}–${entryHi}`;
   } else if (soft.includes('S2')) {
     // S2 — nến khung thẻ ĐÓNG ngược hướng thẻ (SHORT mà đóng nửa trên / đúng cao
     // cây). Không được khoá hướng và không được SONG: hạ CAM, chờ một nến đóng

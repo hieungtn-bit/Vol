@@ -2,7 +2,7 @@ import { ictSessionStart } from './format';
 import { analyzePriceAction, atr } from './priceAction';
 import { buildDelta, buildDerivatives } from './derivatives';
 import { type HTFContext } from './decide';
-import { type DirectionalCall } from './direct';
+import { rKyVong, type DirectionalCall } from './direct';
 import { apDungH9, evaluate as danhGiaVongDoi, type BarK, type LifecycleInput } from './lifecycle';
 import { decideBoth, prepareTF } from './analyze';
 import { type MarketStructure } from './structure';
@@ -165,8 +165,7 @@ function tuStrict(r: Recommendation): TheCoMuc | null {
   return {
     symbol: r.symbol, side: r.bias, entry: r.entry, sl: r.sl, tp1: r.tp1, tp2: r.tp2,
     trigger: r.trigger, triggerLevel: r.triggerLevel,
-    // R kỳ vọng cùng công thức bản điện: 0.5×RR1 + 0.3×RR2 (bỏ runner cho thận trọng).
-    rr: r.rr1 != null && r.rr2 != null ? 0.5 * r.rr1 + 0.3 * r.rr2 : null,
+    rr: rKyVong(r.rr1, r.rr2),
     warnings: r.warnings, opposingLegs: veNguocHuongStrict(r),
   };
 }

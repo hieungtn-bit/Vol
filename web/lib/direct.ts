@@ -88,6 +88,15 @@ export const FUNDING_HIST = {
   tiredShare: 0.25,
 };
 
+/**
+ * R kỳ vọng nếu cả hai mốc chốt đều chạm: 0.5×RR1 + 0.3×RR2 (bỏ runner cho thận
+ * trọng). MỘT chỗ duy nhất — bản điện và /strict đều gọi hàm này, nên trọng số
+ * không thể trôi lệch giữa hai đường rồi làm H5 bắt khác nhau.
+ */
+export function rKyVong(rr1: number | null, rr2: number | null): number | null {
+  return rr1 != null && rr2 != null ? 0.5 * rr1 + 0.3 * rr2 : null;
+}
+
 export const GATE = {
   /**
    * CHƯA CHỨNG MINH ĐƯỢC — giữ nguyên số, nhưng không được coi là đã đo.
@@ -422,7 +431,7 @@ export function decideDirection(
   const rr1 = rr(entryRef, lv.sl, lv.tp1);
   const rr2 = rr(entryRef, lv.sl, lv.tp2);
   // Kế hoạch là 50% ở TP1, 30% ở TP2, 20% runner. R kỳ vọng bỏ qua runner cho thận trọng.
-  const rrBlended = rr1 != null && rr2 != null ? 0.5 * rr1 + 0.3 * rr2 : null;
+  const rrBlended = rKyVong(rr1, rr2);
 
   const warnings: string[] = [];
   if (conviction === 'C') {
