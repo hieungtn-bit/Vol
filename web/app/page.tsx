@@ -42,7 +42,7 @@ export default function LivePage() {
   const [extra, setExtra] = useState('');
   const [auto, setAuto] = useState(true);          // bản điện thì mặc định phải tự chạy
   const [goldOnly, setGoldOnly] = useState(false);
-  // Mặc định BẬT: backtest đo được là bỏ các kèo trượt cửa giữ lại 7% số lệnh
+  // Mặc định BẬT: backtest đo được là chỉ giữ thẻ ĐỦ ĐIỀU KIỆN còn 7% số lệnh
   // nhưng nâng avgR 0.05 → 0.31 và hạ sụt giảm tối đa từ 116.9R xuống 6.3R.
   const [tradeableOnly, setTradeableOnly] = useState(true);
   const [busy, setBusy] = useState(false);

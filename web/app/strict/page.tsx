@@ -108,7 +108,7 @@ export default function Page() {
               ← Về bản điện (Long/Short liên tục, không WAIT)
             </a>
             <a href="../vao-tien/" className="text-2xs text-emerald-300 underline hover:brightness-125">
-              Bảng vào tiền (chỉ kèo qua cửa, kèm khối lượng) →
+              Bảng vào tiền (chỉ thẻ ĐỦ ĐIỀU KIỆN, kèm khối lượng) →
             </a>
           </span>
         </div>

@@ -14,7 +14,7 @@ import type { TF } from '@/lib/types';
 //
 //   /        — mọi mã, mọi khung, luôn có hướng. Để ĐỌC thị trường.
 //   /strict  — có WAIT, ngưỡng điểm. Để đối chiếu KỶ LUẬT.
-//   /vao-tien — CHỈ kèo qua cửa, kèm khối lượng và tiền. Để ĐẶT LỆNH.
+//   /vao-tien — CHỈ thẻ ĐỦ ĐIỀU KIỆN, kèm khối lượng và tiền. Để ĐẶT LỆNH.
 //
 // Bảng này giấu tất cả những gì không đặt lệnh được. Một bảng để vào tiền mà
 // hiện 28 dòng WAIT thì người dùng phải tự lọc bằng mắt, và lọc bằng mắt lúc
@@ -34,6 +34,7 @@ interface Call {
   conviction: string;
   golden: boolean;
   tradeable: boolean;
+  lifecycle: { state: string; grade: string; banner: string; reason: string } | null;
   net: number;
   entry: [number, number];
   sl: number; tp1: number; tp2: number;
@@ -257,13 +258,15 @@ export default function VaoTienPage() {
     return () => clearInterval(t);
   }, []);
 
-  // CHỈ kèo qua cửa, và chỉ kèo dựng được thành lệnh hợp lệ.
+  // CHỈ thẻ state === 'SONG' (ĐỦ ĐIỀU KIỆN) — đọc từ vòng đời, KHÔNG đọc cờ
+  // `tradeable` cũ: cờ đó tính lúc chấm điểm nên không biết nến đã đóng chưa,
+  // giá đã xuyên SL chưa, trigger đã kích hoạt chưa.
   const setups = useMemo<Setup[]>(() => {
     const out: Setup[] = [];
     for (const r of rows) {
       for (const tf of TFS) {
         const c = r.direction?.[tf];
-        if (!c?.tradeable) continue;
+        if (c?.lifecycle?.state !== 'SONG') continue;
         const plan = planOrder({
           side: c.side, entry: c.entry, sl: c.sl, tp1: c.tp1, tp2: c.tp2,
           equity, riskPct, leverage,
@@ -315,7 +318,7 @@ export default function VaoTienPage() {
 
         {setups.length > 0 && (
           <p className="mb-3 rounded-lg border border-line bg-panel2 px-3 py-2 text-2xs leading-snug text-muted">
-            <b className="text-white">{setups.length} kèo qua cửa.</b> Vào hết thì tổng rủi ro{' '}
+            <b className="text-white">{setups.length} thẻ ĐỦ ĐIỀU KIỆN.</b> Vào hết thì tổng rủi ro{' '}
             <b className="text-white">{tongRuiRo.toFixed(0)} USDT</b> ({((tongRuiRo / equity) * 100).toFixed(1)}% vốn)
             — và đó là khi các kèo đi độc lập, còn crypto thì thường cùng chiều.
           </p>
@@ -329,7 +332,7 @@ export default function VaoTienPage() {
 
         {setups.length === 0 && !busy && (
           <div className="rounded-xl border border-line bg-panel px-4 py-8 text-center">
-            <p className="text-sm text-white">Không kèo nào qua cửa lúc này.</p>
+            <p className="text-sm text-white">Không thẻ nào ĐỦ ĐIỀU KIỆN lúc này.</p>
             <p className="mt-2 text-2xs leading-relaxed text-muted">
               Đây là kết quả bình thường, không phải lỗi. Cửa chất lượng giữ lại khoảng 7% số
               kèo. Bảng này cố ý không hiện phần còn lại — muốn xem thiên hướng của mọi mã thì
@@ -343,7 +346,7 @@ export default function VaoTienPage() {
         <section className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-3 text-2xs leading-relaxed text-amber-100/90">
           <p className="mb-1.5 font-semibold text-amber-200">1000 USDT sẽ ra sao — đo trên 5 năm</p>
           <p>
-            Chạy lại <b>4.203 kèo qua cửa</b> trong <b>1.826 ngày</b> (2021-09 → 2026-09, 6 mã ×
+            Chạy lại <b>4.203 thẻ đủ điều kiện</b> trong <b>1.826 ngày</b> (2021-09 → 2026-09, 6 mã ×
             15m/1h/4h) trên tài khoản 1000 USDT, rủi ro 1% mỗi lệnh, tối đa 3 lệnh mở cùng lúc —
             đúng cách bảng này tính khối lượng:
           </p>
@@ -360,7 +363,7 @@ export default function VaoTienPage() {
           <p className="mt-1.5 text-amber-200">
             Lãi trung bình mỗi lệnh chỉ <b>0,06R</b> (sai số ±0,018). Toàn bộ con số trên là 0,06R
             đó cộng dồn qua hơn bốn nghìn lệnh trong năm năm — <b>không phải</b> mỗi lệnh một ít
-            tiền dễ thấy. Chưa qua cửa thì hệ <b>lỗ</b>: −0,12R mỗi lệnh.
+            tiền dễ thấy. Không lọc điều kiện thì hệ <b>lỗ</b>: −0,12R mỗi lệnh.
           </p>
           <p className="mt-1.5 text-amber-200">
             Thứ đáng sợ là <b>248 ngày chìm</b> và <b>11 lệnh thua liên tiếp</b>. Đó là lúc phần

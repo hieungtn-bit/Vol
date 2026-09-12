@@ -460,7 +460,7 @@ export function decideDirection(
   if (lv.crossings >= 3) warnings.push(`Đoạn TP1→TP2 xuyên ${lv.crossings} HVN — phần cuối chạy như runner.`);
   if (rrBlended != null && rrBlended > GATE.maxRRBlended) {
     warnings.push(
-      `R kỳ vọng ${rrBlended.toFixed(2)} — TP2 xa hơn mức hệ cho qua cửa (${GATE.maxRRBlended}). ` +
+      `R kỳ vọng ${rrBlended.toFixed(2)} — TP2 xa hơn mức hệ cho ĐỦ ĐIỀU KIỆN (${GATE.maxRRBlended}). ` +
       'Backtest CHƯA chứng minh được nhóm này lỗ; cân nhắc chốt sạch ở TP1.',
     );
   }

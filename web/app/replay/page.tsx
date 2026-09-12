@@ -53,19 +53,21 @@ function canh2234() {
   const ts = Date.parse('2026-09-11T22:34:00Z');
   return [
     mk({
-      ...chung, tf: '4h', side: 'SHORT', last: 0.154, ts,
+      ...chung, tf: '4h', side: 'SHORT', last: 0.154, ts, rr: 0.49,
       entryLow: 0.147, entryHigh: 0.150, sl: 0.15254, tp1: 0.140, tp2: 0.133,
       triggerText: '4H đóng dưới 0.1470', triggerLevel: 0.147,
+      // SL 0.15254 nằm giữa cụm 1H 20:00+21:00 → H6.
+      cum1h: { low: 0.1505, high: 0.1566, bars: [Date.parse('2026-09-11T20:00:00Z')] },
       openK: bar(0.154, 0.15764, 0.1398, 0.154, 7.3e8, false),
       lastClosedK: bar(0.150, 0.156, 0.150, 0.154, 2.0e8, true),
-    }, {}, 'Trước khi vá: SHORT · hạng A · QUA CỬA — trong khi nến 4H còn mở, last 0.154 đã trên SL 0.15254, và trigger "4H đóng dưới 0.1470" chưa xảy ra.'),
+    }, {}, 'Trước khi vá: SHORT · hạng A · in là đủ điều kiện vào tiền — trong khi nến 4H còn mở, last 0.154 đã trên SL 0.15254, và trigger "4H đóng dưới 0.1470" chưa xảy ra.'),
     mk({
       ...chung, tf: '15m', side: 'LONG', last: 0.1489, ts: Date.parse('2026-09-11T22:59:00Z'),
       entryLow: 0.151, entryHigh: 0.1515, sl: 0.14984, tp1: 0.156, tp2: 0.160,
       triggerText: '15m đóng trên 0.15150', triggerLevel: 0.1515,
       openK: null, lastClosedK: bar(0.150, 0.1502, 0.1485, 0.1487, 1e7, true),
     }, { side: 'LONG', longScore: 61, shortScore: 39, net: 22 },
-      'Trước khi vá: LONG với last 0.14890 NẰM DƯỚI SL 0.14984, trigger đã FAIL (cây 22:45 đóng 0.1487), banner vẫn ghi "hướng vẫn LONG".'),
+      'Trước khi vá: LONG với last 0.14890 NẰM DƯỚI SL 0.14984, trigger đã FAIL (cây 22:45 đóng 0.1487), banner vẫn khẳng định hướng LONG.'),
   ];
 }
 
@@ -102,6 +104,33 @@ function canh0732() {
   ];
 }
 
+function canh0344() {
+  resetKhoaHet();
+  const cum = { low: 0.14, high: 0.1428, bars: [Date.parse('2026-09-12T02:00:00Z')] };
+  return [
+    mk({
+      ...chung, tf: '15m', side: 'SHORT', last: 0.14101, ts: Date.parse('2026-09-12T03:44:00Z'),
+      entryLow: 0.1405, entryHigh: 0.1415, sl: cum.high + 0.0001, tp1: 0.136, tp2: 0.132,
+      triggerText: '15m đóng dưới 0.1405', triggerLevel: 0.1405,
+      openK: null, lastClosedK: bar(0.1415, 0.1416, 0.14, 0.1402, 1e7, true),
+      low24h: 0.13944, low4hMaxVol: 0.13944, atr1h: 0.00194, cum1h: cum,
+    }, {}, 'Trước khi vá: short một cây sát đáy — last 0.14101 chỉ cách đáy 24h 0.13944 đúng 0.00157, nhỏ hơn ATR 1H 0.00194.'),
+  ];
+}
+
+function canh0815() {
+  resetKhoaHet();
+  return [
+    mk({
+      ...chung, tf: '15m', side: 'SHORT', last: 0.14159, ts: Date.parse('2026-09-12T08:15:00Z'),
+      entryLow: 0.1414, entryHigh: 0.1422, sl: 0.144, tp1: 0.138, tp2: 0.135,
+      triggerText: '15m đóng dưới 0.1422', triggerLevel: 0.1422, rr: 1.3,
+      openK: null, lastClosedK: bar(0.141, 0.142, 0.1405, 0.1418, 1e7, true),
+      low24h: 0.13, low4hMaxVol: 0.13,
+    }, {}, 'Trước khi vá: giữ SHORT trong khi cây 15m 08:00 đóng 0.1418 ở nửa TRÊN — nến khung thẻ đóng ngược hướng.'),
+  ];
+}
+
 function Canh({ ten, thes }: { ten: string; thes: ReturnType<typeof canh2234> }) {
   return (
     <section className="mb-6">
@@ -128,7 +157,9 @@ export default function Page() {
         Cùng dữ liệu đã làm thẻ in sai, chạy qua hàm vòng đời và component hiện tại.
       </p>
       <Canh ten="11/09 22:34 — 22:59" thes={canh2234()} />
+      <Canh ten="12/09 03:44 — sát đáy 24h" thes={canh0344()} />
       <Canh ten="12/09 07:32 — cả bốn khung" thes={canh0732()} />
+      <Canh ten="12/09 08:15 — nến 15m đóng ngược hướng" thes={canh0815()} />
     </main>
   );
 }

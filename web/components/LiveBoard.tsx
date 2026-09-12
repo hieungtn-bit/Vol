@@ -205,9 +205,9 @@ function TFCell({
         </span>
       </span>
       {/*
-        Chữ ở đây KHÔNG được phép xuống dòng. "qua cửa" bị ngắt giữa chừng thì dấu
-        tiếng Việt vỡ ra thành "cưả" — nên dấu qua cửa chỉ còn một ký tự, còn tỷ số
-        long/short thì luôn hiện vì nó mới là số người ta so giữa các khung.
+        Chữ ở đây KHÔNG được phép xuống dòng: chữ tiếng Việt bị ngắt giữa chừng thì
+        dấu vỡ ra. Nên dấu ĐỦ ĐIỀU KIỆN chỉ còn một ký tự ✓, còn tỷ số long/short
+        thì luôn hiện vì nó mới là số người ta so giữa các khung.
       */}
       <span className="mono flex items-center gap-1 whitespace-nowrap text-[10px] opacity-75">
         {c.lifecycle?.state === 'SONG' && <span className="text-emerald-300" aria-hidden>✓</span>}
