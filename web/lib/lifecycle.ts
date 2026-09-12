@@ -84,6 +84,15 @@ export interface LifecycleInput {
   /** Số nến khung K đã trôi qua từ lúc thẻ ra đời. */
   barsSinceIssued: number;
 
+  /**
+   * Các nến khung K ĐÃ ĐÓNG trong cửa sổ sống của thẻ, cũ → mới.
+   *
+   * Đây là thứ làm cho HẾT SỐNG SÓT QUA COLD START mà không cần cất gì: nếu
+   * trong cửa sổ này có một cây đã xuyên SL hoặc đã chạm TP1 thì thẻ chết, và
+   * sự thật đó đọc lại được từ nến bất cứ lúc nào. Khoá trong RAM chỉ còn là
+   * đường tắt, không phải nguồn sự thật.
+   */
+  nenGanDay: BarK[];
 }
 
 export interface LifecycleVerdict {
@@ -336,9 +345,24 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
   const hetHan = i.barsSinceIssued > EXPIRE[i.tf];
   const triggerHong = triggerFired === false;
 
+  // ---- SUY HẾT TỪ NẾN ĐÃ ĐÓNG ----
+  // Chạy TRƯỚC khoá RAM. Một thẻ chết vì giá đã xuyên SL ba cây trước thì cây
+  // đó vẫn nằm nguyên trong chuỗi nến; không cần nhớ, chỉ cần đọc lại. Nhờ vậy
+  // tiến trình mới (cold start, RAM trống) vẫn ra HẾT.
+  //
+  // Cửa sổ đúng bằng hạn sống của thẻ: quá hạn đó thẻ chết bằng đường khác, và
+  // một cây xuyên SL từ trước khi thẻ ra đời thì không nói gì về thẻ này.
+  let tuNen: { kieu: KieuHet; bar: BarK } | null = null;
+  for (const b of i.nenGanDay.slice(-(EXPIRE[i.tf] + 1))) {
+    if (isShort ? b.h >= i.sl : b.l <= i.sl) { tuNen = { kieu: 'sl-cay', bar: b }; break; }
+    if (isShort ? b.l <= i.tp1 : b.h >= i.tp1) { tuNen = { kieu: 'toi-chot', bar: b }; break; }
+  }
+
   let kieuHet: KieuHet | null = null;
   if (khoa) {
     kieuHet = khoa.kieu;
+  } else if (tuNen) {
+    kieuHet = tuNen.kieu;
   } else if (xuyenSl) {
     kieuHet = (isShort ? i.last >= i.sl : i.last <= i.sl) ? 'sl-last' : 'sl-cay';
   } else if (daToiChot) {
@@ -351,11 +375,22 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
 
   if (kieuHet) {
     state = 'HET';
-    const giaLucHet = khoa ? khoa.giaLucHet : i.last;
-    const tsHet = khoa ? khoa.ts : i.ts;
-    slHitTs = khoa ? khoa.slHitTs : (kieuHet === 'sl-last' || kieuHet === 'sl-cay' ? i.ts : null);
-    reason = khoa ? lyDoKhoa(kieuHet, i, giaLucHet, tsHet) : lyDoHet(kieuHet, i, i.last, i.ts);
-    if (!khoa) void khoaHet.set(id, { ts: i.ts, kieu: kieuHet, giaLucHet: i.last, slHitTs });
+    if (khoa) {
+      slHitTs = khoa.slHitTs;
+      reason = lyDoKhoa(kieuHet, i, khoa.giaLucHet, khoa.ts);
+    } else if (tuNen) {
+      // Nói rõ CÂY NÀO giết thẻ — mở chart lên là thấy đúng cây đó.
+      const gio = new Date(tuNen.bar.t).toISOString().slice(5, 16).replace('T', ' ');
+      slHitTs = tuNen.kieu === 'sl-cay' ? tuNen.bar.t : null;
+      reason = tuNen.kieu === 'sl-cay'
+        ? `nến ${i.tf} ${gio} đã xuyên SL ${i.sl} (${isShort ? 'cao' : 'thấp'} cây ${isShort ? tuNen.bar.h : tuNen.bar.l}); last hiện tại ${i.last}`
+        : `đã tới chốt — nến ${i.tf} ${gio} chạm TP1 ${i.tp1}; last hiện tại ${i.last}`;
+      void khoaHet.set(id, { ts: tuNen.bar.t, kieu: tuNen.kieu, giaLucHet: i.last, slHitTs });
+    } else {
+      slHitTs = kieuHet === 'sl-last' || kieuHet === 'sl-cay' ? i.ts : null;
+      reason = lyDoHet(kieuHet, i, i.last, i.ts);
+      void khoaHet.set(id, { ts: i.ts, kieu: kieuHet, giaLucHet: i.last, slHitTs });
+    }
   } else if (failed.filter((g) => g !== 'H1' && g !== 'H4').length > 0) {
     state = 'CAM';
     reason = `trượt cổng cứng ${failed.filter((g) => g !== 'H1' && g !== 'H4').join(', ')}`;

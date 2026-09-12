@@ -52,7 +52,7 @@ function tuJson(symbol: string, tf: TF, t: TheJson, last: number): LifecycleInpu
     low4hMaxVol: null, high4hMaxVol: null,
     cum1h: null, rejected1h: true,
     tp1OutsideVa: false, volRatio: null, opposingLegs: 0,
-    tpBreaksUnbackedLevel: false, barsSinceIssued: 0,
+    tpBreaksUnbackedLevel: false, barsSinceIssued: 0, nenGanDay: [],
   };
 }
 
