@@ -34,6 +34,7 @@ export function recToCall(r: Recommendation): DirectionalCall | null {
     net: r.confluence.score * 10,       // chỉ để ghi lại, không dùng khi mô phỏng
     longScore: 0, shortScore: 0,
     unanimous: true, contestedBy: [],
+    triggerLevel: null, lifecycle: null,
     // Đường strict tự nó ĐÃ là cửa: ra được LONG/SHORT nghĩa là đã qua score ≥ 7
     // và cổng TF. Không có cửa thứ hai chồng lên.
     tradeable: true, gateBlockers: [],

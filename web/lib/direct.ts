@@ -1,5 +1,6 @@
 import { buildLongLevels, buildShortLevels, rr, type DecideInput, type Levels } from './decide';
 import { fmtPrice } from './format';
+import type { LifecycleVerdict } from './lifecycle';
 import { OI_READ_VI } from './derivatives';
 import { positioningSplit, type FlowInfo } from './flow';
 import type { MarketStructure } from './structure';
@@ -198,7 +199,14 @@ export interface DirectionalCall {
   runner: string | null;
   size: SizeHint;
   trigger: string;
+  /** Mức giá mà nến khung này phải ĐÓNG qua thì trigger mới kích hoạt. */
+  triggerLevel: number | null;
   invalidation: string;
+  /**
+   * Trạng thái vòng đời, do scan.ts gắn vào sau khi có giá live + nến đang mở.
+   * null = chưa đánh giá được (thiếu dữ liệu live) → UI phải coi như KHÔNG MỞ.
+   */
+  lifecycle: LifecycleVerdict | null;
   evidence: Evidence[];
   structureNote: string;
   flowNote: string;
@@ -353,7 +361,10 @@ export function decideDirection(
     };
     oiPts = (map[oi.read] ?? 0) * W.openInterest;
   }
-  push('Open Interest', oiPts, oi.read === 'na' ? 'N/A — không tính điểm' : OI_READ_VI[oi.read]);
+  push('Open Interest', oiPts,
+    oi.read === 'na' ? 'N/A — không tính điểm'
+      : oi.read === 'flat' ? `${OI_READ_VI[oi.read]} — 0 điểm, KHÔNG phải lý do giữ hướng`
+        : OI_READ_VI[oi.read]);
 
   // 6. Volume đã được tính vào PA ở trên dưới dạng hệ số nhân. Vẫn in ra thành một
   //    dòng để người đọc thấy vì sao PA nặng hay nhẹ, nhưng điểm riêng của nó là 0.
@@ -537,9 +548,12 @@ export function decideDirection(
   // 0.05 — không đơn điệu), còn cửa thì phân loại rất rõ.
   const size: SizeHint = !tradeable ? 'Small' : conviction === 'GOLD' || conviction === 'A' ? 'Normal' : 'Small';
 
+  const triggerLevel = side === 'LONG'
+    ? Math.max(vp.va70.low, lv.entry[1])
+    : Math.min(vp.va70.high, lv.entry[0]);
   const trigger = side === 'LONG'
-    ? `${TRIG[tf]} đóng trên ${P(Math.max(vp.va70.low, lv.entry[1]))} sau khi giữ ${P(lv.entry[0])}`
-    : `${TRIG[tf]} đóng dưới ${P(Math.min(vp.va70.high, lv.entry[0]))} sau khi test ${P(lv.entry[1])}`;
+    ? `${TRIG[tf]} đóng trên ${P(triggerLevel)} sau khi giữ ${P(lv.entry[0])}`
+    : `${TRIG[tf]} đóng dưới ${P(triggerLevel)} sau khi test ${P(lv.entry[1])}`;
 
   const invalidation = structure.breakLevel != null
     ? `đóng nến ${TRIG[tf]} ${side === 'LONG' ? 'dưới' : 'trên'} ${P(lv.sl)} thì hủy; cấu trúc gãy hẳn khi đóng ${structure.state === 'uptrend' ? 'dưới' : 'trên'} ${P(structure.breakLevel)}`
@@ -550,7 +564,8 @@ export function decideDirection(
     unanimous, contestedBy, tradeable, gateBlockers,
     longScore, shortScore,
     entry: lv.entry, sl: lv.sl, tp1: lv.tp1, tp2: lv.tp2,
-    rr1, rr2, rrBlended, runner: lv.runner, size, trigger, invalidation,
+    rr1, rr2, rrBlended, runner: lv.runner, size, trigger, triggerLevel, invalidation,
+    lifecycle: null,
     evidence: ev,
     structureNote: structure.note,
     flowNote: flow.note,

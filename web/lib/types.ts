@@ -172,6 +172,12 @@ export interface FundingHistory {
   flipped: boolean;
   /** Số kỳ cùng dấu NGAY TRƯỚC cú đảo. 0 khi không đảo. */
   brokeStreak: number;
+  /**
+   * Số lần ĐỔI DẤU THẬT trong cửa sổ, đếm trên rate thô, KHÔNG qua ngưỡng phẳng.
+   * Ngưỡng phẳng tồn tại để cấm lấy funding nhỏ làm lý do vào lệnh — nhưng nó
+   * không được phép biến một chuỗi có đảo dấu thành "phẳng N kỳ" trên màn hình.
+   */
+  rawFlips: number;
   text: string;
 }
 

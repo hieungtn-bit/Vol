@@ -3,6 +3,7 @@ import { analyzePriceAction, atr } from './priceAction';
 import { buildDelta, buildDerivatives } from './derivatives';
 import { type HTFContext } from './decide';
 import { type DirectionalCall } from './direct';
+import { apDungH9, evaluate as danhGiaVongDoi, type BarK, type LifecycleInput } from './lifecycle';
 import { decideBoth, prepareTF } from './analyze';
 import { type MarketStructure } from './structure';
 import { buildFlow, type FlowInfo } from './flow';
@@ -74,6 +75,92 @@ export interface SymbolScanLive extends Omit<SymbolScan, 'direction' | 'structur
   direction: Record<TF, DirectionalCall | null>;
   structure: Record<TF, MarketStructure | null>;
   flow: FlowInfo | null;
+}
+
+
+// ---------------------------------------------------------------------------
+// Sự thật quan sát được để chấm vòng đời. Tất cả lấy từ NẾN ĐÃ ĐÓNG + giá live,
+// không lấy từ lần quét trước.
+// ---------------------------------------------------------------------------
+
+const toBar = (c: Candle): BarK => ({ t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.q || c.v, closed: c.closed });
+
+/** Cây có volume lớn nhất trong `n` nến đã đóng gần nhất. */
+function cayVolMax(candles: Candle[], n: number): Candle | null {
+  const closed = candles.filter((c) => c.closed).slice(-n);
+  if (!closed.length) return null;
+  return closed.reduce((a, b) => ((b.q || b.v) > (a.q || a.v) ? b : a));
+}
+
+/** Cụm vol: 2–3 nến 1H volume lớn nhất ĐÃ ĐÓNG trong 48 giờ gần nhất. */
+function cumVol1h(k1h: Candle[]): { low: number; high: number; bars: number[] } | null {
+  const closed = k1h.filter((c) => c.closed).slice(-48);
+  if (closed.length < 3) return null;
+  const top = [...closed].sort((a, b) => (b.q || b.v) - (a.q || a.v)).slice(0, 3);
+  return {
+    low: Math.min(...top.map((c) => c.l)),
+    high: Math.max(...top.map((c) => c.h)),
+    bars: top.map((c) => c.t).sort((a, b) => a - b),
+  };
+}
+
+/**
+ * H12 — đã có nến 1H ĐÓNG từ chối mép cụm chưa: giá kéo lại chạm dải cụm rồi
+ * đóng hẳn ra ngoài. Một cây đỏ không đủ; phải là kéo lại RỒI đóng qua mép.
+ */
+function daTuChoiMep1h(k1h: Candle[], cum: { low: number; high: number } | null, side: 'LONG' | 'SHORT'): boolean {
+  if (!cum) return false;
+  const closed = k1h.filter((c) => c.closed).slice(-6);
+  return closed.some((c) => (side === 'SHORT'
+    ? c.h >= cum.low && c.c < cum.low
+    : c.l <= cum.high && c.c > cum.high));
+}
+
+/** Số vế taker / spot / PA đang NGƯỢC hướng thẻ. */
+function veNguocHuong(call: DirectionalCall): number {
+  const ten = ['Taker', 'Price Action', 'Delta'];
+  return call.evidence.filter((e) =>
+    ten.some((t) => e.label.includes(t))
+    && e.side !== 'neutral'
+    && e.side !== call.side.toLowerCase()).length;
+}
+
+function dungVongDoi(
+  call: DirectionalCall, tf: TF, byTf: Record<TF, Candle[]>,
+  lastLive: number, atr1h: number, low24h: number | null, high24h: number | null,
+): LifecycleInput {
+  const candles = byTf[tf];
+  const openK = candles.find((c) => !c.closed) ?? null;
+  const closedK = candles.filter((c) => c.closed);
+  const cum = cumVol1h(byTf['1h']);
+  const cay4h = cayVolMax(byTf['4h'], 42);
+  const pa = analyzePriceAction(candles);
+  const d1 = byTf['1d'].filter((c) => c.closed).slice(-30);
+
+  return {
+    symbol: call.symbol, tf, side: call.side,
+    entryLow: call.entry[0], entryHigh: call.entry[1],
+    sl: call.sl, tp1: call.tp1, tp2: call.tp2,
+    triggerText: call.trigger, triggerLevel: call.triggerLevel,
+    last: lastLive, ts: Date.now(),
+    openK: openK ? toBar(openK) : null,
+    lastClosedK: closedK.length ? toBar(closedK[closedK.length - 1]) : null,
+    rr: call.rrBlended,
+    atr1h: atr1h > 0 ? atr1h : null,
+    low24h, high24h,
+    low4hMaxVol: cay4h?.l ?? null,
+    high4hMaxVol: cay4h?.h ?? null,
+    cum1h: cum,
+    rejected1h: daTuChoiMep1h(byTf['1h'], cum, call.side),
+    tp1OutsideVa: call.warnings.some((w) => w.includes('TP1') && w.includes('VA')),
+    volRatio: pa.volMedian20 > 0 ? pa.lastVol / pa.volMedian20 : null,
+    opposingLegs: veNguocHuong(call),
+    // TP xuyên đáy/đỉnh 30 ngày mà ngoài đó không còn cụm vol nào đỡ.
+    tpBreaksUnbackedLevel: d1.length >= 10 && (call.side === 'SHORT'
+      ? call.tp2 < Math.min(...d1.map((c) => c.l))
+      : call.tp2 > Math.max(...d1.map((c) => c.h))),
+    barsSinceIssued: 0,
+  };
 }
 
 export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
@@ -163,6 +250,21 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
     structure[tf] = prepared.structure;
     direction[tf] = both.directional;
   }
+
+  // ---- VÒNG ĐỜI: tính lại từ đầu mỗi lần quét, từ giá LIVE + nến đã đóng ----
+  const lastLive = ticker?.lastPrice ?? last;
+  const atr1h = atr(k1h.filter((c) => c.closed));
+  const verdicts: { side: 'LONG' | 'SHORT'; v: NonNullable<DirectionalCall['lifecycle']> }[] = [];
+  for (const tf of TFS) {
+    const call = direction[tf];
+    if (!call) continue;
+    const v = danhGiaVongDoi(
+      dungVongDoi(call, tf, byTf, lastLive, atr1h, ticker?.lowPrice ?? null, ticker?.highPrice ?? null),
+    );
+    call.lifecycle = v;
+    verdicts.push({ side: call.side, v });
+  }
+  apDungH9(verdicts);
 
   const pa15 = analyzePriceAction(k15);
 

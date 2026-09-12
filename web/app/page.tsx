@@ -103,16 +103,16 @@ export default function LivePage() {
       const c = r.direction?.[tf];
       if (!c) continue;
       if (c.side === 'LONG') long++; else short++;
-      if (c.golden) gold++;
-      if (c.tradeable) ok++;
+      if (c.golden && c.lifecycle?.state === 'SONG') gold++;
+      if (c.lifecycle?.state === 'SONG') ok++;
     }
     return { long, short, gold, ok, total: long + short };
   }, [rows]);
 
   const shown = useMemo(() => {
     let out = rows;
-    if (tradeableOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.tradeable));
-    if (goldOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.golden));
+    if (tradeableOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.lifecycle?.state === 'SONG'));
+    if (goldOnly) out = out.filter((r) => TFS.some((tf) => r.direction?.[tf]?.golden && r.direction?.[tf]?.lifecycle?.state === 'SONG'));
     return out;
   }, [rows, goldOnly, tradeableOnly]);
 
@@ -123,7 +123,7 @@ export default function LivePage() {
     : goldOnly
       ? 'Không có tín hiệu vàng nào lúc này — và đó là kết quả bình thường, nó vốn phải hiếm.'
       : tradeableOnly
-        ? 'Không kèo nào qua cửa lúc này. Tắt "Qua cửa" để xem thiên hướng của mọi mã — nhưng đó là để theo dõi, không phải để vào tiền.'
+        ? 'Không thẻ nào ĐỦ ĐIỀU KIỆN lúc này. Tắt "Đủ điều kiện" để xem thiên hướng của mọi mã — thiên hướng là để theo dõi, không phải để vào tiền.'
         : 'Chưa có dữ liệu.';
 
   return (
@@ -172,7 +172,7 @@ export default function LivePage() {
               </div>
               <div className="mt-1 flex items-center gap-2 text-[10px] text-muted">
                 <span className={tally.ok > 0 ? 'font-semibold text-emerald-300' : ''}>
-                  {tally.ok} qua cửa
+                  {tally.ok} đủ điều kiện
                 </span>
                 <span aria-hidden>·</span>
                 <span className={tally.gold > 0 ? 'font-semibold text-amber-300' : ''}>
@@ -195,7 +195,7 @@ export default function LivePage() {
         {/* Bộ lọc: pill cuộn ngang được, không bao giờ làm vỡ hàng trên máy hẹp. */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Pill tone="emerald" on={tradeableOnly} onClick={() => setTradeableOnly((v) => !v)}>
-            {tradeableOnly ? '✓ ' : ''}Qua cửa
+            {tradeableOnly ? '✓ ' : ''}Đủ điều kiện
           </Pill>
           <Pill tone="amber" on={goldOnly} onClick={() => setGoldOnly((v) => !v)}>
             ★ Vàng
@@ -280,19 +280,21 @@ export default function LivePage() {
           </summary>
           <div className="space-y-2 border-t border-amber-600/30 px-3 py-2.5 text-2xs leading-relaxed text-amber-100/90">
             <p>
-              Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên <b>cửa chất lượng</b> mới là
-              thứ phải đọc, không phải hướng.
+              Bản điện này <b>luôn ra hướng</b>, không có WAIT — nên <b>trạng thái thẻ</b> mới là
+              thứ phải đọc, không phải hướng. Thiên hướng khung lớn và được-mở-lệnh là hai câu
+              khác nhau: 4H/1D có thể nghiêng SHORT trong khi thẻ vẫn CHỜ GIÁ VÀO.
             </p>
             <p>
-              <b className="text-emerald-300">Qua cửa</b> = mọi vế bằng chứng cùng hướng + hạng ≥ B
-              + TP2 không quá xa + stop đủ rộng để phí không ăn quá 10% của 1R.
-              Backtest 5.661 lệnh: lọc bằng đúng bốn điều này giữ <b>7%</b> số kèo mà nâng avgR
-              0.05 → <b>0.31</b>, PF 1.11 → <b>2.16</b>, sụt giảm tối đa 116.9R → <b>6.3R</b>
-              {' '}(ngoài mẫu 0.39 / PF 2.86). Đổi lại, kèo qua cửa rất hiếm.
+              <b className="text-emerald-300">ĐỦ ĐIỀU KIỆN</b> = nến khung đã đóng · giá chưa xuyên
+              SL · giá đang trong vùng vào · trigger đã kích hoạt · và qua đủ 13 cổng cứng.
+              Mọi thẻ tính lại từ giá live + nến đã đóng ở <i>mỗi lần</i> quét; không cờ nào được
+              giữ lại từ lần quét trước.
             </p>
             <p>
-              Kèo <b>trượt cửa vẫn có hướng</b>, nhưng là thiên hướng để theo dõi, không phải lệnh
-              để vào tiền — mỗi kèo đều ghi rõ nó trượt vì điều kiện nào.
+              <b>CHƯA ĐÓNG NẾN</b> · <b>CHỜ GIÁ VÀO</b> · <b>TRƯỢT ĐIỀU KIỆN</b> ·
+              {' '}<b>TÍN HIỆU HẾT</b> đều là <b>KHÔNG MỞ</b>. Thẻ vẫn ghi hướng để theo dõi, kèm
+              đúng những cổng nó hỏng. Thẻ đã HẾT thì khoá luôn — muốn vào cùng hướng phải là thẻ
+              mới sau một nến đã đóng, với entry/SL/trigger khác.
             </p>
             <p>
               Hạng: <b className="text-amber-300">★ vàng</b> = mọi vế đồng thuận và độ lệch ≥ 40 ·
