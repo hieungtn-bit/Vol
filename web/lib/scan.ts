@@ -369,9 +369,12 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   return {
     symbol,
     ts: Date.now(),
-    price: ticker?.lastPrice ?? last,
-    change24h: ticker?.priceChangePercent ?? 0,
-    quoteVolume24h: ticker?.quoteVolume ?? 0,
+    // Giá in trên màn hình phải là ĐÚNG giá mà cổng đang chấm. Trước đó header
+    // lấy ticker spot còn `evaluate()` lấy mark perp — hai số lệch nhau, và
+    // người đọc không có cách nào biết thẻ đang nói về giá nào.
+    price: lastLive || null,
+    change24h: ticker?.priceChangePercent ?? null,
+    quoteVolume24h: ticker?.quoteVolume ?? null,
     rangePos: pa15.rangePos,
     tfs,
     derivatives: deriv,
