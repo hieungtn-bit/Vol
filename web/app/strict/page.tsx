@@ -115,6 +115,9 @@ export default function Page() {
             <a href="../" className="text-2xs text-sky-300 underline hover:brightness-125">
               ← Về bản điện (Long/Short liên tục, không WAIT)
             </a>
+            <a href="../phan-tich/" className="text-2xs text-sky-300 underline hover:brightness-125">
+              Phân tích sâu BTC·BNB →
+            </a>
             <a href="../vao-tien/" className="text-2xs text-emerald-300 underline hover:brightness-125">
               Bảng vào tiền (chỉ thẻ ĐỦ ĐIỀU KIỆN, kèm khối lượng) →
             </a>

@@ -141,6 +141,12 @@ export default function LivePage() {
               <p className="mono text-[10px] leading-tight text-muted">{clock ?? '—'}</p>
             </div>
             <a
+              href="/phan-tich"
+              className="tap-sm shrink-0 rounded-full border border-sky-500/50 bg-sky-500/15 px-3 text-2xs font-semibold leading-[36px] text-sky-200 active:brightness-125"
+            >
+              BTC·BNB
+            </a>
+            <a
               href="/vao-tien"
               className="tap-sm shrink-0 rounded-full border border-emerald-500/50 bg-emerald-500/15 px-3.5 text-2xs font-semibold leading-[36px] text-emerald-200 active:brightness-125"
             >
