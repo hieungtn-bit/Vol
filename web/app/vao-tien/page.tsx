@@ -378,7 +378,8 @@ export default function VaoTienPage() {
 
         <p className="mt-4 text-center text-2xs text-muted">
           Quét {targets.length} mã · cập nhật {updated ?? '—'} · <a href="/" className="underline">bản điện</a> ·{' '}
-          <a href="/strict" className="underline">bảng kỷ luật</a>
+          <a href="/strict" className="underline">bảng kỷ luật</a> ·{' '}
+          <a href="/phan-tich" className="underline">phân tích BTC·BNB</a>
         </p>
       </main>
     </div>
