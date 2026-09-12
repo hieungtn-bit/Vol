@@ -4,6 +4,7 @@ import { buildDelta, buildDerivatives } from './derivatives';
 import { type HTFContext } from './decide';
 import { rKyVong, type DirectionalCall } from './direct';
 import { apDungH9, evaluate as danhGiaVongDoi, type BarK, type LifecycleInput } from './lifecycle';
+import { pocTuNenVol, readBar, sessionTb, type HFBar } from './hourflow';
 import { decideBoth, prepareTF } from './analyze';
 import { type MarketStructure } from './structure';
 import { buildFlow, type FlowInfo } from './flow';
@@ -182,6 +183,16 @@ export function dungVongDoi(
   const pa = analyzePriceAction(candles);
   const d1 = byTf['1d'].filter((c) => c.closed).slice(-30);
 
+  // ---- Nhịp 1H. MỘT chỗ duy nhất, cả hai đường thẻ cùng đọc. ----
+  const h1 = byTf['1h'] as HFBar[];
+  const h1Closed = h1.filter((b) => b.closed);
+  const { tb } = sessionTb(h1Closed);
+  const h1Cuoi = h1Closed.length ? readBar(h1Closed[h1Closed.length - 1], tb) : null;
+  const h1Mo = h1.find((b) => !b.closed) ?? null;
+  const k4hClosed = byTf['4h'].filter((b) => b.closed);
+  const k4hCuoi = k4hClosed.length
+    ? readBar(k4hClosed[k4hClosed.length - 1] as HFBar, tb) : null;
+
   return {
     symbol: the.symbol, tf, side: the.side,
     entryLow: the.entry[0], entryHigh: the.entry[1],
@@ -205,6 +216,14 @@ export function dungVongDoi(
       ? the.tp2 < Math.min(...d1.map((c) => c.l))
       : the.tp2 > Math.max(...d1.map((c) => c.h))),
     barsSinceIssued: 0,
+
+    hf1hTb: tb > 0 ? tb : null,
+    hf1hLastVsTb: h1Cuoi?.vsTb ?? null,
+    hf1hLastDelta: h1Cuoi?.delta ?? null,
+    hf1hLastPos: h1Cuoi?.closePos ?? null,
+    hf1hEventOpen: h1Mo != null && tb > 0 && h1Mo.v >= 3 * tb,
+    poc1h: pocTuNenVol(h1Closed.slice(-48)),
+    k4hLastPos: k4hCuoi?.closePos ?? null,
   };
 }
 

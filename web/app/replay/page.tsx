@@ -45,6 +45,10 @@ function mk(
 }
 
 const chung = {
+  // Replay không nạp nhịp 1H thật — để trống thì cổng hourflow không bắt, và
+  // đó là đúng: thà không có số còn hơn có số bịa.
+  hf1hTb: null, hf1hLastVsTb: null, hf1hLastDelta: null, hf1hLastPos: null,
+  hf1hEventOpen: false, poc1h: null, k4hLastPos: null,
   symbol: 'ENAUSDT', rr: 1.2, atr1h: 0.0025,
   low24h: 0.13, high24h: 0.16, low4hMaxVol: 0.13, high4hMaxVol: 0.16,
   cum1h: null, rejected1h: true, tp1OutsideVa: false, volRatio: 1.2,

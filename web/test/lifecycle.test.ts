@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { apDungH9, daToiTP, evaluate, resetKhoaHet, tpHitTol, type BarK, type LifecycleInput } from '../lib/lifecycle';
 import { buildFundingHistory } from '../lib/derivatives';
+import { pocTuNenVol, sessionTb, type HFBar } from '../lib/hourflow';
 
 const bar = (o: number, h: number, l: number, c: number, v: number, closed: boolean, t = 0): BarK =>
   ({ t, o, h, l, c, v, closed });
@@ -22,6 +23,8 @@ function co(p: Partial<LifecycleInput>): LifecycleInput {
     cum1h: null, rejected1h: true,
     tp1OutsideVa: false, volRatio: 1.2, opposingLegs: 0,
     tpBreaksUnbackedLevel: false, barsSinceIssued: 1,
+    hf1hTb: null, hf1hLastVsTb: null, hf1hLastDelta: null, hf1hLastPos: null,
+    hf1hEventOpen: false, poc1h: null, k4hLastPos: null,
     ...p,
   };
 }
@@ -522,6 +525,121 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
     expect(v.failedGates).toContain('H12');
   });
 
+  // ==========================================================================
+  // T20–T24 — Hourflow 1H trong máy trạng thái. Vẫn hai đường, vẫn haiDuong().
+  // ==========================================================================
+
+  /** Phiên 1H 11/09 — cùng số liệu với test/hourflow.test.ts. */
+  const hb = (iso: string, o: number, h: number, l: number, c: number, v: number,
+    tbb: number | null = null, closed = true): HFBar =>
+    ({ t: Date.parse(iso), o, h, l, c, v, takerBuyBase: tbb, closed });
+
+  const PHIEN_1H: HFBar[] = [
+    hb('2026-09-11T13:00:00Z', 0.1520, 0.1535, 0.1512, 0.1530, 68.0e6),
+    hb('2026-09-11T14:00:00Z', 0.1530, 0.1544, 0.1525, 0.1538, 71.7e6),
+    hb('2026-09-11T15:00:00Z', 0.1538, 0.1550, 0.1530, 0.1541, 74.2e6),
+    hb('2026-09-11T16:00:00Z', 0.1541, 0.1552, 0.1534, 0.1546, 66.9e6),
+    hb('2026-09-11T17:00:00Z', 0.1546, 0.1560, 0.1540, 0.1552, 80.1e6),
+    hb('2026-09-11T18:00:00Z', 0.1552, 0.1566, 0.1544, 0.1558, 71.7e6),
+    hb('2026-09-11T19:00:00Z', 0.1558, 0.1576, 0.1548, 0.1562, 95.3e6),
+    hb('2026-09-11T20:00:00Z', 0.1562, 0.1566, 0.1505, 0.1520, 182.4e6, 79.0e6),
+    hb('2026-09-11T21:00:00Z', 0.1520, 0.1560, 0.1500, 0.1530, 246.1e6, 105.0e6),
+  ];
+  const TB_1109 = sessionTb(PHIEN_1H, Date.parse('2026-09-11T21:59:00Z')).tb;
+  const POC_1H = pocTuNenVol(PHIEN_1H);
+
+  it('T20 09:00 1H SHORT — cây 1H 08:00 vol 24.8m là vol chết', () => {
+    const vsTb = 24.8e6 / TB_1109;
+    log.push(`T20 vsTb 08:00 = 24.8m / TB ${(TB_1109 / 1e6).toFixed(1)}m = ${vsTb.toFixed(2)}×`);
+    expect(vsTb).toBeLessThan(0.5);
+    const v = haiDuong('T20', {
+      side: 'SHORT', tf: '1h', entryLow: 0.1412, entryHigh: 0.1420, sl: 0.1436,
+      tp1: 0.1380, tp2: 0.1355, triggerText: '1H đóng dưới 0.1420', triggerLevel: 0.1420,
+      rr: 1.30,
+    }, {
+      ...CHO_0900, openK: null, lastClosedK: K1H_0800, rejected1h: true,
+      hf1hTb: TB_1109, hf1hLastVsTb: vsTb, hf1hLastPos: 'tren', k4hLastPos: 'duoi',
+    });
+    expect(v.state).toBe('CAM');
+    expect(v.softFlags).toContain('S5');
+    expect(v.state).not.toBe('SONG');
+    expect(v.khoaHuong).toBeNull();
+    expect(v.reason).toContain('vol chết');
+  });
+
+  it('T21 21:30 4H SHORT — cây 4H 19:00 còn mở, vol ≥ 3× TB 1H', () => {
+    const v = haiDuong('T21', {
+      side: 'SHORT', tf: '4h', entryLow: 0.147, entryHigh: 0.150, sl: 0.15254,
+      tp1: 0.140, tp2: 0.133, triggerText: '4H đóng dưới 0.1470', triggerLevel: 0.147,
+      rr: 1.20,
+    }, {
+      last: 0.1480, ts: Date.parse('2026-09-11T21:30:00Z'),
+      atr1h: 0.0025, low24h: 0.1300, high24h: 0.1600,
+      low4hMaxVol: 0.1300, high4hMaxVol: 0.1600,
+      openK: bar(0.1558, 0.15764, 0.1500, 0.1480, 500e6, false),
+      lastClosedK: bar(0.1500, 0.1560, 0.1490, 0.1558, 180e6, true),
+      hf1hTb: TB_1109, hf1hLastVsTb: 246.1e6 / TB_1109, hf1hLastPos: 'giua',
+    });
+    expect(500e6).toBeGreaterThanOrEqual(3 * TB_1109);
+    expect(v.failedGates).toContain('H8');
+    expect(v.state).not.toBe('SONG');
+  });
+
+  it('T22 09:00 15m — LONG ngược cây 4H đã đóng nửa dưới thì H14, SHORT thì không', () => {
+    // 4H 03:00 đóng c0.14036 trong dải 0.13793–0.14354 → (c−l)/(h−l) = 0.43 …
+    // nhưng thẻ đọc `k4hLastPos` do scan.ts tính, ở đây ép 'duoi' cho rõ ý định.
+    const vLong = haiDuong('T22 LONG ', {
+      side: 'LONG', tf: '15m', entryLow: 0.1412, entryHigh: 0.1418, sl: 0.1400,
+      tp1: 0.1450, tp2: 0.1480, triggerText: '15m đóng trên 0.1418', triggerLevel: 0.1418,
+      rr: 1.20,
+    }, {
+      ...CHO_0900, openK: null, lastClosedK: K15_0845, rejected1h: true,
+      hf1hTb: TB_1109, hf1hLastVsTb: 1.1, k4hLastPos: 'duoi',
+    });
+    expect(vLong.failedGates).toContain('H14');
+    expect(vLong.state).not.toBe('SONG');
+
+    const vShort = haiDuong('T22 SHORT', {
+      side: 'SHORT', tf: '15m', entryLow: 0.1412, entryHigh: 0.1418, sl: 0.1428,
+      tp1: 0.1380, tp2: 0.1360, triggerText: '15m đóng dưới 0.1418', triggerLevel: 0.1418,
+      rr: 1.20,
+    }, {
+      ...CHO_0900, openK: null, lastClosedK: K15_0845, rejected1h: true,
+      hf1hTb: TB_1109, hf1hLastVsTb: 1.1, k4hLastPos: 'duoi',
+    });
+    expect(vShort.failedGates).not.toContain('H14');
+  });
+
+  it('T23 T0/T13 không đổi sau khi thêm hourflow', () => {
+    const v0 = evaluate(co({ ...THE_2234, ...CHO_2234 }));
+    resetKhoaHet();
+    const v13 = evaluate(co({ ...strictSangThe(recTuThe(THE_2234))!, tf: THE_2234.tf, ...CHO_2234 }));
+    expect(v0.id).toBe('ENAUSDT-4h-SHORT-etb5vc');
+    expect(v13.id).toBe(v0.id);
+    expect([...v0.failedGates].sort()).toEqual(['H1', 'H10', 'H2', 'H3', 'H4', 'H5', 'H6', 'H8']);
+    expect([...v13.failedGates].sort()).toEqual([...v0.failedGates].sort());
+  });
+
+  it('T24 H6 dựng từ pocTuNenVol khi fixture không nhét cum1h tay', () => {
+    expect(POC_1H).not.toBeNull();
+    expect(POC_1H!.low).toBeLessThan(0.15254);
+    expect(POC_1H!.high).toBeGreaterThan(0.15254);
+    const v = haiDuong('T24', {
+      side: 'SHORT', tf: '4h', entryLow: 0.147, entryHigh: 0.150, sl: 0.15254,
+      tp1: 0.140, tp2: 0.133, triggerText: '4H đóng dưới 0.1470', triggerLevel: 0.147,
+      rr: 1.20,
+    }, {
+      last: 0.1480, ts: Date.parse('2026-09-11T22:00:00Z'),
+      atr1h: 0.0025, low24h: 0.1300, high24h: 0.1600,
+      low4hMaxVol: 0.1300, high4hMaxVol: 0.1600,
+      openK: null, lastClosedK: bar(0.1520, 0.1525, 0.1470, 0.1475, 180e6, true),
+      cum1h: null,            // KHÔNG nhét tay — để H6 tự rơi về dải vol 1H
+      poc1h: POC_1H, hf1hTb: TB_1109, hf1hLastVsTb: 1.1,
+    });
+    expect(v.failedGates).toContain('H6');
+    expect(v.state).not.toBe('SONG');
+  });
+
   it('H9 hạ hạng A khi khung khác cùng hướng đang TRƯỢT', () => {
     const song = evaluate(co({
       tf: '1h', last: 0.1480, entryLow: 0.1470, entryHigh: 0.1490, sl: 0.1520,
@@ -540,6 +658,6 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
   it('in log T0–T9', () => {
     // eslint-disable-next-line no-console
     console.log('\n' + log.join('\n') + '\n');
-    expect(log.length).toBeGreaterThanOrEqual(23);
+    expect(log.length).toBeGreaterThanOrEqual(33);
   });
 });

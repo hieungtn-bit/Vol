@@ -307,7 +307,10 @@ export function buildDerivatives(
     perpDelta = {
       quality: 'REAL', venue: null, lastBar: perBar[perBar.length - 1], cvd: acc,
       cvdSeries: series, deltaAtPrice: [], divergence: 'none',
-      note: 'Taker perp (Binance USDT-M).',
+      // Số này đến từ futures/data/takerlongshortRatio — TỶ LỆ mua/bán của chợ
+      // perp, KHÔNG phải field 9 của kline. Repo không gọi kline USD-M ở đâu
+      // cả, nên mọi delta tính từ field 9 đều là SPOT và phải ghi là spot.
+      note: 'Taker perp (Binance USDT-M, từ tỷ lệ taker — không phải delta kline).',
     };
   } else {
     perpDelta = {
