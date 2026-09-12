@@ -3,7 +3,10 @@
  * CI đỏ nếu bất kỳ thẻ nào trong số này quay lại trạng thái cũ.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { apDungH9, daToiTP, evaluate, resetKhoaHet, tpHitTol, type BarK, type LifecycleInput } from '../lib/lifecycle';
+import {
+  apDungH9, daToiTP, evaluate, resetKhoaHet, setKhoaHetStore, taoKhoaHetRam,
+  tpHitTol, type BarK, type LifecycleInput,
+} from '../lib/lifecycle';
 import { buildFundingHistory } from '../lib/derivatives';
 
 const bar = (o: number, h: number, l: number, c: number, v: number, closed: boolean, t = 0): BarK =>
@@ -21,7 +24,7 @@ function co(p: Partial<LifecycleInput>): LifecycleInput {
     low4hMaxVol: 0.1300, high4hMaxVol: 0.1600,
     cum1h: null, rejected1h: true,
     tp1OutsideVa: false, volRatio: 1.2, opposingLegs: 0,
-    tpBreaksUnbackedLevel: false, barsSinceIssued: 1,
+    tpBreaksUnbackedLevel: false, barsSinceIssued: 1, nenGanDay: [],
     ...p,
   };
 }
@@ -522,6 +525,83 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
     expect(v.failedGates).toContain('H12');
   });
 
+  // ==========================================================================
+  // T27 — HẾT phải sống qua COLD START mà KHÔNG cần cất gì.
+  //
+  // Trên Vercel, RAM chết theo lambda và đĩa cũng ephemeral, nên "ghi ra đĩa"
+  // không cứu được gì ở đó. Thứ cứu được là: cây đã giết thẻ vẫn nằm nguyên
+  // trong chuỗi nến. Test này chạy với store RỖNG hoàn toàn.
+  // ==========================================================================
+  it('T27 tiến trình mới, khoá RỖNG — vẫn HẾT nhờ đọc lại nến', () => {
+    // Cây 4H 19:00 có cao 0.15764, vượt SL 0.15254 → thẻ chết ở cây đó.
+    const cayGietThe = bar(0.1558, 0.15764, 0.1500, 0.1520, 7.3e8, true, 
+      Date.parse('2026-09-11T19:00:00Z'));
+    const nen = [
+      bar(0.1500, 0.1512, 0.1495, 0.1508, 2e8, true, Date.parse('2026-09-11T11:00:00Z')),
+      bar(0.1508, 0.1520, 0.1502, 0.1558, 2e8, true, Date.parse('2026-09-11T15:00:00Z')),
+      cayGietThe,
+      bar(0.1520, 0.1524, 0.1470, 0.1480, 3e8, true, Date.parse('2026-09-11T23:00:00Z')),
+    ];
+
+    // Tiến trình MỚI: store rỗng, chưa từng thấy thẻ này.
+    setKhoaHetStore(taoKhoaHetRam());
+    const i = co({
+      ...THE_2234,
+      // Giá hiện tại đã quay về trong vùng và KHÔNG vi phạm gì: nếu chỉ nhìn
+      // khoảnh khắc này thì thẻ trông sống.
+      last: 0.1485, ts: Date.parse('2026-09-12T00:10:00Z'),
+      openK: null,
+      lastClosedK: bar(0.1520, 0.1524, 0.1470, 0.1480, 3e8, true),
+      nenGanDay: nen,
+    });
+    const v = evaluate(i);
+    ghi('T27', i, v);
+
+    expect(v.state).toBe('HET');
+    expect(v.id).toBe('ENAUSDT-4h-SHORT-etb5vc');
+    expect(v.reason).toContain('09-11 19:00');
+    expect(v.reason).toContain('0.15764');
+    expect(v.slHitTs).toBe(cayGietThe.t);
+    resetKhoaHet();
+  });
+
+  it('T27b không có cây nào xuyên SL thì KHÔNG tự dựng HẾT ra', () => {
+    setKhoaHetStore(taoKhoaHetRam());
+    const i = co({
+      ...THE_2234,
+      last: 0.1485, ts: Date.parse('2026-09-12T00:10:00Z'),
+      openK: null,
+      // Đóng dưới 0.147 để trigger kích hoạt — cô lập đúng phần suy-từ-nến.
+      lastClosedK: bar(0.1520, 0.1524, 0.1450, 0.1465, 3e8, true),
+      // Mọi cây đều nằm dưới SL 0.15254 và trên TP1 0.140.
+      nenGanDay: [
+        bar(0.1500, 0.1512, 0.1470, 0.1480, 2e8, true, Date.parse('2026-09-11T19:00:00Z')),
+        bar(0.1480, 0.1520, 0.1450, 0.1465, 2e8, true, Date.parse('2026-09-11T23:00:00Z')),
+      ],
+    });
+    const v = evaluate(i);
+    ghi('T27b', i, v);
+    expect(v.state).not.toBe('HET');
+    resetKhoaHet();
+  });
+
+  it('T27c cây xuyên SL NGOÀI cửa sổ sống của thẻ thì không tính', () => {
+    setKhoaHetStore(taoKhoaHetRam());
+    const qua = Array.from({ length: 9 }, (_, n) =>
+      bar(0.1480, 0.1490, 0.1450, 0.1465, 2e8, true, Date.parse('2026-09-11T23:00:00Z') + n * 3600_000));
+    const i = co({
+      ...THE_2234,
+      last: 0.1485, ts: Date.parse('2026-09-12T09:00:00Z'),
+      openK: null, lastClosedK: qua[qua.length - 1],
+      // Cây xuyên SL nằm ở đầu chuỗi, cách xa hơn hạn sống 4H (4 cây).
+      nenGanDay: [bar(0.1558, 0.15764, 0.1500, 0.1520, 7e8, true, Date.parse('2026-09-11T19:00:00Z')), ...qua],
+    });
+    const v = evaluate(i);
+    ghi('T27c', i, v);
+    expect(v.state).not.toBe('HET');
+    resetKhoaHet();
+  });
+
   it('H9 hạ hạng A khi khung khác cùng hướng đang TRƯỢT', () => {
     const song = evaluate(co({
       tf: '1h', last: 0.1480, entryLow: 0.1470, entryHigh: 0.1490, sl: 0.1520,
@@ -540,6 +620,6 @@ describe('vòng đời thẻ — ENAUSDT 11–12/09/2026', () => {
   it('in log T0–T9', () => {
     // eslint-disable-next-line no-console
     console.log('\n' + log.join('\n') + '\n');
-    expect(log.length).toBeGreaterThanOrEqual(23);
+    expect(log.length).toBeGreaterThanOrEqual(26);
   });
 });

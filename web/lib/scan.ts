@@ -209,6 +209,9 @@ export function dungVongDoi(
       ? the.tp2 < Math.min(...d1.map((c) => c.l))
       : the.tp2 > Math.max(...d1.map((c) => c.h))),
     barsSinceIssued: 0,
+    // Cửa sổ nến đã đóng để suy lại HẾT sau cold start. Lấy dư vài cây so với
+    // hạn sống của thẻ; `evaluate()` tự cắt đúng cửa sổ của khung đó.
+    nenGanDay: closedK.slice(-10).map(toBar),
   };
 }
 
