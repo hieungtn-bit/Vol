@@ -165,11 +165,14 @@ export default function SymbolDrawer({ scan, onClose }: { scan: SymbolScan; onCl
             <div className="flex items-center gap-2">
               <h2 className="mono text-lg font-semibold">{scan.symbol}</h2>
               <span className="mono text-sm">{fmtPrice(scan.price, bs)}</span>
-              <span className={`mono text-xs ${scan.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <span className={`mono text-xs ${(scan.change24h ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {fmtPct(scan.change24h)}
               </span>
             </div>
-            <div className="text-2xs text-muted">Vol 24h {fmtUsd(scan.quoteVolume24h)} · Range pos {scan.rangePos.toFixed(0)}%</div>
+            <div className="text-2xs text-muted">
+              Vol 24h {fmtUsd(scan.quoteVolume24h)} · Range pos{' '}
+              {scan.rangePos == null ? '—' : `${scan.rangePos.toFixed(0)}%`}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <CopyBtn text={allPlans} />

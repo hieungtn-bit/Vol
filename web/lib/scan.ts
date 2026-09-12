@@ -1,6 +1,7 @@
 import { ictSessionStart } from './format';
 import { analyzePriceAction, atr } from './priceAction';
 import { buildDelta, buildDerivatives } from './derivatives';
+import { blindDerivatives } from './backtest';
 import { type HTFContext } from './decide';
 import { rKyVong, type DirectionalCall } from './direct';
 import { apDungH9, evaluate as danhGiaVongDoi, type BarK, type LifecycleInput } from './lifecycle';
@@ -214,17 +215,27 @@ export function dungVongDoi(
 export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const errors: string[] = [];
 
+  const nen = async (tf: TF) => fetchKlines(symbol, tf, LIMIT[tf])
+    .catch((e) => { errors.push(`nến ${tf}: ${(e as Error).message}`); return [] as Candle[]; });
+
   const [k15, k1h, k4h, k1d, ticker] = await Promise.all([
-    fetchKlines(symbol, '15m', LIMIT['15m']).catch((e) => { errors.push(`klines 15m: ${e.message}`); return [] as Candle[]; }),
-    fetchKlines(symbol, '1h', LIMIT['1h']).catch((e) => { errors.push(`klines 1h: ${e.message}`); return [] as Candle[]; }),
-    fetchKlines(symbol, '4h', LIMIT['4h']).catch((e) => { errors.push(`klines 4h: ${e.message}`); return [] as Candle[]; }),
-    fetchKlines(symbol, '1d', LIMIT['1d']).catch((e) => { errors.push(`klines 1d: ${e.message}`); return [] as Candle[]; }),
-    fetchTicker(symbol).catch(() => null),
+    nen('15m'), nen('1h'), nen('4h'), nen('1d'),
+    fetchTicker(symbol).catch((e) => {
+      errors.push(`ticker 24h: ${(e as Error).message}`);
+      return null;
+    }),
   ]);
 
   const byTf: Record<TF, Candle[]> = { '15m': k15, '1h': k1h, '4h': k4h, '1d': k1d };
   const closed15 = k15.filter((c) => c.closed);
   const last = closed15.length ? closed15[closed15.length - 1].c : (ticker?.lastPrice ?? 0);
+
+  // KHÔNG có nến nào và KHÔNG có ticker = không biết gì về mã này. Trả thẳng một
+  // bản ghi rỗng có `price: null` thay vì `price: 0` kèm bốn thẻ WAIT: số 0 hiện
+  // lên màn hình trông y như một cái giá, còn WAIT trông y như một kết luận.
+  if (!closed15.length && !ticker) {
+    return rong(symbol, errors.length ? errors : ['không lấy được dữ liệu nào']);
+  }
 
   // Δ giá 1h để đọc OI (OI ↑/↓ đi cùng giá ↑/↓ mới có nghĩa)
   const c1h = k1h.filter((c) => c.closed);
@@ -352,6 +363,26 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
       d3Poc: composite.d3?.poc ?? null,
       dualRead: composite.dualRead,
     },
+    errors,
+  };
+}
+
+/** Không có dữ liệu thì nói KHÔNG CÓ, đừng dựng một bản phân tích rỗng. */
+function rong(symbol: string, errors: string[]): SymbolScanLive {
+  const tfs = {} as Record<TF, Recommendation>;
+  const direction = {} as Record<TF, DirectionalCall | null>;
+  const structure = {} as Record<TF, MarketStructure | null>;
+  for (const tf of TFS) {
+    tfs[tf] = emptyRec(symbol, tf, 0, 'không có dữ liệu');
+    direction[tf] = null;
+    structure[tf] = null;
+  }
+  return {
+    symbol, ts: Date.now(),
+    price: null, change24h: null, quoteVolume24h: null, rangePos: null,
+    tfs, derivatives: blindDerivatives(), spotTakerDelta: blindDerivatives().perpTaker,
+    direction, structure, flow: null,
+    composite: { sessionPoc: null, h24Poc: null, d3Poc: null, dualRead: null },
     errors,
   };
 }

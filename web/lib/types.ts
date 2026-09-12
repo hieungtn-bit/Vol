@@ -290,10 +290,14 @@ export interface Recommendation {
 export interface SymbolScan {
   symbol: string;
   ts: number;
-  price: number;
-  change24h: number;
-  quoteVolume24h: number;
-  rangePos: number;
+  /**
+   * null = KHÔNG lấy được dữ liệu cho mã này. Trước đây chỗ này là `0`, và số 0
+   * hiện lên màn hình trông y hệt một cái giá thật.
+   */
+  price: number | null;
+  change24h: number | null;
+  quoteVolume24h: number | null;
+  rangePos: number | null;
   tfs: Record<TF, Recommendation>;
   derivatives: Derivatives;
   spotTakerDelta: DeltaInfo;

@@ -247,12 +247,14 @@ function Row({ s, onOpen }: { s: SymbolScan; onOpen: () => void }) {
         <button onClick={onOpen} className="mono font-semibold text-sky-300 hover:underline">{s.symbol}</button>
       </td>
       <td className="mono text-right">{fmtPrice(s.price, bs)}</td>
-      <td className={`mono text-right ${s.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtPct(s.change24h)}</td>
+      <td className={`mono text-right ${(s.change24h ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtPct(s.change24h)}</td>
       <td className="mono text-right text-muted">{fmtUsd(s.quoteVolume24h)}</td>
       <td className="mono text-right">
-        <span className={s.rangePos > 80 ? 'text-red-300' : s.rangePos < 20 ? 'text-emerald-300' : ''}>
-          {s.rangePos.toFixed(0)}%
-        </span>
+        {s.rangePos == null ? <span className="text-muted">—</span> : (
+          <span className={s.rangePos > 80 ? 'text-red-300' : s.rangePos < 20 ? 'text-emerald-300' : ''}>
+            {s.rangePos.toFixed(0)}%
+          </span>
+        )}
       </td>
       {TFS.map((tf) => (
         <td key={tf} className="w-16"><BiasBadge r={s.tfs[tf]} onClick={onOpen} /></td>
