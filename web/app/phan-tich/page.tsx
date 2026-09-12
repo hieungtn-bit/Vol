@@ -30,7 +30,9 @@ type Ma = {
 };
 type The = { side: string; net: number; entry: [number, number]; sl: number; tp1: number;
   lifecycle: { state: string; banner: string; reason: string; grade: string; failedGates: string[] } | null };
+type CanhBao = { muc: 'khong' | 'cao' | 'chua-hieu-chuan'; xa: number | null; nguong: number | null; cau: string };
 type Quet = { symbol: string; price: number | null; change24h: number | null;
+  canhBaoSom: CanhBao | null;
   direction: Record<TF, The | null>; derivatives: { funding: { rate: number | null; history: { text: string } | null };
   oi: { read: string; chg24h: number | null } } };
 
@@ -139,6 +141,24 @@ export default function Page() {
                 {' · '}biến động giờ <b className="text-slate-300">{(m.trangThai.bienDong * 100).toFixed(2)}%</b>
                 {' · '}so với TB240 <b className="text-slate-300">{pc(m.trangThai.soVoiTB, 2)}</b>
                 {' — '}mẫu {m.tuNgay} → {m.denNgay}, {m.soNen.toLocaleString('vi')} nến 1H
+              </p>
+            )}
+
+            {/* CẢNH BÁO ĐỘ LỚN — đặt trước bảng phân phối, vì nó là thứ đổi cách
+                đọc mọi con số bên dưới. */}
+            {q?.canhBaoSom && (
+              <p className={`mb-2 rounded-md border px-2 py-1.5 text-2xs leading-snug ${
+                q.canhBaoSom.muc === 'cao'
+                  ? 'border-amber-400/50 bg-amber-400/10 text-amber-100'
+                  : q.canhBaoSom.muc === 'khong'
+                    ? 'border-line bg-panel2 text-slate-400'
+                    : 'border-slate-500/40 bg-slate-500/10 text-slate-400'}`}>
+                <b>
+                  {q.canhBaoSom.muc === 'cao' ? '⚠ CẢNH BÁO ĐỘ LỚN — sắp có cú mạnh'
+                    : q.canhBaoSom.muc === 'khong' ? 'Không có cảnh báo độ lớn'
+                      : 'Chưa hiệu chuẩn cảnh báo'}
+                </b>{' '}
+                {q.canhBaoSom.cau}
               </p>
             )}
 

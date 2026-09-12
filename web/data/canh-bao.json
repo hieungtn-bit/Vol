@@ -1,0 +1,50 @@
+{
+ "taoLuc": 1789251356930,
+ "gio": 24,
+ "nguongSuKien": 0.09820359231881991,
+ "moTaSuKien": "dịch chuyển lớn nhất (cả hai phía) trong 24h vượt 9.82%",
+ "ma": {
+  "BTCUSDT": {
+   "nguong": 0.07831560110342192,
+   "nenNgoaiMau": 0.008762322015334063,
+   "pNgoaiMau": 0.11764705882352941,
+   "gapNen": 13.426470588235293,
+   "nNgoaiMau": 34
+  },
+  "ETHUSDT": {
+   "nguong": 0.09136436883426614,
+   "nenNgoaiMau": 0.047097480832420595,
+   "pNgoaiMau": 0.18181818181818182,
+   "gapNen": 3.8604651162790695,
+   "nNgoaiMau": 77
+  },
+  "BNBUSDT": {
+   "nguong": 0.07877890850100377,
+   "nenNgoaiMau": 0.025191675794085433,
+   "pNgoaiMau": 0.13846153846153847,
+   "gapNen": 5.496321070234114,
+   "nNgoaiMau": 65
+  },
+  "SOLUSDT": {
+   "nguong": 0.13327752564975573,
+   "nenNgoaiMau": 0.06790799561883899,
+   "pNgoaiMau": 0.2647058823529412,
+   "gapNen": 3.8980075901328273,
+   "nNgoaiMau": 34
+  },
+  "XRPUSDT": {
+   "nguong": 0.07970445074161145,
+   "nenNgoaiMau": 0.09090909090909091,
+   "pNgoaiMau": 0.3492063492063492,
+   "gapNen": 3.841269841269841,
+   "nNgoaiMau": 126
+  },
+  "ENAUSDT": {
+   "nguong": 0.18243031209505606,
+   "nenNgoaiMau": 0.19775280898876405,
+   "pNgoaiMau": 0.6,
+   "gapNen": 3.034090909090909,
+   "nNgoaiMau": 20
+  }
+ }
+}
