@@ -10,7 +10,6 @@
  * Hàm này thuần: vào là sự thật quan sát được, ra là trạng thái. Không fetch,
  * không đọc cache, không nhìn trạng thái lần quét trước (trừ khoá HET).
  */
-import { NGUONG_VOL_CHET as VOL_CHET } from './hourflow';
 import type { TF } from './types';
 
 export type CardState = 'CHO_NEN' | 'CHO_GIA' | 'SONG' | 'HET' | 'CAM';
@@ -85,20 +84,6 @@ export interface LifecycleInput {
   /** Số nến khung K đã trôi qua từ lúc thẻ ra đời. */
   barsSinceIssued: number;
 
-  // ---- Hourflow 1H (lib/hourflow.ts). Tất cả tính từ nến 1H ĐÃ ĐÓNG. ----
-  /** TB volume 1H của phiên, đã loại cây max bất thường. */
-  hf1hTb: number | null;
-  /** vol cây 1H đóng gần nhất / TB phiên. */
-  hf1hLastVsTb: number | null;
-  /** Delta taker SPOT của cây 1H đóng gần nhất (field 9 kline spot). */
-  hf1hLastDelta: number | null;
-  hf1hLastPos: 'tren' | 'giua' | 'duoi' | null;
-  /** Cây 1H ĐANG MỞ đã ≥ 3× TB phiên. */
-  hf1hEventOpen: boolean;
-  /** Dải vol 1H lớn nhất, dùng làm POC dự phòng cho H6 khi cum1h trống. */
-  poc1h: { low: number; high: number; bars: number[] } | null;
-  /** Chỗ đóng của cây 4H ĐÃ ĐÓNG gần nhất — H14 đọc số này. */
-  k4hLastPos: 'tren' | 'giua' | 'duoi' | null;
 }
 
 export interface LifecycleVerdict {
@@ -284,33 +269,18 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
   const rr = i.rr;
   if (rr == null || rr < 0.5) failed.push('H5');
 
-  // H6 — SL không được nằm GIỮA cụm vol 2–3 nến 1H lớn nhất đã đóng. Thiếu cụm
-  // dựng sẵn thì rơi về dải vol 1H (pocTuNenVol) — không có cụm KHÔNG có nghĩa
-  // là không có túi stop.
-  const cum = i.cum1h ?? i.poc1h;
-  if (cum && i.sl > cum.low && i.sl < cum.high) failed.push('H6');
+  // H6 — SL không được nằm GIỮA cụm vol 2–3 nến 1H lớn nhất đã đóng.
+  if (i.cum1h && i.sl > i.cum1h.low && i.sl < i.cum1h.high) failed.push('H6');
 
   // H7 — TP1 ngoài VA và quãng TP1–entry quá ngắn.
   if (i.tp1OutsideVa && risk > 0 && Math.abs(i.tp1 - (isShort ? entryLo : entryHi)) < 0.6 * risk) {
     failed.push('H7');
   }
 
-  // H8 — cấm fade cây expansion khung K khi cây đó CHƯA ĐÓNG. Hai cách nhận
-  // diện, nối bằng HOẶC (cách cũ giữ nguyên nghĩa, cách mới chỉ thêm vào):
-  //   (cũ) vol ≥ 3× cây K liền trước VÀ xuyên cả hai cực của nó;
-  //   (mới) vol cây đang mở ≥ 3× TB 1H phiên.
-  //
-  // LƯU Ý về cách (mới) trên khung > 1H: nó so một cây nhiều giờ với trung bình
-  // MỘT giờ, nên cây 4H bình thường đã ~4× TB và điều kiện này bắt rất dễ. Chỗ
-  // đó không đổi trạng thái — H1 vốn đã cấm SONG suốt lúc cây còn mở — nhưng
-  // phải biết rằng trên 4H/1D nhãn H8 nói "cây đang chạy to", không nói "bất
-  // thường so với chính khung đó".
-  const expansionCu = i.openK != null && i.lastClosedK != null
+  // H8 — cây K expansion (vol ≥ 3× cây trước VÀ xuyên hai cực) chưa đóng → cấm fade.
+  const expansion = i.openK != null && i.lastClosedK != null
     && i.lastClosedK.v > 0 && i.openK.v >= 3 * i.lastClosedK.v
     && i.openK.h >= i.lastClosedK.h && i.openK.l <= i.lastClosedK.l;
-  const expansionTb = i.openK != null && i.hf1hTb != null && i.hf1hTb > 0
-    && i.openK.v >= 3 * i.hf1hTb;
-  const expansion = expansionCu || expansionTb;
   if (expansion && nenConMo) failed.push('H8');
 
   // H11 — cấm SHORT sát đáy 24h / đáy cây 4H vol lớn nhất. LONG đối xứng.
@@ -332,12 +302,6 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
   // H13 — ngày không được mở lệnh; và cấm TP xuyên mức không có cụm vol đỡ.
   if (i.tf === '1d' || i.tpBreaksUnbackedLevel) failed.push('H13');
 
-  // H14 — thẻ 15m không được đi NGƯỢC cây 4H ĐÃ ĐÓNG gần nhất. Cây 4H đang mở
-  // không tính: bấc cây đang chạy chưa phải chấp nhận.
-  if (i.tf === '15m' && i.k4hLastPos
-      && (isShort ? i.k4hLastPos === 'tren' : i.k4hLastPos === 'duoi')) {
-    failed.push('H14');
-  }
 
   // =========================================================================
   // CỔNG MỀM — chỉ trừ hạng, không chặn
@@ -360,12 +324,6 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
   // S4 — volume mỏng.
   if (i.volRatio != null && i.volRatio < 0.6) soft.push('S4');
 
-  // S5 — vol 1H chết. Khung 15m/1h vào lệnh lúc cây 1H vừa đóng dưới nửa TB
-  // phiên là vào lúc không ai giao dịch: chặn SONG như S2, không khoá hướng.
-  // 4H không dùng S5 — ở đó H1/CHO_GIA đã giữ vai trò đó.
-  const volChet = (i.tf === '15m' || i.tf === '1h')
-    && i.hf1hLastVsTb != null && i.hf1hLastVsTb < VOL_CHET;
-  if (volChet) soft.push('S5');
 
   // =========================================================================
   // TRẠNG THÁI. Thứ tự: HET > CAM > CHO_NEN > CHO_GIA > SONG.
@@ -415,9 +373,6 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
   } else if (failed.includes('H4')) {
     state = 'CHO_GIA';
     reason = `trigger chưa kích hoạt: ${i.triggerText}`;
-  } else if (volChet) {
-    state = 'CAM';
-    reason = `vol 1H đóng ${i.hf1hLastVsTb!.toFixed(2)}× TB phiên — vol chết, không khoá hướng`;
   } else if (soft.includes('S2')) {
     // S2 — nến khung thẻ ĐÓNG ngược hướng thẻ (SHORT mà đóng nửa trên / đúng cao
     // cây). Không được khoá hướng và không được SONG: hạ CAM, chờ một nến đóng
@@ -441,8 +396,7 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
     grade = 'C';
   }
 
-  const noiDuocHuong = NOI_DUOC_HUONG.includes(state)
-    && !soft.includes('S2') && !soft.includes('S5');
+  const noiDuocHuong = NOI_DUOC_HUONG.includes(state) && !soft.includes('S2');
   return {
     id, state, banner: BANNER[state], reason,
     failedGates: failed, softFlags: soft, grade, slHitTs,

@@ -4,12 +4,11 @@ import { buildDelta, buildDerivatives } from './derivatives';
 import { type HTFContext } from './decide';
 import { rKyVong, type DirectionalCall } from './direct';
 import { apDungH9, evaluate as danhGiaVongDoi, type BarK, type LifecycleInput } from './lifecycle';
-import { pocTuNenVol, readBar, sessionTb, type HFBar } from './hourflow';
 import { decideBoth, prepareTF } from './analyze';
 import { type MarketStructure } from './structure';
 import { buildFlow, type FlowInfo } from './flow';
 import {
-  fetchBinancePerp, fetchKlines, fetchKlinesPerp, fetchOkx, fetchPerpPositioning, fetchPerpTakerRatio,
+  fetchBinancePerp, fetchKlines, fetchOkx, fetchPerpPositioning, fetchPerpTakerRatio,
   fetchTicker, SOURCES, TF_MS, venueState,
 } from './sources';
 import { computeVolumeProfile } from './volumeProfile';
@@ -186,16 +185,6 @@ export function dungVongDoi(
   const pa = analyzePriceAction(candles);
   const d1 = byTf['1d'].filter((c) => c.closed).slice(-30);
 
-  // ---- Nhịp 1H. MỘT chỗ duy nhất, cả hai đường thẻ cùng đọc. ----
-  const h1 = byTf['1h'] as HFBar[];
-  const h1Closed = h1.filter((b) => b.closed);
-  const { tb } = sessionTb(h1Closed);
-  const h1Cuoi = h1Closed.length ? readBar(h1Closed[h1Closed.length - 1], tb) : null;
-  const h1Mo = h1.find((b) => !b.closed) ?? null;
-  const k4hClosed = byTf['4h'].filter((b) => b.closed);
-  const k4hCuoi = k4hClosed.length
-    ? readBar(k4hClosed[k4hClosed.length - 1] as HFBar, tb) : null;
-
   return {
     symbol: the.symbol, tf, side: the.side,
     entryLow: the.entry[0], entryHigh: the.entry[1],
@@ -219,38 +208,18 @@ export function dungVongDoi(
       ? the.tp2 < Math.min(...d1.map((c) => c.l))
       : the.tp2 > Math.max(...d1.map((c) => c.h))),
     barsSinceIssued: 0,
-
-    hf1hTb: tb > 0 ? tb : null,
-    hf1hLastVsTb: h1Cuoi?.vsTb ?? null,
-    hf1hLastDelta: h1Cuoi?.delta ?? null,
-    hf1hLastPos: h1Cuoi?.closePos ?? null,
-    hf1hEventOpen: h1Mo != null && tb > 0 && h1Mo.v >= 3 * tb,
-    poc1h: pocTuNenVol(h1Closed.slice(-48)),
-    k4hLastPos: k4hCuoi?.closePos ?? null,
   };
 }
 
 export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const errors: string[] = [];
 
-  // NẾN PERP cho mọi phân tích: người dùng vào lệnh trên perp, nên value area,
-  // H8, H11 và giá đều phải đọc trên sổ perp. Nến SPOT vẫn tải riêng — nhưng chỉ
-  // để dựng taker delta spot, và không bao giờ đi vào `dungVongDoi`.
-  const napPerp = async (tf: TF) => {
-    try {
-      const r = await fetchKlinesPerp(symbol, tf, LIMIT[tf]);
-      if (r.loi) errors.push(r.loi);
-      return r.candles;
-    } catch (e) {
-      errors.push(`klines perp ${tf}: ${(e as Error).message}`);
-      return [] as Candle[];
-    }
-  };
-
-  const [k15, k1h, k4h, k1d, ticker, k15spot] = await Promise.all([
-    napPerp('15m'), napPerp('1h'), napPerp('4h'), napPerp('1d'),
+  const [k15, k1h, k4h, k1d, ticker] = await Promise.all([
+    fetchKlines(symbol, '15m', LIMIT['15m']).catch((e) => { errors.push(`klines 15m: ${e.message}`); return [] as Candle[]; }),
+    fetchKlines(symbol, '1h', LIMIT['1h']).catch((e) => { errors.push(`klines 1h: ${e.message}`); return [] as Candle[]; }),
+    fetchKlines(symbol, '4h', LIMIT['4h']).catch((e) => { errors.push(`klines 4h: ${e.message}`); return [] as Candle[]; }),
+    fetchKlines(symbol, '1d', LIMIT['1d']).catch((e) => { errors.push(`klines 1d: ${e.message}`); return [] as Candle[]; }),
     fetchTicker(symbol).catch(() => null),
-    fetchKlines(symbol, '15m', LIMIT['15m']).catch(() => [] as Candle[]),
   ]);
 
   const byTf: Record<TF, Candle[]> = { '15m': k15, '1h': k1h, '4h': k4h, '1d': k1d };
@@ -282,9 +251,7 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   const atr15 = atr(closed15);
   const composite = buildComposite(k15, last, atr15);
   const vp15Full = computeVolumeProfile(closed15, { mode: 'close', atr: atr15 });
-  // Delta taker SPOT — dựng từ NẾN SPOT. Field 9 của kline perp là taker perp,
-  // gắn nhãn 'binance-spot' lên nó là nói sai chợ.
-  const spotDelta = buildDelta(k15spot.length ? k15spot : k15, vp15Full, 'binance-spot');
+  const spotDelta = buildDelta(k15, vp15Full, 'binance-spot');
 
   // Tính từ TF LỚN xuống nhỏ để mỗi TF có context cha, nhưng bias vẫn tính độc lập.
   const tfs = {} as Record<TF, Recommendation>;
@@ -333,16 +300,12 @@ export async function scanSymbol(symbol: string): Promise<SymbolScanLive> {
   }
 
   // ---- VÒNG ĐỜI: tính lại từ đầu mỗi lần quét, từ giá LIVE + nến đã đóng ----
-  // Giá LIVE theo thứ tự sổ perp trước: markPrice là giá thanh lý và giá khớp
-  // tham chiếu của chính chợ sẽ vào lệnh. Ticker spot chỉ là chốt chặn cuối.
-  const lastLive = perp.markPrice ?? perp.lastPrice ?? ticker?.lastPrice ?? last;
-  if (perp.markPrice == null && perp.lastPrice == null) {
-    errors.push('Không lấy được giá perp (mark/ticker) — đang dùng giá SPOT làm giá live.');
-  }
-  // Cao/thấp 24h của SỔ PERP. H11 đo khoảng cách tới đáy trên đúng sổ mà lệnh
-  // sẽ khớp; đáy spot lệch khỏi đáy perp đúng lúc có squeeze.
-  const lo = perp.low24h ?? ticker?.lowPrice ?? null;
-  const hi = perp.high24h ?? ticker?.highPrice ?? null;
+  // Giá LIVE = ticker 24h hiện tại, KHÔNG phải close của nến 15m đã đóng. Thẻ
+  // 4H ngày 11/09 sống sót vì `last` là close nến cũ nên không thấy giá đã
+  // xuyên SL.
+  const lastLive = ticker?.lastPrice ?? last;
+  const lo = ticker?.lowPrice ?? null;
+  const hi = ticker?.highPrice ?? null;
   const atr1h = atr(k1h.filter((c) => c.closed));
   type Cham = { side: 'LONG' | 'SHORT'; v: NonNullable<DirectionalCall['lifecycle']> };
 

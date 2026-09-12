@@ -6,7 +6,7 @@ import { classifyStage, decideBias } from '@/lib/decide';
 import { flat, mkCandles, noDerivatives, type Spec } from './fixtures';
 
 const okxEmpty = { ok: false, fundingRate: null, nextFundingTime: null, markPrice: null, oiUsd: null, oiHistUsd: null, perpVol24hUsd: null };
-const perpDead = { alive: false, reason: 'HTTP 451', fundingRate: null, fundingHistory: null, nextFundingTime: null, markPrice: null, openInterest: null, oiHist: null, oiUsd: null, vol24hUsd: null, lastPrice: null, high24h: null, low24h: null };
+const perpDead = { alive: false, reason: 'HTTP 451', fundingRate: null, fundingHistory: null, nextFundingTime: null, markPrice: null, openInterest: null, oiHist: null, oiUsd: null, vol24hUsd: null };
 
 describe('accept vs grab', () => {
   it('wick ra ngoài range rồi đóng trong = grab, không phải break', () => {
@@ -143,7 +143,6 @@ describe('OI + funding', () => {
     const perpAlive = {
       alive: true, reason: 'binance-fapi', fundingRate: 0.0001, fundingHistory: null, nextFundingTime: null,
       markPrice: 100, openInterest: 1000, oiUsd: 300, vol24hUsd: 100,
-      lastPrice: 100, high24h: 105, low24h: 95,
       oiHist: [
         { t: now - 25 * 3_600_000, oi: 900 },
         { t: now - 2 * 3_600_000, oi: 900 },
