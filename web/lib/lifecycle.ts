@@ -85,6 +85,14 @@ export interface LifecycleInput {
   barsSinceIssued: number;
 
   /**
+   * Chỗ đóng của cây 4H ĐÃ ĐÓNG gần nhất: `tren` khi (C−L)/(H−L) ≥ 0.66,
+   * `duoi` khi ≤ 0.33, `giua` ở giữa, null khi cây phẳng hoặc chưa có.
+   * H14 đọc số này. Cây 4H đang mở KHÔNG được tính — bấc cây đang chạy chưa
+   * phải chấp nhận.
+   */
+  k4hLastPos: 'tren' | 'giua' | 'duoi' | null;
+
+  /**
    * Các nến khung K ĐÃ ĐÓNG trong cửa sổ sống của thẻ, cũ → mới.
    *
    * Đây là thứ làm cho HẾT SỐNG SÓT QUA COLD START mà không cần cất gì: nếu
@@ -310,6 +318,14 @@ export function evaluate(i: LifecycleInput): LifecycleVerdict {
 
   // H13 — ngày không được mở lệnh; và cấm TP xuyên mức không có cụm vol đỡ.
   if (i.tf === '1d' || i.tpBreaksUnbackedLevel) failed.push('H13');
+
+  // H14 — thẻ 15m không được đi NGƯỢC cây 4H ĐÃ ĐÓNG gần nhất: SHORT mà 4H
+  // đóng ở nửa trên, LONG mà 4H đóng ở nửa dưới. Vào 15m ngược khung mẹ vừa
+  // chốt xong là đứng chắn trước dòng tiền lớn hơn mình một bậc.
+  if (i.tf === '15m' && i.k4hLastPos
+      && (isShort ? i.k4hLastPos === 'tren' : i.k4hLastPos === 'duoi')) {
+    failed.push('H14');
+  }
 
 
   // =========================================================================

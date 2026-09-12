@@ -45,7 +45,7 @@ function mk(
 }
 
 const chung = {
-  symbol: 'ENAUSDT', rr: 1.2, atr1h: 0.0025, nenGanDay: [] as BarK[],
+  symbol: 'ENAUSDT', rr: 1.2, atr1h: 0.0025, nenGanDay: [] as BarK[], k4hLastPos: null,
   low24h: 0.13, high24h: 0.16, low4hMaxVol: 0.13, high4hMaxVol: 0.16,
   cum1h: null, rejected1h: true, tp1OutsideVa: false, volRatio: 1.2,
   opposingLegs: 2, tpBreaksUnbackedLevel: false, barsSinceIssued: 1,
